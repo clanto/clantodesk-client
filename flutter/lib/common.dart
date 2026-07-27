@@ -3111,6 +3111,15 @@ void onCopyFingerprint(String value) {
   }
 }
 
+void onCopyId(String value) {
+  if (value.isNotEmpty) {
+    Clipboard.setData(ClipboardData(text: value));
+    showToast('$value\n${translate("Copied")}');
+  } else {
+    showToast(translate("Invalid ID"));
+  }
+}
+
 Future<bool> callMainCheckSuperUserPermission() async {
   bool checked = await bind.mainCheckSuperUserPermission();
   if (isMacOS) {
@@ -3988,6 +3997,11 @@ get defaultOptionApproveMode => isCustomClient ? 'password-click' : '';
 bool whitelistNotEmpty() {
   // https://rustdesk.com/docs/en/self-host/client-configuration/advanced-settings/#whitelist
   final v = bind.mainGetOptionSync(key: kOptionWhitelist);
+  return v != '' && v != ',';
+}
+
+bool idWhitelistNotEmpty() {
+  final v = bind.mainGetOptionSync(key: kOptionIdWhitelist);
   return v != '' && v != ',';
 }
 
