@@ -18,7 +18,7 @@ AppDir:
     id: clantodesk
     name: clantodesk
     icon: clantodesk
-    version: 1.4.5
+    version: 1.4.9
     exec: usr/share/clantodesk/clantodesk
     exec_args: $@
   apt:
