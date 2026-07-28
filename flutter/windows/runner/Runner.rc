@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "Purslane Ltd" "\0"
+            VALUE "CompanyName", "Clanto Services srls" "\0"
             VALUE "FileDescription", "Clantodesk Remote Desktop" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "clantodesk" "\0"
-            VALUE "LegalCopyright", "Copyright © 2026 Clanto Services. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright © 2026 Clanto Services srls. All rights reserved." "\0"
             VALUE "OriginalFilename", "clantodesk.exe" "\0"
             VALUE "ProductName", "ClantoDesk" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

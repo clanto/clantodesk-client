@@ -26,7 +26,7 @@ windows = { version = "0.61", features = [
 native-windows-gui = {version = "1.0", default-features = false, features = ["animation-timer", "image-decoder"]}
 
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2026 Clanto Services. All rights reserved."
+LegalCopyright = "Copyright © 2026 Clanto Services srls. All rights reserved."
 ProductName = "Clantodesk"
 OriginalFilename = "clantodesk.exe"
 FileDescription = "Clantodesk Remote Desktop"

@@ -123,6 +123,15 @@ impl Drop for SimpleCallOnReturn {
 
 pub fn global_init() -> bool {
     *config::APP_NAME.write().unwrap() = "ClantoDesk".to_owned();
+    // Impostato qui e non nel submodule hbb_common, che resta upstream puro.
+    // Va prima di qualsiasi accesso a Config: ORG entra nel percorso di
+    // configurazione (ProjectDirs::from("", ORG, APP_NAME)) e nei nomi dei plist
+    // di servizio (com.carriez.ClantoDesk_service.plist -> it.clanto.*).
+    // ORG e' dichiarato solo per macOS in hbb_common/src/config.rs:55.
+    #[cfg(target_os = "macos")]
+    {
+        *config::ORG.write().unwrap() = "it.clanto".to_owned();
+    }
     if let Some(rendezvous_server) = option_env!("RENDEZVOUS_SERVER") {
         if !rendezvous_server.is_empty() {
             *config::PROD_RENDEZVOUS_SERVER.write().unwrap() = rendezvous_server.to_owned();

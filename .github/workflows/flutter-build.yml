@@ -67,13 +67,93 @@ env:
   API_SERVER: "${{ secrets.API_SERVER }}"
 
 jobs:
-  # Fail fast se i secret dei nostri server mancano: senza di essi il binario ricadrebbe
-  # sull'infrastruttura pubblica RustDesk. Il client rifiuta comunque di avviarsi
-  # (check_own_server_configured in src/common.rs), ma e' meglio non produrlo affatto.
+  # Preflight: fallisce prima di compilare qualsiasi cosa.
+  # 1. secret dei nostri server: senza, il binario ricadrebbe sull'infrastruttura
+  #    pubblica RustDesk (il client rifiuta comunque di avviarsi, vedi
+  #    check_own_server_configured in src/common.rs, ma e' meglio non produrlo)
+  # 2. versione coerente fra Cargo.toml e i file che NON la derivano da lui
+  # 3. submodule hbb_common non indietro rispetto al tag upstream corrispondente
+  # 4. nessun nome di artefatto rimasto "rustdesk-"
   verify-secrets:
-    name: Verify Clanto server secrets
+    name: Preflight (secret, versione, submodule)
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: false
+
+      - name: Check version consistency
+        shell: bash
+        run: |
+          # Cargo.toml e' la fonte: build.py:get_version() legge da qui e riscrive
+          # PKGBUILD, rpm.spec e rpm-suse.spec. Tutto il resto va allineato a mano.
+          VER=$(grep -m1 '^version = ' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          echo "Cargo.toml: $VER"
+          fail=0
+          check() { # file  valore_estratto
+            if [ "$2" != "$VER" ]; then
+              echo "::error file=$1::versione '$2' diversa da Cargo.toml '$VER'"
+              fail=1
+            else
+              echo "  ok  $1"
+            fi
+          }
+          check flutter/pubspec.yaml \
+            "$(grep -m1 '^version:' flutter/pubspec.yaml | sed 's/^version: *//; s/+.*//')"
+          check .github/workflows/flutter-build.yml \
+            "$(grep -m1 '^  VERSION:' .github/workflows/flutter-build.yml | sed 's/.*"\(.*\)".*/\1/')"
+          check .github/workflows/playground.yml \
+            "$(grep -m1 '^  VERSION:' .github/workflows/playground.yml | sed 's/.*"\(.*\)".*/\1/')"
+          for f in res/rpm-flutter.spec res/rpm-flutter-suse.spec; do
+            check "$f" "$(grep -m1 '^Version:' "$f" | awk '{print $2}')"
+          done
+          for f in appimage/AppImageBuilder-x86_64.yml appimage/AppImageBuilder-aarch64.yml; do
+            check "$f" "$(grep -m1 '^    version: ' "$f" | awk '{print $2}')"
+          done
+          exit $fail
+
+      - name: Check hbb_common submodule is not behind upstream
+        shell: bash
+        run: |
+          # Il rollback del submodule ha fatto fallire ogni job di build con E0432
+          # (simboli assenti). Qui confrontiamo con quello che il tag upstream pinna.
+          VER=$(grep -m1 '^version = ' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          OURS=$(git ls-tree HEAD libs/hbb_common | awk '{print $3}')
+          echo "nostro:   $OURS"
+          if ! git fetch -q --depth=1 https://github.com/rustdesk/rustdesk "refs/tags/$VER"; then
+            echo "::warning::tag upstream $VER non trovato: controllo saltato"
+            exit 0
+          fi
+          THEIRS=$(git ls-tree FETCH_HEAD libs/hbb_common | awk '{print $3}')
+          echo "upstream $VER: $THEIRS"
+          if [ "$OURS" != "$THEIRS" ]; then
+            echo "::error::libs/hbb_common e' $OURS ma upstream $VER pinna $THEIRS."
+            echo "::error::Se e' voluto rimuovi questo controllo; se no: git -C libs/hbb_common checkout $THEIRS"
+            exit 1
+          fi
+          echo "submodule allineato a upstream $VER"
+
+      - name: Check no rustdesk- artifact names
+        shell: bash
+        run: |
+          # Il pattern non puo' contenere due graffe aperte: GitHub interpolerebbe
+          # l'espressione prima che bash la veda. 'rustdesk-' seguito da cifra o da
+          # dollaro cattura sia il nome con versione letterale sia quello con
+          # espressione, e non tocca rustdesk-portable / rustdesk-unsigned.
+          #
+          # Ambito: solo i workflow che pubblicano nel nostro flusso. playground.yml
+          # e' un workflow sperimentale di upstream, ancora con nomi rustdesk-*.
+          if grep -nE 'rustdesk-[0-9$]' \
+               .github/workflows/flutter-build.yml \
+               .github/workflows/flutter-tag.yml \
+               .github/workflows/flutter-nightly.yml \
+               .github/workflows/flutter_ci_pc.yml; then
+            echo "::error::nome artefatto ancora 'rustdesk-': deve essere 'clantodesk-'"
+            exit 1
+          fi
+          echo "nomi artefatto ok"
+
       - name: Check RENDEZVOUS_SERVER and RS_PUB_KEY
         shell: bash
         env:
@@ -427,7 +507,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
           pushd ./res/msi
-          python preprocess.py --arp -d ../../clantodesk --app-name clantodesk
+          python preprocess.py --arp -d ../../clantodesk --app-name clantodesk --display-name ClantoDesk --manufacturer "Clanto Services srls"
           nuget restore msi.sln
           $msiPlatform = if ('${{ matrix.job.arch }}' -eq 'aarch64') { 'ARM64' } else { 'x64' }
           msbuild msi.sln -p:Configuration=Release -p:Platform=$msiPlatform /p:TargetVersion=Windows10
@@ -2247,7 +2327,7 @@ jobs:
 
       - name: Rename Binary
         run: |
-          mv clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.deb flatpak/rustdesk.deb
+          mv clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.deb flatpak/clantodesk.deb
 
       - uses: rustdesk-org/run-on-arch-action@d3fcfbb632b84cf7f6bc772bfaaa2c2f4f8789a8 # no release tag; commit 2026-05-26
         name: Build rustdesk flatpak package for ${{ matrix.job.arch }}
@@ -2273,8 +2353,8 @@ jobs:
             # package
             pushd flatpak
             git clone https://github.com/flathub/shared-modules.git --depth=1
-            flatpak-builder --user --install-deps-from=flathub -y --force-clean --repo=repo ./build ./rustdesk.json
-            flatpak build-bundle ./repo clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.flatpak com.rustdesk.RustDesk
+            flatpak-builder --user --install-deps-from=flathub -y --force-clean --repo=repo ./build ./clantodesk.json
+            flatpak build-bundle ./repo clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.flatpak it.clanto.clantodesk
 
       - name: Publish flatpak package
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1

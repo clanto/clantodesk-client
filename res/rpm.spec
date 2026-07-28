@@ -2,7 +2,7 @@ Name:       clantodesk
 Version:    1.4.9
 Release:    0
 Summary:    RPM package
-License:    GPL-3.0
+License:    AGPL-3.0-only
 URL:        https://rustdesk.com
 Vendor:     rustdesk <info@rustdesk.com>
 Requires:   gtk3 libxcb libXfixes alsa-lib libva2 pam gstreamer1-plugins-base

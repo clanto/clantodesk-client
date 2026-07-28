@@ -103,6 +103,7 @@ qrcode-generator = "4.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = [
+    "winbase",
     "winuser",
     "wincrypt",
     "shellscalingapi",
@@ -210,7 +211,7 @@ exclude = ["vdi/host", "examples/custom_plugin"]
 libxdo-sys = { path = "libs/libxdo-sys-stub" }
 
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2026 Clanto Services. All rights reserved."
+LegalCopyright = "Copyright © 2026 Clanto Services srls. All rights reserved."
 ProductName = "Clantodesk"
 FileDescription = "Clantodesk Remote Desktop"
 OriginalFilename = "clantodesk.exe"
@@ -229,8 +230,8 @@ hound = "3.5"
 docopt = "1.1"
 
 [package.metadata.bundle]
-name = "RustDesk"
-identifier = "com.carriez.rustdesk"
+name = "ClantoDesk"
+identifier = "it.clanto.clantodesk"
 icon = ["res/32x32.png", "res/128x128.png", "res/128x128@2x.png"]
 osx_minimum_system_version = "10.14"
 

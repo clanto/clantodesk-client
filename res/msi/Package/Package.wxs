@@ -46,6 +46,7 @@
 			<ComponentRef Id="Product.Registry.URLProtocol" />
 			<ComponentRef Id="Product.Registry.Command" />
 			<ComponentRef Id="Product.Registry.UninstallApp" />
+			<ComponentRef Id="Product.Registry.EventLogSource" />
 			<ComponentRef Id="App.StartMenu" />
 			<ComponentRef Id="Product.Registry.PersistedStartMenuShortcutProperties1" />
 			<ComponentRef Id="Product.Registry.PersistedStartMenuShortcutProperties0" />

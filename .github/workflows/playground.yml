@@ -31,6 +31,12 @@ env:
 
 jobs:
   build-for-macOS:
+    # DISABILITATO da Clanto. Workflow sperimentale di upstream: pubblica su
+    # release (tag_name: nightly) artefatti chiamati rustdesk-*.dmg / .apk, e
+    # cerca RustDesk.app che build.py non produce piu'. Lanciandolo a mano si
+    # sporcherebbe la release nightly con nomi sbagliati.
+    # Per riabilitarlo: togliere questa riga e allineare i nomi degli artefatti.
+    if: false
     name: ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     strategy:
@@ -231,6 +237,8 @@ jobs:
 
 
   build-rustdesk-android:
+    # DISABILITATO da Clanto: vedi la nota su build-for-macOS.
+    if: false
     if: false
     name: build rustdesk android apk ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}

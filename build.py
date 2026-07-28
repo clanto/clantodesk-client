@@ -353,6 +353,10 @@ def build_flutter_deb(version, features):
     system2(
         "echo \"#!/bin/sh\" >> tmpdeb/usr/share/clantodesk/files/polkit && chmod a+x tmpdeb/usr/share/clantodesk/files/polkit")
 
+    # Debian Policy 12.5: ogni pacchetto deve avere /usr/share/doc/<pkg>/copyright
+    system2('mkdir -p tmpdeb/usr/share/doc/clantodesk/')
+    system2('cp ../res/copyright tmpdeb/usr/share/doc/clantodesk/copyright')
+
     system2('mkdir -p tmpdeb/DEBIAN')
     generate_control_file(version)
     system2('cp -a ../res/DEBIAN/* tmpdeb/DEBIAN/')
@@ -389,6 +393,10 @@ def build_deb_from_folder(version, binary_folder):
         'cp ../res/clantodesk-link.desktop tmpdeb/usr/share/applications/clantodesk-link.desktop')
     system2(
         "echo \"#!/bin/sh\" >> tmpdeb/usr/share/clantodesk/files/polkit && chmod a+x tmpdeb/usr/share/clantodesk/files/polkit")
+
+    # Debian Policy 12.5: ogni pacchetto deve avere /usr/share/doc/<pkg>/copyright
+    system2('mkdir -p tmpdeb/usr/share/doc/clantodesk/')
+    system2('cp ../res/copyright tmpdeb/usr/share/doc/clantodesk/copyright')
 
     system2('mkdir -p tmpdeb/DEBIAN')
     generate_control_file(version)

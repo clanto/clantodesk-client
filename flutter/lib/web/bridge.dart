@@ -1608,8 +1608,9 @@ class RustdeskImpl {
   }
 
   bool isCustomClient({dynamic hint}) {
-    // is_custom_client() checks if app name is not "RustDesk"
-    return mainGetAppNameSync(hint: hint) != "RustDesk";
+    // is_custom_client() checks if app name is not "ClantoDesk"
+    // deve restare allineato a crate::common::is_custom_client() in src/common.rs
+    return mainGetAppNameSync(hint: hint) != "ClantoDesk";
   }
 
   bool isDisableSettings({dynamic hint}) {

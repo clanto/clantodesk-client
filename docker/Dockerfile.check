@@ -1,0 +1,53 @@
+# Immagine per il type-check rapido del crate Rust.
+#
+# Sfrutta la feature `linux-pkg-config` di scrap/magnum-opus, che prende
+# vpx/aom/libyuv/opus da apt invece che da vcpkg. Risultato: immagine pronta in
+# ~1 minuto invece di ~1 ora (il Dockerfile principale compila CMake da sorgente
+# e costruisce 4 pacchetti vcpkg, aom da solo e' mezz'ora).
+#
+# USARE PER: verificare che il codice compili dopo un merge upstream o una
+#            modifica, in locale, senza toolchain Rust installata.
+# NON USARE PER: build di release. Quelle devono passare da vcpkg come la CI,
+#                perche' le librerie di sistema hanno versioni diverse.
+#
+# Uso:  docker/check.sh
+FROM ubuntu:24.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+# Allineata a env.RUST_VERSION di .github/workflows/flutter-build.yml
+ARG RUST_VERSION=1.75
+
+RUN apt-get update -y && apt-get install --yes --no-install-recommends \
+        g++ gcc git curl make pkg-config ca-certificates \
+        clang libclang-dev llvm-dev \
+        nasm yasm python3 \
+        libgtk-3-dev libssl-dev \
+        libxcb-randr0-dev libxdo-dev libxfixes-dev \
+        libxcb-shape0-dev libxcb-xfixes0-dev \
+        libasound2-dev libpam0g-dev libpulse-dev \
+        libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+        libva-dev libdrm-dev \
+        libvpx-dev libaom-dev libyuv-dev libopus-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | sh -s -- -y --default-toolchain ${RUST_VERSION} --profile minimal
+ENV PATH=/root/.cargo/bin:$PATH
+
+# Ubuntu spedisce libyuv-dev senza file .pc: shim locale, serve solo qui.
+# In CI libyuv arriva da vcpkg e questo file non esiste.
+RUN ARCH_TRIPLET="$(gcc -dumpmachine)" && \
+    printf '%s\n' \
+      'prefix=/usr' \
+      'exec_prefix=${prefix}' \
+      "libdir=\${prefix}/lib/${ARCH_TRIPLET}" \
+      'includedir=${prefix}/include' \
+      '' \
+      'Name: libyuv' \
+      'Description: YUV scaling and conversion (shim Debian/Ubuntu)' \
+      'Version: 0.0' \
+      'Libs: -L${libdir} -lyuv' \
+      'Cflags: -I${includedir}' \
+      > "/usr/lib/${ARCH_TRIPLET}/pkgconfig/libyuv.pc"
+
+WORKDIR /work

@@ -373,6 +373,8 @@ pub struct Connection {
     start_cm_ipc_para: Option<StartCmIpcPara>,
     auto_disconnect_timer: Option<(Instant, u64)>,
     authed_conn_id: Option<self::raii::AuthedConnID>,
+    // Istante di autenticazione riuscita, per la durata nell'evento "close".
+    authed_time: Option<Instant>,
     file_remove_log_control: FileRemoveLogControl,
     last_supported_encoding: Option<SupportedEncoding>,
     services_subed: bool,
@@ -573,6 +575,7 @@ impl Connection {
             }),
             auto_disconnect_timer: None,
             authed_conn_id: None,
+            authed_time: None,
             file_remove_log_control: FileRemoveLogControl::new(id),
             last_supported_encoding: None,
             services_subed: false,
@@ -1141,9 +1144,13 @@ impl Connection {
             raii::AuthedConnID::check_remove_session(conn.inner.id(), conn.session_key());
         }
 
-        conn.post_conn_audit(json!({
+        let mut close_audit = json!({
             "action": "close",
-        }));
+        });
+        if let Some(t) = conn.authed_time {
+            close_audit["duration_secs"] = json!(t.elapsed().as_secs());
+        }
+        conn.post_conn_audit(close_audit);
         if let Some(s) = conn.server.upgrade() {
             let mut s = s.write().unwrap();
             s.remove_connection(&conn.inner);
@@ -1427,15 +1434,18 @@ impl Connection {
     }
 
     fn post_conn_audit(&self, v: Value) {
-        if self.server_audit_conn.is_empty() {
-            return;
-        }
-        let url = self.server_audit_conn.clone();
         let mut v = v;
         v["id"] = json!(Config::get_id());
         v["uuid"] = json!(crate::encode64(hbb_common::get_uuid()));
         v["conn_id"] = json!(self.inner.id);
         v["session_id"] = json!(self.lr.session_id);
+        // Sink Clanto (syslog / Windows Event Log): indipendenti dall'API server,
+        // per questo stanno prima del gate su server_audit_conn.
+        crate::clanto::audit_sink::emit("conn", &v);
+        if self.server_audit_conn.is_empty() {
+            return;
+        }
+        let url = self.server_audit_conn.clone();
         allow_err!(self.tx_post_seq.send((url, v)));
     }
 
@@ -1462,9 +1472,6 @@ impl Connection {
         files: Vec<(String, i64)>,
         info: Value,
     ) {
-        if self.server_audit_file.is_empty() {
-            return;
-        }
         let url = self.server_audit_file.clone();
         let file_num = files.len();
         let mut files = files;
@@ -1486,6 +1493,10 @@ impl Connection {
             "is_file":is_file,
             "info":json!(info).to_string(),
         });
+        crate::clanto::audit_sink::emit("file", &v);
+        if url.is_empty() {
+            return;
+        }
         tokio::spawn(async move {
             allow_err!(Self::post_audit_async(url, v).await);
         });
@@ -1679,6 +1690,7 @@ impl Connection {
             .get(&self.session_key())
             .map(|s| s.last_recv_time.clone());
         self.normalize_conn_audit_auth_fields();
+        self.authed_time = Some(Instant::now());
         let mut audit = json!({"peer": ((&self.lr.my_id, &self.lr.my_name)), "type": conn_type});
         if self.conn_audit_primary_auth != ConnAuditPrimaryAuth::None {
             audit["primary_auth"] = json!(self.conn_audit_primary_auth.as_i64());

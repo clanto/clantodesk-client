@@ -42,6 +42,11 @@ g_arpsystemcomponent = {
 def default_revision_version():
     return int(datetime.datetime.now().timestamp() / 60)
 
+def display_name(args):
+    """Nome visibile all'utente. Ricade su app_name se non specificato."""
+    return args.display_name or args.app_name
+
+
 def make_parser():
     parser = argparse.ArgumentParser(description="Msi preprocess script.")
     parser.add_argument(
@@ -74,6 +79,15 @@ def make_parser():
     )
     parser.add_argument(
         "--app-name", type=str, default="RustDesk", help="The app name."
+    )
+    parser.add_argument(
+        "--display-name",
+        type=str,
+        default="",
+        help="Nome visualizzato all'utente (Programmi installati, titolo installer). "
+        "Se vuoto usa --app-name. Tenuto separato perche' --app-name deve corrispondere "
+        "al nome dell'eseguibile e da esso deriva l'UpgradeCode: cambiarlo romperebbe "
+        "l'aggiornamento delle installazioni esistenti.",
     )
     parser.add_argument(
         "-v", "--version", type=str, default="", help="The app version."
@@ -158,8 +172,8 @@ def gen_pre_vars(args, dist_dir):
         to_insert_lines = [
             f'{indent}<?define Version="{g_version}" ?>\n',
             f'{indent}<?define Manufacturer="{args.manufacturer}" ?>\n',
-            f'{indent}<?define Product="{args.app_name}" ?>\n',
-            f'{indent}<?define Description="{args.app_name} Installer" ?>\n',
+            f'{indent}<?define Product="{display_name(args)}" ?>\n',
+            f'{indent}<?define Description="{display_name(args)} Installer" ?>\n',
             f'{indent}<?define ProductLower="{args.app_name.lower()}" ?>\n',
             f'{indent}<?define RegKeyRoot=".$(var.ProductLower)" ?>\n',
             f'{indent}<?define RegKeyInstall="$(var.RegKeyRoot)\\Install" ?>\n',
@@ -311,7 +325,7 @@ def gen_custom_ARPSYSTEMCOMPONENT_True(args, dist_dir):
             f"{indent}<!--https://learn.microsoft.com/en-us/windows/win32/msi/property-reference-->\n"
         )
         lines_new.append(
-            f'{indent}<RegistryValue Type="string" Name="DisplayName" Value="{args.app_name}" />\n'
+            f'{indent}<RegistryValue Type="string" Name="DisplayName" Value="{display_name(args)}" />\n'
         )
         lines_new.append(
             f'{indent}<RegistryValue Type="string" Name="DisplayIcon" Value="[INSTALLFOLDER_INNER]{args.app_name}.exe" />\n'
@@ -497,6 +511,11 @@ def update_license_file(app_name):
     license_file = Path(sys.argv[0]).parent.joinpath("Package/License.rtf")
     with open(license_file, "r", encoding="utf-8") as f:
         license_content = f.read()
+    # "Purslane" identifica la licenza upstream. Se non c'e', il file e' gia' il nostro:
+    # sostituire "RustDesk" al suo interno distruggerebbe l'attribuzione AGPL richiesta.
+    if "Purslane" not in license_content:
+        print("License.rtf non e' quella upstream: nessuna sostituzione.")
+        return
     license_content = license_content.replace("website rustdesk.com and other ", "")
     license_content = license_content.replace("RustDesk", app_name)
     license_content = re.sub(r"Purslane(?: Tech Pte\.)? Ltd", app_name, license_content, flags=re.IGNORECASE)

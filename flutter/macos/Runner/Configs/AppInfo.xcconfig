@@ -11,4 +11,4 @@ PRODUCT_NAME = ClantoDesk
 PRODUCT_BUNDLE_IDENTIFIER = it.clanto.clantodesk
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 Clanto Services srl. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Clanto Services srls. All rights reserved.

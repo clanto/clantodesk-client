@@ -1,9 +1,9 @@
 {
-  "id": "com.rustdesk.RustDesk",
+  "id": "it.clanto.clantodesk",
   "runtime": "org.freedesktop.Platform",
   "runtime-version": "24.08",
   "sdk": "org.freedesktop.Sdk",
-  "command": "rustdesk",
+  "command": "clantodesk",
   "cleanup": ["/include", "/lib/pkgconfig", "/share/gtk-doc"],
   "modules": [
     "shared-modules/libappindicator/libappindicator-gtk3-12.10.json",
@@ -32,22 +32,22 @@
       ]
     },
     {
-      "name": "rustdesk",
+      "name": "clantodesk",
       "buildsystem": "simple",
       "build-commands": [
-        "bsdtar -Oxf rustdesk.deb data.tar.xz | bsdtar -xf -",
+        "bsdtar -Oxf clantodesk.deb data.tar.xz | bsdtar -xf -",
         "cp -r usr/* /app/",
-        "mkdir -p /app/bin && ln -s /app/share/rustdesk/rustdesk /app/bin/rustdesk",
-        "find /app/share/applications -name '*.desktop' -exec mv {} /app/share/applications/com.rustdesk.RustDesk.desktop \\;"
+        "mkdir -p /app/bin && ln -s /app/share/clantodesk/clantodesk /app/bin/clantodesk",
+        "find /app/share/applications -name '*.desktop' -exec mv {} /app/share/applications/it.clanto.clantodesk.desktop \\;"
       ],
       "sources": [
         {
           "type": "file",
-          "path": "rustdesk.deb"
+          "path": "clantodesk.deb"
         },
         {
           "type": "file",
-          "path": "com.rustdesk.RustDesk.metainfo.xml"
+          "path": "it.clanto.clantodesk.metainfo.xml"
         }
       ]
     }
