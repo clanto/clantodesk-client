@@ -33,6 +33,10 @@ pub fn core_main() -> Option<Vec<String>> {
         return None;
     }
     crate::load_custom_client();
+    // Dopo load_custom_client: anche quello puo' fornire rendezvous server e chiave.
+    if !crate::common::ensure_own_server_configured() {
+        return None;
+    }
     #[cfg(windows)]
     if !crate::platform::windows::bootstrap() {
         // return None to terminate the process

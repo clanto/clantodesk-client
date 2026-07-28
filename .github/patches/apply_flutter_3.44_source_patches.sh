@@ -26,7 +26,8 @@ sed -i '/static ThemeData darkTheme = ThemeData(/,/scrollbarTheme: scrollbarThem
       backgroundColor: Color(0xFF18191E),/' flutter/lib/common.dart
 # Dependency bumps required by the newer Dart/Flutter:
 sed -i 's/extended_text: 14.0.0/extended_text: 15.0.2/' flutter/pubspec.yaml
-sed -i 's/google_fonts: \^6.2.1/google_fonts: ^8.1.0/' flutter/pubspec.yaml
+# versione esatta, non caret: l'artefatto arm64 non e' coperto dal pubspec.lock committato
+sed -i 's/google_fonts: \^6.2.1/google_fonts: 8.1.0/' flutter/pubspec.yaml
 
 # Fail loudly if any expected string drifted, so we never silently build unpatched:
 grep -qF 'dialogTheme: DialogThemeData(' flutter/lib/common.dart
@@ -34,6 +35,6 @@ grep -qF 'tabBarTheme: const TabBarThemeData(' flutter/lib/common.dart
 grep -qF 'backgroundColor: Colors.white,' flutter/lib/common.dart
 grep -qF 'backgroundColor: Color(0xFF18191E),' flutter/lib/common.dart
 grep -qF 'extended_text: 15.0.2' flutter/pubspec.yaml
-grep -qF 'google_fonts: ^8.1.0' flutter/pubspec.yaml
+grep -qF 'google_fonts: 8.1.0' flutter/pubspec.yaml
 
 git --no-pager diff -- flutter/lib/common.dart flutter/pubspec.yaml

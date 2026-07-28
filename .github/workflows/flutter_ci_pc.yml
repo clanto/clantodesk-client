@@ -1,14 +1,14 @@
 name: Full Flutter CI (windows)
 
+# Questo workflow firma con i certificati di produzione e pubblica su release.
+# NON aggiungere il trigger `pull_request`: eseguirebbe codice della PR con i
+# certificati Azure/Apple/Android in env. La validazione delle PR sta in
+# flutter-ci.yml, che compila senza secret e senza pubblicare.
 on:
   workflow_dispatch:
-  pull_request:
-    paths-ignore:
-    - "docs/**"
-    - "README.md"
   push:
     branches:
-      - master
+      - clnt_1.4.9
     paths-ignore:
       - ".github/**"
       - "docs/**"

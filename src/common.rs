@@ -166,6 +166,60 @@ pub fn global_init() -> bool {
     true
 }
 
+/// Fail closed: senza i nostri server e la nostra chiave il client ricadrebbe sui default
+/// upstream (`rs-ny.rustdesk.com`, chiave pubblica RustDesk, `https://admin.rustdesk.com`),
+/// mandando il traffico dei nostri utenti su infrastruttura di terzi senza che se ne accorgano.
+/// Meglio rifiutare l'avvio che degradare in silenzio.
+///
+/// Va chiamata DOPO `load_custom_client`/`read_custom_client`, che possono a loro volta
+/// fornire server e chiave. Ritorna false se l'avvio deve essere interrotto.
+///
+/// Per i build di sviluppo locale si puo' compilare con `CLANTO_ALLOW_PUBLIC_SERVER=1`.
+pub fn ensure_own_server_configured() -> bool {
+    match check_own_server_configured() {
+        Ok(()) => true,
+        Err(e) => {
+            log::error!("{}", e);
+            eprintln!("{}", e);
+            false
+        }
+    }
+}
+
+fn check_own_server_configured() -> Result<(), String> {
+    let allow_public = option_env!("CLANTO_ALLOW_PUBLIC_SERVER").unwrap_or("") == "1";
+
+    let mut problems = Vec::new();
+    if using_public_server() {
+        problems.push("nessun rendezvous server configurato (RENDEZVOUS_SERVER)");
+    }
+    let key = Config::get_option("key");
+    if key.is_empty() {
+        problems.push("nessuna chiave pubblica configurata (RS_PUB_KEY)");
+    } else if key == config::RS_PUB_KEY {
+        problems.push("la chiave pubblica configurata e' quella pubblica di RustDesk");
+    }
+    if problems.is_empty() {
+        return Ok(());
+    }
+
+    let detail = problems.join("; ");
+    if allow_public {
+        log::warn!(
+            "ATTENZIONE: build di sviluppo, si ricade sull'infrastruttura pubblica RustDesk ({}). \
+             Non distribuire questo binario.",
+            detail
+        );
+        return Ok(());
+    }
+    Err(format!(
+        "Avvio interrotto: configurazione server Clanto assente o non valida ({}). \
+         Questo binario e' stato compilato senza i secret RENDEZVOUS_SERVER/RS_PUB_KEY \
+         e ricadrebbe sui server pubblici RustDesk.",
+        detail
+    ))
+}
+
 pub fn global_clean() {}
 
 #[inline]
@@ -984,11 +1038,15 @@ pub fn check_software_update() {
 }
 
 // No need to check `danger_accept_invalid_cert` for now.
-// Because the url is always `https://api.rustdesk.com/version/latest`.
+// Because the url is always `https://clanto.it/api/clantodesk.php`.
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
-    let (request, _) =
+    let (mut request, _) =
         hbb_common::version_check_request(hbb_common::VER_TYPE_RUSTDESK_CLIENT.to_string());
+    // GDPR: `device_id` e' un fingerprint hardware stabile (MAC address + machine id + CPU/RAM),
+    // quindi dato personale pseudonimizzato. Per sapere se esiste un aggiornamento bastano
+    // sistema operativo, architettura e versione corrente: non lo trasmettiamo.
+    request.device_id = Vec::new();
     let url = "https://clanto.it/api/clantodesk.php".to_owned();
     let proxy_conf = Config::get_socks();
     let tls_url = get_url_for_tls(&url, &proxy_conf);

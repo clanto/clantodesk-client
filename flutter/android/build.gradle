@@ -1,8 +1,18 @@
 allprojects {
     repositories {
         google()
-        jcenter()
-        maven { url 'https://jitpack.io' }
+        mavenCentral()
+        // JitPack compila i tag da GitHub su richiesta: artefatti non firmati e tag
+        // ricreabili. Confinato all'unico gruppo che ne ha bisogno (XXPermissions),
+        // cosi' non puo' servire nessun'altra coordinata.
+        exclusiveContent {
+            forRepository {
+                maven { url 'https://jitpack.io' }
+            }
+            filter {
+                includeGroup 'com.github.getActivity'
+            }
+        }
     }
 }
 

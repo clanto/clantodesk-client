@@ -75,6 +75,12 @@ fn initialize(app_dir: &str, custom_client_config: &str) {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
         let _ = crate::common::global_init();
+        // Il custom client e' gia' stato letto sopra. Su mobile non c'e' un valore di ritorno
+        // che fermi l'avvio, quindi terminiamo qui invece di ricadere sui server pubblici
+        // RustDesk.
+        if !crate::common::ensure_own_server_configured() {
+            std::process::exit(1);
+        }
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {

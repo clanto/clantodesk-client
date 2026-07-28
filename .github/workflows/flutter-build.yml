@@ -67,10 +67,43 @@ env:
   API_SERVER: "${{ secrets.API_SERVER }}"
 
 jobs:
+  # Fail fast se i secret dei nostri server mancano: senza di essi il binario ricadrebbe
+  # sull'infrastruttura pubblica RustDesk. Il client rifiuta comunque di avviarsi
+  # (check_own_server_configured in src/common.rs), ma e' meglio non produrlo affatto.
+  verify-secrets:
+    name: Verify Clanto server secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check RENDEZVOUS_SERVER and RS_PUB_KEY
+        shell: bash
+        env:
+          # via env, non interpolati nello script: i valori non finiscono nel comando
+          RENDEZVOUS_SERVER: ${{ secrets.RENDEZVOUS_SERVER }}
+          RS_PUB_KEY: ${{ secrets.RS_PUB_KEY }}
+          API_SERVER: ${{ secrets.API_SERVER }}
+        run: |
+          missing=""
+          if [ -z "$RENDEZVOUS_SERVER" ]; then
+            missing="$missing RENDEZVOUS_SERVER"
+          fi
+          if [ -z "$RS_PUB_KEY" ]; then
+            missing="$missing RS_PUB_KEY"
+          fi
+          if [ -n "$missing" ]; then
+            echo "::error::Secret mancanti o vuoti:$missing - il build ricadrebbe sui server pubblici RustDesk."
+            exit 1
+          fi
+          if [ -z "$API_SERVER" ]; then
+            echo "::warning::API_SERVER non impostato: sara' derivato dal rendezvous server."
+          fi
+          echo "Secret server presenti."
+
   generate-bridge:
+    needs: [verify-secrets]
     uses: ./.github/workflows/bridge.yml
 
   build-RustDeskTempTopMostWindow:
+    needs: [verify-secrets]
     uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
     strategy:
       fail-fast: false
@@ -198,7 +231,15 @@ jobs:
         run: |
           flutter doctor -v
           flutter precache --windows
+          # Il tag `main` e' rolling: questo hash e' l'unico ancoraggio. Se rustdesk
+          # ricompila l'engine il build fallisce di proposito, cosi' il cambio si nota.
+          $EXPECTED_ENGINE = "ec8cabf36ee4ff24c8d98de25b00e70781eb03876265aee84d0fe554a110036e"
           Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
+          $sumEngine = (Get-FileHash -Path windows-x64-release.zip -Algorithm SHA256).Hash
+          if ($sumEngine -ne $EXPECTED_ENGINE) {
+            Write-Output "::error::windows-x64-release.zip: atteso $EXPECTED_ENGINE, ottenuto $sumEngine"
+            exit 1
+          }
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
           mv -Force windows-x64-release/*  C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
 
@@ -273,37 +314,49 @@ jobs:
           mv ./flutter/build/windows/${{ matrix.job.flutter-arch }}/runner/Release ./clantodesk
 
           # Download usbmmidd_v2.zip and extract it to ./rustdesk
+          # Tag non versionato: l'asset e' sostituibile senza cambiare URL.
+          $EXPECTED_USBMMIDD = "629b51e9944762bae73948171c65d09a79595cf4c771a82ebc003fbba5b24f51"
           Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
+          $sumUsb = (Get-FileHash -Path usbmmidd_v2.zip -Algorithm SHA256).Hash
+          if ($sumUsb -ne $EXPECTED_USBMMIDD) {
+            Write-Output "::error::usbmmidd_v2.zip: atteso $EXPECTED_USBMMIDD, ottenuto $sumUsb"
+            exit 1
+          }
           Expand-Archive usbmmidd_v2.zip -DestinationPath .
           Remove-Item -Path usbmmidd_v2\Win32 -Recurse
           Remove-Item -Path "usbmmidd_v2\deviceinstaller64.exe", "usbmmidd_v2\deviceinstaller.exe", "usbmmidd_v2\usbmmidd.bat"
           mv -Force .\usbmmidd_v2 ./clantodesk
 
           # Download printer driver files and extract them to ./rustdesk
+          # Hash ancorati qui: il file sha256sums vive sullo stesso tag mutabile `driver`,
+          # quindi non e' una radice di fiducia. Un mismatch fa fallire il build (fail-closed):
+          # questi binari finiscono dentro il pacchetto che poi firmiamo.
+          $EXPECTED_DRIVER  = "c4cf4d3b48c4d9079b243edc43bb1db03b076282bc259c9f49883e9db20fa8b5"
+          $EXPECTED_ADAPTER = "e90e5d52c8807b4c6293c78a52479338715e0bf396b1b34802777b8c452e6781"
+          $driverDownloaded = $false
           try {
             Invoke-WebRequest -Uri https://github.com/rustdesk/hbb_common/releases/download/driver/rustdesk_printer_driver_v4-1.4.zip -OutFile rustdesk_printer_driver_v4-1.4.zip
             Invoke-WebRequest -Uri https://github.com/rustdesk/hbb_common/releases/download/driver/printer_driver_adapter.zip -OutFile printer_driver_adapter.zip
-            Invoke-WebRequest -Uri https://github.com/rustdesk/hbb_common/releases/download/driver/sha256sums -OutFile sha256sums
-
-            # Check and move the files
-            $checksum_driver = (Select-String -Path .\sha256sums -Pattern '^([a-fA-F0-9]{64}) \*rustdesk_printer_driver_v4-1.4\.zip$').Matches.Groups[1].Value
-            $downloadsum_driver = Get-FileHash -Path rustdesk_printer_driver_v4-1.4.zip -Algorithm SHA256
-            $checksum_adapter = (Select-String -Path .\sha256sums -Pattern '^([a-fA-F0-9]{64}) \*printer_driver_adapter\.zip$').Matches.Groups[1].Value
-            $downloadsum_adapter = Get-FileHash -Path printer_driver_adapter.zip -Algorithm SHA256
-            if ($checksum_driver -eq $downloadsum_driver.Hash -and $checksum_adapter -eq $downloadsum_adapter.Hash) {
-                Write-Output "rustdesk_printer_driver_v4-1.4, checksums match, extract the file."
-                Expand-Archive rustdesk_printer_driver_v4-1.4.zip -DestinationPath .
-                mkdir ./clantodesk/drivers
-                mv -Force .\rustdesk_printer_driver_v4-1.4 ./clantodesk/drivers/RustDeskPrinterDriver
-                Expand-Archive printer_driver_adapter.zip -DestinationPath .
-                mv -Force .\printer_driver_adapter.dll ./clantodesk
-            } elseif ($checksum_driver -ne $downloadsum_driver.Hash) {
-                Write-Output "rustdesk_printer_driver_v4-1.4, checksums do not match, ignore the file."
-            } else {
-                Write-Output "printer_driver_adapter.dll, checksums do not match, ignore the file."
-            }
+            $driverDownloaded = $true
           } catch {
-              Write-Host "Ingore the printer driver error."
+            Write-Host "Printer driver download failed, skipping."
+          }
+          if ($driverDownloaded) {
+            $sumDriver  = (Get-FileHash -Path rustdesk_printer_driver_v4-1.4.zip -Algorithm SHA256).Hash
+            $sumAdapter = (Get-FileHash -Path printer_driver_adapter.zip -Algorithm SHA256).Hash
+            if ($sumDriver -ne $EXPECTED_DRIVER) {
+              Write-Output "::error::rustdesk_printer_driver_v4-1.4.zip: atteso $EXPECTED_DRIVER, ottenuto $sumDriver"
+              exit 1
+            }
+            if ($sumAdapter -ne $EXPECTED_ADAPTER) {
+              Write-Output "::error::printer_driver_adapter.zip: atteso $EXPECTED_ADAPTER, ottenuto $sumAdapter"
+              exit 1
+            }
+            Expand-Archive rustdesk_printer_driver_v4-1.4.zip -DestinationPath .
+            mkdir ./clantodesk/drivers
+            mv -Force .\rustdesk_printer_driver_v4-1.4 ./clantodesk/drivers/RustDeskPrinterDriver
+            Expand-Archive printer_driver_adapter.zip -DestinationPath .
+            mv -Force .\printer_driver_adapter.dll ./clantodesk
           }
 
       - name: find Runner.res
@@ -338,7 +391,7 @@ jobs:
 
       - name: Sign rustdesk files with Azure Trusted Signing
         if: env.UPLOAD_ARTIFACT == 'true' && env.AZURE_TENANT_ID != ''
-        uses: azure/artifact-signing-action@v1
+        uses: azure/artifact-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1
         with:
           azure-tenant-id: ${{ env.AZURE_TENANT_ID }}
           azure-client-id: ${{ env.AZURE_CLIENT_ID }}
@@ -384,7 +437,7 @@ jobs:
 
       - name: Sign rustdesk self-extracted file and MSI with Azure Trusted Signing
         if: env.UPLOAD_ARTIFACT == 'true' && env.AZURE_TENANT_ID != ''
-        uses: azure/artifact-signing-action@v1
+        uses: azure/artifact-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1
         with:
           azure-tenant-id: ${{ env.AZURE_TENANT_ID }}
           azure-client-id: ${{ env.AZURE_CLIENT_ID }}
@@ -411,6 +464,7 @@ jobs:
   # The fallback for the flutter version, we use Sciter for 32bit Windows.
   build-for-windows-sciter:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
+    needs: [verify-secrets]
     runs-on: ${{ matrix.job.os }}
     # Temporarily disable this action due to additional test is needed.
     # if: false
@@ -495,8 +549,11 @@ jobs:
           mkdir -p ./Release
           mv ./target/release/rustdesk.exe ./Release/clantodesk.exe
           curl -LJ -o ./Release/sciter.dll https://github.com/c-smile/sciter-sdk/raw/master/bin.win/x32/sciter.dll
+          # sciter-sdk e' servito da `master`: senza hash il binario cambierebbe sotto silenzio
+          echo "285f3e6a051a7c61845cd7e4d2120781b6bdf411239f70a85c65b38a52d38f28 *./Release/sciter.dll" | sha256sum -c -
           echo "output_folder=./Release" >> $GITHUB_OUTPUT
           curl -LJ -o ./usbmmidd_v2.zip https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip
+          echo "629b51e9944762bae73948171c65d09a79595cf4c771a82ebc003fbba5b24f51 *./usbmmidd_v2.zip" | sha256sum -c -
           unzip usbmmidd_v2.zip
           # Do not remove x64 files, because the user may run the 32bit version on a 64bit system.
           # Do not remove ./usbmmidd_v2/deviceinstaller64.exe, as x86 exe cannot install and uninstall drivers when running on x64,
@@ -529,7 +586,7 @@ jobs:
 
       - name: Sign rustdesk files with Azure Trusted Signing
         if: env.UPLOAD_ARTIFACT == 'true' && env.AZURE_TENANT_ID != ''
-        uses: azure/artifact-signing-action@v1
+        uses: azure/artifact-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1
         with:
           azure-tenant-id: ${{ env.AZURE_TENANT_ID }}
           azure-client-id: ${{ env.AZURE_CLIENT_ID }}
@@ -556,7 +613,7 @@ jobs:
 
       - name: Sign rustdesk self-extracted file with Azure Trusted Signing
         if: env.UPLOAD_ARTIFACT == 'true' && env.AZURE_TENANT_ID != ''
-        uses: azure/artifact-signing-action@v1
+        uses: azure/artifact-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1
         with:
           azure-tenant-id: ${{ env.AZURE_TENANT_ID }}
           azure-client-id: ${{ env.AZURE_CLIENT_ID }}
@@ -675,7 +732,7 @@ jobs:
           path: target/aarch64-apple-ios/release/liblibrustdesk.a
 
       - name: Install the Apple certificate and provisioning profile
-        uses: apple-actions/import-codesign-certs@v3
+        uses: apple-actions/import-codesign-certs@63fff01cd422d4b7b855d40ca1e9d34d2de9427d # v3
         with:
           p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           p12-password: ${{ secrets.MACOS_P12_PASSWORD }}
@@ -756,7 +813,7 @@ jobs:
           done
 
       - name: Publish ipa package
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
@@ -827,6 +884,8 @@ jobs:
         run: |
           pushd /tmp
           wget https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.22.0/apple-codesign-0.22.0-macos-universal.tar.gz
+          # questo binario firma i nostri build macOS: verifica obbligatoria
+          echo "7031ee75ca2a55c558071701078517c05d959e012dd87833ac6b4a23c5ff52b9 *apple-codesign-0.22.0-macos-universal.tar.gz" | shasum -a 256 -c -
           tar -zxvf apple-codesign-0.22.0-macos-universal.tar.gz
           mv apple-codesign-0.22.0-macos-universal/rcodesign /usr/local/bin
           popd
@@ -1032,7 +1091,7 @@ jobs:
   #         tar czf clantodesk-${{ env.VERSION }}-unsigned.tar.gz *.dmg windows-x86_64 windows-x86
   #
   #     - name: Publish unsigned app
-  #       uses: softprops/action-gh-release@v1
+  #       uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
   #       with:
   #         prerelease: true
   #         tag_name: ${{ env.TAG_NAME }}
@@ -1856,6 +1915,7 @@ jobs:
 
   build-rustdesk-linux-sciter:
     if: ${{ inputs.upload-artifact }}
+    needs: [verify-secrets]
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
     strategy:
@@ -1870,6 +1930,7 @@ jobs:
               distro: ubuntu18.04,
               deb_arch: amd64,
               sciter_arch: x64,
+              sciter_sha256: a1682fbf55e004f1862d6ace31b5220121d20906bdbf308d0a9237b451e4db86,
               vcpkg-triplet: x64-linux,
               extra_features: ",hwcodec,unix-file-copy-paste",
             }
@@ -1880,6 +1941,7 @@ jobs:
               distro: ubuntu18.04-rustdesk,
               deb_arch: armhf,
               sciter_arch: arm32,
+              sciter_sha256: e68092ef9182ab42c69f0954de5709ccc9266a2e73af47dc1eeab3a5114fe435,
               vcpkg-triplet: arm-linux,
               extra_features: ",unix-file-copy-paste",
             }
@@ -2011,7 +2073,8 @@ jobs:
             rm -rf rust-${{env.RUST_TOOLCHAIN_VERSION}}-${{ matrix.job.target }}
             popd
             # install newer nasm for aom
-            wget --output-document nasm.deb "http://ftp.us.debian.org/debian/pool/main/n/nasm/nasm_${{ env.SCITER_NASM_DEBVERSION }}_${{ matrix.job.deb_arch }}.deb"
+            # deb.debian.org su HTTPS: ftp.us.debian.org serve solo HTTP in chiaro
+            wget --output-document nasm.deb "https://deb.debian.org/debian/pool/main/n/nasm/nasm_${{ env.SCITER_NASM_DEBVERSION }}_${{ matrix.job.deb_arch }}.deb"
             dpkg -i nasm.deb
             rm -f nasm.deb
           run: |
@@ -2054,6 +2117,7 @@ jobs:
             mkdir -p ./Release
             mv ./target/release/rustdesk ./Release/clantodesk
             wget -O ./Release/libsciter-gtk.so https://github.com/c-smile/sciter-sdk/raw/master/bin.lnx/${{ matrix.job.sciter_arch }}/libsciter-gtk.so
+            echo "${{ matrix.job.sciter_sha256 }} *./Release/libsciter-gtk.so" | sha256sum -c -
             export DEB_ARCH=${{ matrix.job.deb_arch }}
             ./build.py --package ./Release
 

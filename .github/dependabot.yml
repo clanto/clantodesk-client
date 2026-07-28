@@ -1,11 +1,47 @@
 version: 2
 updates:
+  # NOTA: dependabot legge questo file dal branch di default del repo (master).
+  # Finche' il default resta master, queste voci non producono PR su clnt_1.4.9.
   - package-ecosystem: "gitsubmodule"
     directory: "/"
-    target-branch: "master"
+    target-branch: "clnt_1.4.9"
     schedule:
       interval: "daily"
     commit-message:
       prefix: "Git submodule"
+    labels:
+      - "dependencies"
+
+  # Le action di terze parti sono pinnate a SHA: senza questo ecosystem non
+  # arrivano ne' aggiornamenti ne' alert di sicurezza su di esse.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "clnt_1.4.9"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "CI"
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    target-branch: "clnt_1.4.9"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "Cargo"
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "pub"
+    directory: "/flutter"
+    target-branch: "clnt_1.4.9"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "Flutter"
     labels:
       - "dependencies"
