@@ -275,8 +275,11 @@ fn load_icon_from_asset() -> Option<image::DynamicImage> {
     else {
         return None;
     };
+    // Su macOS il tray e' un'immagine template: conta solo l'alpha, non i colori.
+    // icon.png e' l'icona dell'app, piena: come maschera diventa un blocco.
     #[cfg(target_os = "macos")]
-    let path = path.join("../Frameworks/App.framework/Resources/flutter_assets/assets/icon.png");
+    let path =
+        path.join("../Frameworks/App.framework/Resources/flutter_assets/assets/icon_tray_macos.png");
     #[cfg(windows)]
     let path = path.join(r"data\flutter_assets\assets\icon.png");
     #[cfg(target_os = "linux")]

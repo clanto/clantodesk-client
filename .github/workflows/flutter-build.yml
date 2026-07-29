@@ -9,10 +9,10 @@ on:
       upload-tag:
         type: string
         default: "nightly"
-      # Costruisce solo la catena Android (APK + AAB), salta tutto il resto.
-      only-android:
-        type: boolean
-        default: false
+      # Quali piattaforme costruire: all | windows | macos | linux | android | ios
+      targets:
+        type: string
+        default: "all"
 
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
@@ -183,7 +183,7 @@ jobs:
 
   build-RustDeskTempTopMostWindow:
     needs: [verify-secrets]
-    if: ${{ !inputs.only-android }}
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'windows' }}
     uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
     strategy:
       fail-fast: false
@@ -207,7 +207,7 @@ jobs:
   build-for-windows-flutter:
     name: ${{ matrix.job.target }}
     needs: [build-RustDeskTempTopMostWindow, generate-bridge]
-    if: ${{ !inputs.only-android }}
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'windows' }}
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
@@ -546,7 +546,7 @@ jobs:
   build-for-windows-sciter:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     needs: [verify-secrets]
-    if: ${{ !inputs.only-android }}
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'windows' }}
     runs-on: ${{ matrix.job.os }}
     # Temporarily disable this action due to additional test is needed.
     # if: false
@@ -719,7 +719,7 @@ jobs:
             ./SignOutput/clantodesk-*.exe
 
   build-rustdesk-ios:
-    if: ${{ inputs.upload-artifact && !inputs.only-android }}
+    if: ${{ inputs.upload-artifact && (inputs.targets == 'all' || inputs.targets == 'ios') }}
     name: build rustdesk ios ipa
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -903,7 +903,7 @@ jobs:
             flutter/build/ios/ipa/clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}.ipa
 
   build-for-macOS:
-    if: ${{ !inputs.only-android }}
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'macos' }}
     name: ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -1182,6 +1182,7 @@ jobs:
 
   build-rustdesk-android:
     needs: [generate-bridge]
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'android' }}
     name: build rustdesk android apk ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     strategy:
@@ -1474,6 +1475,7 @@ jobs:
 
   build-rustdesk-android-universal:
     needs: [build-rustdesk-android]
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'android' }}
     name: build rustdesk android universal apk
     runs-on: ubuntu-24.04
     env:
@@ -1660,7 +1662,7 @@ jobs:
 
   build-rustdesk-linux:
     needs: [generate-bridge]
-    if: ${{ !inputs.only-android }}
+    if: ${{ inputs.targets == 'all' || inputs.targets == 'linux' }}
     name: build rustdesk linux ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.on }}
     strategy:
@@ -2002,7 +2004,7 @@ jobs:
             res/clantodesk-${{ env.VERSION }}*.zst
 
   build-rustdesk-linux-sciter:
-    if: ${{ inputs.upload-artifact && !inputs.only-android }}
+    if: ${{ inputs.upload-artifact && (inputs.targets == 'all' || inputs.targets == 'linux') }}
     needs: [verify-secrets]
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
@@ -2237,7 +2239,7 @@ jobs:
     name: Build appimage ${{ matrix.job.target }}
     needs: [build-rustdesk-linux]
     runs-on: ubuntu-22.04
-    if: ${{ inputs.upload-artifact && !inputs.only-android }}
+    if: ${{ inputs.upload-artifact && (inputs.targets == 'all' || inputs.targets == 'linux') }}
     strategy:
       fail-fast: false
       matrix:
@@ -2293,7 +2295,7 @@ jobs:
       - build-rustdesk-linux
       - build-rustdesk-linux-sciter
     runs-on: ${{ matrix.job.on }}
-    if: ${{ inputs.upload-artifact && !inputs.only-android }}
+    if: ${{ inputs.upload-artifact && (inputs.targets == 'all' || inputs.targets == 'linux') }}
     strategy:
       fail-fast: false
       matrix:
