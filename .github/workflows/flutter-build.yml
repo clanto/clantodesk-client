@@ -153,6 +153,19 @@ jobs:
           fi
           echo "nomi artefatto ok"
 
+      - name: Check branding assets present
+        shell: bash
+        run: |
+          # .gitignore ha una regola '*png': un asset di brand non aggiunto con -f
+          # resta fuori dal commit e la build ricade sull'icona RustDesk compilata.
+          for f in flutter/assets/icon_tray_macos.png flutter/assets/icon.png res/tray-icon.ico; do
+            if [ ! -s "$f" ]; then
+              echo "::error::$f assente nel checkout: verifica .gitignore e 'git add -f'."
+              exit 1
+            fi
+          done
+          echo "asset di brand presenti"
+
       - name: Check RENDEZVOUS_SERVER and RS_PUB_KEY
         shell: bash
         env:
