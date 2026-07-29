@@ -23,6 +23,8 @@ $FILES = [
     'win_x64_exe'    => "clantodesk-{$LATEST_TAG}-x86_64.exe",
     'win_x64_msi'    => "clantodesk-{$LATEST_TAG}-x86_64.msi",
     'win_x86_sciter' => "clantodesk-{$LATEST_TAG}-x86-sciter.exe",
+    'win_arm_exe'    => "clantodesk-{$LATEST_TAG}-aarch64.exe",
+    'win_arm_msi'    => "clantodesk-{$LATEST_TAG}-aarch64.msi",
     
     // macOS
     'mac_x64'        => "clantodesk-{$LATEST_TAG}-x86_64.dmg",
@@ -140,9 +142,15 @@ $release_date = get_release_date($REPO_URL, $LATEST_TAG);
         <div id="main-download" class="hidden space-y-6 mb-12">
             <div class="bg-blue-600 rounded-3xl p-8 text-center shadow-xl transform transition hover:scale-[1.02] border border-blue-400/30">
                 <h3 class="text-3xl font-bold mb-4" id="detected-os">Versione Rilevata</h3>
-                <a id="download-btn" href="#" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-xl hover:bg-gray-100 transition shadow-lg active:scale-95">
-                    Scarica Ora
-                </a>
+                <div class="flex flex-wrap justify-center gap-4">
+                    <a id="download-btn" href="#" class="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-bold text-xl hover:bg-gray-100 transition shadow-lg active:scale-95">
+                        Scarica Ora
+                    </a>
+                    <a id="download-btn-alt" href="#" class="hidden items-center bg-blue-500 text-white px-10 py-4 rounded-full font-bold text-xl hover:bg-blue-400 transition shadow-lg active:scale-95">
+                        Alternativa
+                    </a>
+                </div>
+                <p id="download-note" class="hidden text-sm text-blue-100 mt-4"></p>
             </div>
         </div>
 
@@ -160,6 +168,13 @@ $release_date = get_release_date($REPO_URL, $LATEST_TAG);
                         <div class="flex gap-2">
                             <a href="<?php echo "{$DOWNLOAD_BASE}/{$FILES['win_x64_exe']}"; ?>" class="flex-1 text-center py-2 bg-gray-700 hover:bg-blue-600 rounded-lg transition font-semibold">.exe</a>
                             <a href="<?php echo "{$DOWNLOAD_BASE}/{$FILES['win_x64_msi']}"; ?>" class="flex-1 text-center py-2 bg-gray-700 hover:bg-blue-600 rounded-lg transition font-semibold">.msi</a>
+                        </div>
+                    </div>
+                    <div class="group border-t border-gray-700 pt-3">
+                        <p class="text-xs text-gray-500 mb-1 group-hover:text-blue-400 transition">ARM64 (Snapdragon / Surface)</p>
+                        <div class="flex gap-2">
+                            <a href="<?php echo "{$DOWNLOAD_BASE}/{$FILES['win_arm_exe']}"; ?>" class="flex-1 text-center py-2 bg-gray-700 hover:bg-blue-600 rounded-lg transition font-semibold">.exe</a>
+                            <a href="<?php echo "{$DOWNLOAD_BASE}/{$FILES['win_arm_msi']}"; ?>" class="flex-1 text-center py-2 bg-gray-700 hover:bg-blue-600 rounded-lg transition font-semibold">.msi</a>
                         </div>
                     </div>
                     <div class="group border-t border-gray-700 pt-3">
@@ -293,69 +308,107 @@ $release_date = get_release_date($REPO_URL, $LATEST_TAG);
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const statusText = document.getElementById('status-text');
             const analysingBox = document.getElementById('analysing');
+            const statusText = document.getElementById('status-text');
             const mainDownload = document.getElementById('main-download');
             const detectedOSText = document.getElementById('detected-os');
-            const downloadBtn = document.getElementById('download-btn');
-            const fileInfo = document.getElementById('file-info');
+            const btn = document.getElementById('download-btn');
+            const btnAlt = document.getElementById('download-btn-alt');
+            const note = document.getElementById('download-note');
 
-            // --- Logica di Rilevamento ---
-            const ua = navigator.userAgent;
-            const platform = navigator.platform.toLowerCase();
-            let os = "Sconosciuto";
-            let downloadUrl = "";
-            let fileName = "";
+            const BASE = "<?php echo $DOWNLOAD_BASE; ?>";
+            const F = {
+                win_x64:   "<?php echo $FILES['win_x64_exe']; ?>",
+                win_arm:   "<?php echo $FILES['win_arm_exe']; ?>",
+                mac_arm:   "<?php echo $FILES['mac_arm']; ?>",
+                mac_x64:   "<?php echo $FILES['mac_x64']; ?>",
+                linux_x64: "<?php echo $FILES['linux_deb_x64']; ?>",
+                linux_arm: "<?php echo $FILES['linux_deb_arm']; ?>"
+            };
+            const PLAY = "<?php echo $PLAY_STORE_URL; ?>";
+            const APPSTORE = "<?php echo $APP_STORE_URL; ?>";
 
-            // Simuliamo un ritardo per "l'analisi"
-            setTimeout(() => {
-                const is64bit = ua.includes('x86_64') || ua.includes('Win64') || ua.includes('x64') || platform.includes('win64');
-                const isARM = ua.includes('arm64') || ua.includes('aarch64') || platform.includes('arm') || platform.includes('aarch64');
-
-                if (ua.includes('Win')) {
-                    os = "Windows";
-                    fileName = "<?php echo $FILES['win_x64_exe']; ?>";
-                } else if (ua.includes('Mac')) {
-                    os = "macOS";
-                    // Rilevamento architettura Mac
-                    if (isARM || (navigator.maxTouchPoints > 0)) {
-                        os += " (Apple Silicon)";
-                        fileName = "<?php echo $FILES['mac_arm']; ?>";
-                    } else {
-                        os += " (Intel)";
-                        fileName = "<?php echo $FILES['mac_x64']; ?>";
+            // Solo Chromium dichiara l'architettura. Safari e Firefox no.
+            async function archFromClientHints() {
+                try {
+                    if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+                        const d = await navigator.userAgentData.getHighEntropyValues(['architecture']);
+                        if (d.architecture === 'arm') return 'arm';
+                        if (d.architecture === 'x86') return 'x64';
                     }
-                } else if (ua.includes('Linux')) {
-                    os = "Linux";
-                    fileName = "<?php echo $FILES['linux_deb_x64']; ?>";
-                } else if (ua.includes('Android')) {
-                    os = "Android";
-                    downloadUrl = "<?php echo $PLAY_STORE_URL; ?>";
+                } catch (e) {}
+                return null;
+            }
+
+            // Su macOS lo User-Agent dice sempre "Intel", anche su Apple Silicon.
+            // Il renderer WebGL invece distingue: "Apple GPU" vs Intel/AMD/NVIDIA.
+            function macArchFromWebGL() {
+                try {
+                    const gl = document.createElement('canvas').getContext('webgl');
+                    if (!gl) return null;
+                    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+                    const r = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
+                                         : gl.getParameter(gl.RENDERER));
+                    if (/intel|amd|radeon|nvidia|geforce/i.test(r)) return 'x64';
+                    if (/apple/i.test(r)) return 'arm';
+                } catch (e) {}
+                return null;
+            }
+
+            function show(osLabel, file, autostart) {
+                analysingBox.classList.add('hidden');
+                mainDownload.classList.remove('hidden');
+                detectedOSText.innerText = "Scarica per " + osLabel;
+                btn.href = file.startsWith('http') ? file : BASE + "/" + file;
+                if (autostart) {
+                    setTimeout(() => { window.location.href = btn.href; }, 1500);
+                }
+            }
+
+            // Architettura non determinabile: due pulsanti e nessun download
+            // automatico, meglio che servire il pacchetto sbagliato.
+            function showChoice(osLabel, labelA, fileA, labelB, fileB, msg) {
+                analysingBox.classList.add('hidden');
+                mainDownload.classList.remove('hidden');
+                detectedOSText.innerText = osLabel;
+                btn.href = BASE + "/" + fileA;
+                btn.innerText = labelA;
+                btnAlt.href = BASE + "/" + fileB;
+                btnAlt.innerText = labelB;
+                btnAlt.classList.remove('hidden');
+                btnAlt.classList.add('inline-block');
+                note.innerText = msg;
+                note.classList.remove('hidden');
+            }
+
+            (async () => {
+                const ua = navigator.userAgent;
+                const arch = await archFromClientHints();
+
+                if (ua.includes('Android')) {
+                    show("Android", PLAY, false);
                 } else if (ua.includes('iPhone') || ua.includes('iPad')) {
-                    os = "iOS";
-                    downloadUrl = "<?php echo $APP_STORE_URL; ?>";
-                }
-
-                if (!downloadUrl && fileName) {
-                    downloadUrl = "<?php echo $DOWNLOAD_BASE; ?>/" + fileName;
-                }
-
-                if (downloadUrl) {
-                    analysingBox.classList.add('hidden');
-                    mainDownload.classList.remove('hidden');
-                    detectedOSText.innerText = "Scarica per " + os;
-                    downloadBtn.href = downloadUrl;
-                    
-                    // Avvio download automatico (opzionale, solo se non mobile)
-                    if (!ua.includes('Android') && !ua.includes('iPhone')) {
-                        setTimeout(() => { 
-                            window.location.href = downloadUrl; 
-                        }, 1500);
-                    }
+                    show("iOS", APPSTORE, false);
+                } else if (ua.includes('Win')) {
+                    if (arch === 'arm') show("Windows ARM64", F.win_arm, true);
+                    else show("Windows (x64)", F.win_x64, true);
+                } else if (ua.includes('Mac')) {
+                    const macArch = arch || macArchFromWebGL();
+                    if (macArch === 'arm') show("macOS (Apple Silicon)", F.mac_arm, true);
+                    else if (macArch === 'x64') show("macOS (Intel)", F.mac_x64, true);
+                    else showChoice("macOS: scegli la versione",
+                        "Apple Silicon", F.mac_arm, "Intel", F.mac_x64,
+                        "Non riusciamo a determinare il processore. Se il Mac e' del 2020 o successivo, quasi certamente Apple Silicon (menu Apple > Informazioni su questo Mac).");
+                } else if (ua.includes('Linux')) {
+                    if (arch === 'arm') show("Linux ARM64 (.deb)", F.linux_arm, true);
+                    else if (arch === 'x64') show("Linux x86_64 (.deb)", F.linux_x64, true);
+                    else showChoice("Linux: scegli l'architettura",
+                        "x86_64 .deb", F.linux_x64, "ARM64 .deb", F.linux_arm,
+                        "Verifica con: uname -m. Per altri formati usa l'elenco qui sotto.");
                 } else {
                     statusText.innerText = "Non siamo riusciti a identificare il tuo dispositivo. Scegli una versione qui sotto.";
                 }
-            }, 1000);
+            })();
         });
     </script>
 </body>
