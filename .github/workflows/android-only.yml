@@ -1,0 +1,20 @@
+name: Android only (APK + AAB)
+
+# Costruisce solo la catena Android, per non far ripartire tutta la nightly quando
+# serve solo un AAB nuovo per il Play Store. Salta Windows, macOS, Linux e iOS.
+on:
+  workflow_dispatch:
+    inputs:
+      upload-tag:
+        description: "Tag della release su cui pubblicare"
+        type: string
+        default: "nightly"
+
+jobs:
+  run-android:
+    uses: ./.github/workflows/flutter-build.yml
+    secrets: inherit
+    with:
+      upload-artifact: true
+      upload-tag: ${{ inputs.upload-tag }}
+      only-android: true

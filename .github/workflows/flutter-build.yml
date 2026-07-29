@@ -9,6 +9,10 @@ on:
       upload-tag:
         type: string
         default: "nightly"
+      # Costruisce solo la catena Android (APK + AAB), salta tutto il resto.
+      only-android:
+        type: boolean
+        default: false
 
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
@@ -179,6 +183,7 @@ jobs:
 
   build-RustDeskTempTopMostWindow:
     needs: [verify-secrets]
+    if: ${{ !inputs.only-android }}
     uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
     strategy:
       fail-fast: false
@@ -202,6 +207,7 @@ jobs:
   build-for-windows-flutter:
     name: ${{ matrix.job.target }}
     needs: [build-RustDeskTempTopMostWindow, generate-bridge]
+    if: ${{ !inputs.only-android }}
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
@@ -540,6 +546,7 @@ jobs:
   build-for-windows-sciter:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     needs: [verify-secrets]
+    if: ${{ !inputs.only-android }}
     runs-on: ${{ matrix.job.os }}
     # Temporarily disable this action due to additional test is needed.
     # if: false
@@ -712,7 +719,7 @@ jobs:
             ./SignOutput/clantodesk-*.exe
 
   build-rustdesk-ios:
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.only-android }}
     name: build rustdesk ios ipa
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -896,6 +903,7 @@ jobs:
             flutter/build/ios/ipa/clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}.ipa
 
   build-for-macOS:
+    if: ${{ !inputs.only-android }}
     name: ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -1612,7 +1620,11 @@ jobs:
           # build flutter (APK and AAB are automatically signed using key.properties)
           pushd flutter
           flutter build apk "--${{ env.reltype }}" --target-platform android-arm64,android-arm,android-x64${{ env.x86_target }} --no-tree-shake-icons
-          flutter build appbundle "--${{ env.reltype }}" --no-tree-shake-icons
+          # AAB senza armeabi-v7a: le .so a 32 bit restano a p_align 4096 (default NDK,
+          # nessun dispositivo a pagine 16 KB e' a 32 bit) e Play le segnala. L'APK
+          # universale e quelli per singola architettura le mantengono.
+          rm -rf android/app/src/main/jniLibs/armeabi-v7a
+          flutter build appbundle "--${{ env.reltype }}" --target-platform android-arm64,android-x64 --no-tree-shake-icons
           popd
           
           # Move signed artifacts to release directory
@@ -1648,6 +1660,7 @@ jobs:
 
   build-rustdesk-linux:
     needs: [generate-bridge]
+    if: ${{ !inputs.only-android }}
     name: build rustdesk linux ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.on }}
     strategy:
@@ -1989,7 +2002,7 @@ jobs:
             res/clantodesk-${{ env.VERSION }}*.zst
 
   build-rustdesk-linux-sciter:
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.only-android }}
     needs: [verify-secrets]
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
@@ -2224,7 +2237,7 @@ jobs:
     name: Build appimage ${{ matrix.job.target }}
     needs: [build-rustdesk-linux]
     runs-on: ubuntu-22.04
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.only-android }}
     strategy:
       fail-fast: false
       matrix:
@@ -2280,7 +2293,7 @@ jobs:
       - build-rustdesk-linux
       - build-rustdesk-linux-sciter
     runs-on: ${{ matrix.job.on }}
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.upload-artifact && !inputs.only-android }}
     strategy:
       fail-fast: false
       matrix:
