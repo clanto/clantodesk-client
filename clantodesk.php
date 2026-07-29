@@ -5,7 +5,7 @@
  */
 
 // --- CONFIGURAZIONE ---
-$LATEST_TAG = '1.4.5';
+$LATEST_TAG = '1.4.9';
 $UPDATE_ENABLED = true;
 
 // Store Links
@@ -42,10 +42,10 @@ $FILES = [
     'linux_flat_arm' => "clantodesk-{$LATEST_TAG}-aarch64.flatpak",
     
     // Linux RPM (Fedora/openSUSE)
-    'linux_rpm_x64'  => "clantodesk-{$LATEST_TAG}-x86_64.rpm",
-    'linux_rpm_arm'  => "clantodesk-{$LATEST_TAG}-aarch64.rpm",
-    'linux_rpm_suse_x64' => "clantodesk-{$LATEST_TAG}-x86_64-suse.rpm",
-    'linux_rpm_suse_arm' => "clantodesk-{$LATEST_TAG}-aarch64-suse.rpm",
+    'linux_rpm_x64'  => "clantodesk-{$LATEST_TAG}-0.x86_64.rpm",
+    'linux_rpm_arm'  => "clantodesk-{$LATEST_TAG}-0.aarch64.rpm",
+    'linux_rpm_suse_x64' => "clantodesk-{$LATEST_TAG}-0.x86_64-suse.rpm",
+    'linux_rpm_suse_arm' => "clantodesk-{$LATEST_TAG}-0.aarch64-suse.rpm",
     
     // Android APK
     'android_univ'   => "clantodesk-{$LATEST_TAG}-universal.apk",
