@@ -40,16 +40,14 @@
 				</RegistryKey>
 			</Component>
 
-			<!-- Sorgente eventi per il Windows Event Log (sink di audit ClantoDesk).
-			     Il nome della chiave deve coincidere con EVENT_SOURCE in
-			     src/clanto/audit_sink.rs: $(var.Product) e' il display name.
-			     EventMessageFile punta a EventCreate.exe, che fornisce un message
-			     table generico: senza, il Visualizzatore eventi mostrerebbe
-			     "impossibile trovare la descrizione". TypesSupported=7 abilita
-			     Error|Warning|Information. -->
+			<!-- Sorgente eventi per il Windows Event Log. Il nome chiave deve
+			     coincidere con EVENT_SOURCE in src/clanto/audit_sink.rs.
+			     EventLogMessages.dll del .NET rende qualsiasi Event ID.
+			     La stessa chiave la crea anche ensure_event_source_registered(),
+			     che non sovrascrive un EventMessageFile esistente. -->
 			<Component Id="Product.Registry.EventLogSource" Guid="0F3A6B21-7C48-4D9E-9B15-2A7E5C6D8F40">
 				<RegistryKey Root="HKLM" Key="SYSTEM\CurrentControlSet\Services\EventLog\Application\$(var.Product)">
-					<RegistryValue Type="expandable" Name="EventMessageFile" Value="%SystemRoot%\System32\EventCreate.exe" />
+					<RegistryValue Type="expandable" Name="EventMessageFile" Value="%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\EventLogMessages.dll;%SystemRoot%\Microsoft.NET\Framework\v4.0.30319\EventLogMessages.dll" />
 					<RegistryValue Type="integer" Name="TypesSupported" Value="7" />
 				</RegistryKey>
 			</Component>

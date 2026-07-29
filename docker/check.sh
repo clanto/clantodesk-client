@@ -19,6 +19,13 @@ case "$FEATURES" in
   *)           CARGO_ARGS="--features $FEATURES" ;;
 esac
 
+# Se il daemon non risponde, dirlo subito e chiaramente: un fallimento qui e'
+# facile da confondere con "check passato" leggendo l'exit code sbagliato.
+if ! docker info >/dev/null 2>&1; then
+  echo "ERRORE: il daemon Docker non risponde. Avvia Docker Desktop e riprova." >&2
+  exit 2
+fi
+
 echo "==> build immagine (rapido dopo la prima volta)"
 docker build -q -f "$REPO_ROOT/docker/Dockerfile.check" -t "$IMAGE" "$REPO_ROOT/docker" >/dev/null
 

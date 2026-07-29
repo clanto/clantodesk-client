@@ -307,6 +307,12 @@ fn correct_app_name(s: &str) -> String {
     if let Some(bundleid) = get_bundle_id() {
         s = s.replace("com.carriez.rustdesk", &bundleid);
     }
+    // Anche l'organizzazione: get_full_name() usa ORG, i template no.
+    // Dopo il bundle id (che la contiene) e prima dei nomi app.
+    let org = hbb_common::config::ORG.read().unwrap().clone();
+    if !org.is_empty() {
+        s = s.replace("com.carriez", &org);
+    }
     s = s.replace("rustdesk", &crate::get_app_name().to_lowercase());
     s = s.replace("RustDesk", &crate::get_app_name());
     s

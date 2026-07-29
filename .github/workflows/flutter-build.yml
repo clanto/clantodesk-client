@@ -67,13 +67,8 @@ env:
   API_SERVER: "${{ secrets.API_SERVER }}"
 
 jobs:
-  # Preflight: fallisce prima di compilare qualsiasi cosa.
-  # 1. secret dei nostri server: senza, il binario ricadrebbe sull'infrastruttura
-  #    pubblica RustDesk (il client rifiuta comunque di avviarsi, vedi
-  #    check_own_server_configured in src/common.rs, ma e' meglio non produrlo)
-  # 2. versione coerente fra Cargo.toml e i file che NON la derivano da lui
-  # 3. submodule hbb_common non indietro rispetto al tag upstream corrispondente
-  # 4. nessun nome di artefatto rimasto "rustdesk-"
+  # Preflight: blocca i build su secret mancanti, versione incoerente,
+  # submodule hbb_common non allineato, nomi artefatto "rustdesk-".
   verify-secrets:
     name: Preflight (secret, versione, submodule)
     runs-on: ubuntu-latest

@@ -18,10 +18,8 @@
 use hbb_common::{config::Config, log, tokio};
 use serde_json::Value;
 
-// Le chiavi non sono registrate in KEYS_SETTINGS di hbb_common (che e' un
-// submodule upstream): `is_option_can_save()` salva comunque qualsiasi chiave,
-// e `Config::get_option()` legge da OVERWRITE > CONFIG2 > DEFAULT. Quindi si
-// possono anche imporre centralmente via config firmata.
+// Chiavi non registrate in KEYS_SETTINGS (submodule upstream): Config le salva
+// e le legge comunque, e si possono imporre via config firmata.
 pub const OPT_SYSLOG_ENABLED: &str = "clanto-syslog-enabled";
 pub const OPT_SYSLOG_HOST: &str = "clanto-syslog-host";
 pub const OPT_SYSLOG_PORT: &str = "clanto-syslog-port";
@@ -34,9 +32,7 @@ const DEFAULT_FACILITY: u8 = 16; // local0
 const SEVERITY_INFO: u8 = 6;
 const EVENT_SOURCE: &str = "ClantoDesk";
 
-/// NON usare `config::option2bool`: per una chiave che non inizia con "enable-"
-/// o "allow-" ritorna `value != "N"`, quindi una chiave mai impostata risulta
-/// **attiva**. Qui vogliamo il contrario: attivo solo se esplicitamente "Y".
+/// Non usare `option2bool`: per queste chiavi ritorna true se mai impostate.
 fn is_on(key: &str) -> bool {
     Config::get_option(key) == "Y"
 }
@@ -133,17 +129,78 @@ fn send_syslog(kind: &str, payload: &str) {
 #[cfg(not(target_os = "windows"))]
 fn write_event_log(_kind: &str, _payload: &str) {}
 
+/// `EventLogMessages.dll` del .NET definisce gli ID 1-65535 come "%1", quindi
+/// rende qualsiasi Event ID. Elenco separato da ";": vince il primo che esiste.
+#[cfg(target_os = "windows")]
+const EVENT_MESSAGE_FILE: &str = concat!(
+    r"%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\EventLogMessages.dll",
+    ";",
+    r"%SystemRoot%\Microsoft.NET\Framework\v4.0.30319\EventLogMessages.dll"
+);
+
+/// Registra la sorgente eventi in HKLM, una volta per processo. Serve perche'
+/// l'MSI non gira su EXE autoestraente e aggiornamento automatico. Senza
+/// privilegi l'evento si scrive comunque, solo senza descrizione.
+#[cfg(target_os = "windows")]
+fn ensure_event_source_registered() {
+    use std::sync::Once;
+    use winreg::{enums::*, RegKey};
+
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        let path = format!(
+            r"SYSTEM\CurrentControlSet\Services\EventLog\Application\{}",
+            EVENT_SOURCE
+        );
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+
+        // Non sovrascrivere: l'MSI o l'amministratore possono avere di meglio.
+        if let Ok(key) = hklm.open_subkey(&path) {
+            if key
+                .get_value::<String, _>("EventMessageFile")
+                .map_or(false, |v| !v.is_empty())
+            {
+                return;
+            }
+        }
+
+        match hklm.create_subkey(&path) {
+            Ok((key, _)) => {
+                // REG_EXPAND_SZ: %SystemRoot% deve essere espanso da Windows.
+                let mut v = winreg::RegValue {
+                    bytes: Vec::new(),
+                    vtype: REG_EXPAND_SZ,
+                };
+                v.bytes = EVENT_MESSAGE_FILE
+                    .encode_utf16()
+                    .chain(std::iter::once(0))
+                    .flat_map(|c| c.to_le_bytes())
+                    .collect();
+                if let Err(e) = key.set_raw_value("EventMessageFile", &v) {
+                    log::debug!("EventMessageFile: {}", e);
+                }
+                // 7 = Error | Warning | Information
+                if let Err(e) = key.set_value("TypesSupported", &7u32) {
+                    log::debug!("TypesSupported: {}", e);
+                }
+                log::info!("sorgente eventi '{}' registrata", EVENT_SOURCE);
+            }
+            Err(e) => log::debug!(
+                "registrazione sorgente eventi non riuscita (servono privilegi HKLM): {}",
+                e
+            ),
+        }
+    });
+}
+
 /// Scrive nel canale Application dell'Event Log.
-///
-/// Nota: senza un message file registrato, il Visualizzatore eventi mostra
-/// "impossibile trovare la descrizione", ma le stringhe dell'evento restano
-/// leggibili e gli agent SIEM le raccolgono comunque. La sorgente va registrata
-/// dall'MSI in HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\ClantoDesk.
 #[cfg(target_os = "windows")]
 fn write_event_log(kind: &str, payload: &str) {
     use std::os::windows::ffi::OsStrExt;
     use winapi::um::winbase::{DeregisterEventSource, RegisterEventSourceW, ReportEventW};
     use winapi::um::winnt::EVENTLOG_INFORMATION_TYPE;
+
+    ensure_event_source_registered();
 
     fn wide(s: &str) -> Vec<u16> {
         std::ffi::OsStr::new(s)
@@ -152,17 +209,13 @@ fn write_event_log(kind: &str, payload: &str) {
             .collect()
     }
 
-    // Event ID per tipo: regole di alerting SIEM semplici da scrivere.
-    // Tenuti sotto 1000: l'MSI registra EventMessageFile = EventCreate.exe, il cui
-    // message table copre un intervallo basso di ID. Fuori da quello il
-    // Visualizzatore eventi mostrerebbe "impossibile trovare la descrizione"
-    // (i dati restano leggibili, ma l'operatore vede un errore).
-    // Soluzione definitiva: una DLL di messaggi nostra.
+    // 61xxx: fuori dai codici errore Win32. Con ID bassi, se il message file
+    // manca, il Visualizzatore mostra un errore di sistema fuorviante.
     let event_id: u32 = match kind {
-        "conn" => 100,
-        "file" => 101,
-        "alarm" => 102,
-        _ => 199,
+        "conn" => 61000,
+        "file" => 61001,
+        "alarm" => 61002,
+        _ => 61099,
     };
 
     unsafe {
