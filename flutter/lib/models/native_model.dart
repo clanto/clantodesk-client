@@ -3,7 +3,6 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:external_path/external_path.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -153,8 +152,10 @@ class PlatformFFI {
       _startListenEvent(_ffiBind); // global event
       try {
         if (isAndroid) {
-          // only support for android
-          _homeDir = (await ExternalPath.getExternalStorageDirectories())[0];
+          // Cartella dell'app: leggibile senza MANAGE_EXTERNAL_STORAGE, che Play
+          // non concede alle app di assistenza remota.
+          final d = await getExternalStorageDirectory();
+          _homeDir = d?.path ?? (await getApplicationDocumentsDirectory()).path;
         } else if (isIOS) {
           // The previous code was `_homeDir = (await getDownloadsDirectory())?.path ?? '';`,
           // which provided the `downloads` path in the sandbox.

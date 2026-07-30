@@ -2636,13 +2636,7 @@ connect(BuildContext context, String id,
     }
   } else {
     if (isFileTransfer) {
-      if (isAndroid) {
-        if (!await AndroidPermissionManager.check(kManageExternalStorage)) {
-          if (!await AndroidPermissionManager.request(kManageExternalStorage)) {
-            return;
-          }
-        }
-      }
+      // Su Android nessun permesso: scoped storage, cartella dell'app.
       if (isWeb) {
         Navigator.push(
           context,
