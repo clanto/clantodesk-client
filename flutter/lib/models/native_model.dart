@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:ffi/ffi.dart';
@@ -283,6 +284,12 @@ class PlatformFFI {
   }
 
   void setRgbaCallback(void Function(int, Uint8List) fun) async {}
+
+  // web only, decoded WebCodecs frames arriving as ready-made images
+  void setVideoFrameCallback(
+      Future<void> Function(int, ui.Image, bool Function()) fun) {}
+
+  void clearVideoFrameCallback() {}
 
   void startDesktopWebListener() {}
 
