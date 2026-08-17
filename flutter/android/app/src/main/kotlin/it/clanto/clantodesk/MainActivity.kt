@@ -60,7 +60,7 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         if (MainService.isReady) {
-            Intent(activity, MainService::class.java).also {
+            Intent(this@MainActivity, MainService::class.java).also {
                 bindService(it, serviceConnection, Context.BIND_AUTO_CREATE)
             }
         }
@@ -81,7 +81,7 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onResume() {
         super.onResume()
         val inputPer = InputService.isOpen
-        activity.runOnUiThread {
+        this@MainActivity.runOnUiThread {
             flutterMethodChannel?.invokeMethod(
                 "on_state_changed",
                 mapOf("name" to "input", "value" to inputPer.toString())
@@ -142,7 +142,7 @@ class MainActivity : FlutterFragmentActivity() {
             // make sure result will be invoked, otherwise flutter will await forever
             when (call.method) {
                 "init_service" -> {
-                    Intent(activity, MainService::class.java).also {
+                    Intent(this@MainActivity, MainService::class.java).also {
                         bindService(it, serviceConnection, Context.BIND_AUTO_CREATE)
                     }
                     if (MainService.isReady) {
@@ -177,14 +177,14 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "check_permission" -> {
                     if (call.arguments is String) {
-                        result.success(XXPermissions.isGranted(context, call.arguments as String))
+                        result.success(XXPermissions.isGranted(this@MainActivity, call.arguments as String))
                     } else {
                         result.success(false)
                     }
                 }
                 "request_permission" -> {
                     if (call.arguments is String) {
-                        requestPermission(context, call.arguments as String)
+                        requestPermission(this@MainActivity, call.arguments as String)
                         result.success(true)
                     } else {
                         result.success(false)
@@ -192,7 +192,7 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 START_ACTION -> {
                     if (call.arguments is String) {
-                        startAction(context, call.arguments as String)
+                        startAction(this@MainActivity, call.arguments as String)
                         result.success(true)
                     } else {
                         result.success(false)
