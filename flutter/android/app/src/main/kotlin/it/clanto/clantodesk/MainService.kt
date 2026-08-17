@@ -171,7 +171,7 @@ class MainService : Service() {
                     e.printStackTrace()
                 }
             }
-            "chat_server_mode" -> {
+            "chat_server_mode", "chat_client_mode" -> {
                 try {
                     val jsonObject = JSONObject(arg1)
                     val id = jsonObject.getInt("id")
@@ -718,6 +718,7 @@ class MainService : Service() {
     }
 
     private fun chatMessageNotification(clientID: Int, text: String) {
+        if (MainActivity.isInForeground) return
         val floatingState = getSharedPreferences(FLOATING_STATE_PREFERENCES, MODE_PRIVATE)
         val unreadMessages = floatingState.getInt(FLOATING_UNREAD_MESSAGES, 0)
         floatingState.edit()
@@ -729,22 +730,37 @@ class MainService : Service() {
             addCategory(Intent.CATEGORY_LAUNCHER)
             putExtra(MainActivity.EXTRA_OPEN_CHAT, true)
         }
+        val notificationID = getClientNotifyID(clientID)
         val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.getActivity(this, clientID, intent, FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
+            PendingIntent.getActivity(this, notificationID, intent, FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
         } else {
-            PendingIntent.getActivity(this, clientID, intent, FLAG_UPDATE_CURRENT)
+            PendingIntent.getActivity(this, notificationID, intent, FLAG_UPDATE_CURRENT)
         }
-        val notification = notificationBuilder
+        val publicNotification = NotificationCompat.Builder(this, notificationChannel)
+            .setSmallIcon(R.mipmap.ic_stat_logo)
+            .setContentTitle("ClantoDesk")
+            .setContentText(translate("New message"))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+        val notification = NotificationCompat.Builder(this, notificationChannel)
+            .setSmallIcon(R.mipmap.ic_stat_logo)
             .setOngoing(false)
+            .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setOnlyAlertOnce(false)
-            .setContentTitle("${translate("Chat")} - ClantoDesk")
+            .setDefaults(Notification.DEFAULT_ALL)
+            .setContentTitle(translate("New message"))
             .setContentText(text)
+            .setSubText("ClantoDesk")
+            .setTicker(translate("New message"))
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(pendingIntent)
+            .setColor(ContextCompat.getColor(this, R.color.primary))
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicNotification)
             .build()
-        notificationManager.notify(getClientNotifyID(clientID), notification)
+        notificationManager.notify(notificationID, notification)
     }
 
     private fun getClientNotifyID(clientID: Int): Int {

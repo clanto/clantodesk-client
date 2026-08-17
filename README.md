@@ -69,6 +69,14 @@ disponibile un'icona flottante con il proprio marchio. Se arrivano messaggi di
 chat mentre l'app è in background, l'icona mostra il numero dei messaggi non
 letti fino a `99+` e resta interamente visibile per non tagliare il badge.
 
+Le notifiche chat funzionano anche nella direzione opposta: se il telefono sta
+controllando un altro dispositivo e il tecnico passa temporaneamente al browser
+o a un'altra app, ClantoDesk segnala i nuovi messaggi ricevuti dalla sessione.
+Toccando la notifica viene ripristinata la sessione e aperta la relativa chat.
+Con il dispositivo sbloccato la notifica mostra il titolo “Hai un nuovo
+messaggio” e il relativo testo; sulla schermata bloccata viene mostrato soltanto
+l'avviso generico, senza esporre il contenuto della conversazione.
+
 Il menu dell'icona mostra `Chat (N)` quando ci sono messaggi da leggere. La voce
 apre direttamente la scheda Chat e azzera il contatore. Lo stesso collegamento
 diretto viene usato dalle notifiche dei nuovi messaggi. Entrando nella chat
@@ -79,6 +87,28 @@ Le richieste di chiamata vocale usano una notifica distinta e chiaramente
 identificata come chiamata, invece di una richiesta generica. Le notifiche
 Android richiedono il relativo permesso nelle versioni del sistema che lo
 prevedono.
+
+Quando l'utente termina una sessione ricevuta, ClantoDesk distingue fra `Solo
+disconnetti` e `Disconnetti e arresta`. La prima scelta chiude la connessione
+corrente ma lascia attivo il servizio per l'accesso non presidiato: un
+dispositivo autorizzato potrebbe quindi collegarsi nuovamente. La seconda
+chiude tutte le sessioni e arresta il servizio, rendendo il telefono non
+raggiungibile finché il servizio non viene riattivato.
+
+Dopo `Solo disconnetti`, un avviso conferma che ClantoDesk resta disponibile e
+offre l'azione immediata `Arresta ora`, così l'utente può cambiare decisione
+senza cercare il comando nelle impostazioni.
+
+L'arresto interrompe l'uso delle capacità di controllo da parte di ClantoDesk,
+ma non revoca il permesso di Accessibilità nelle impostazioni di Android: per
+ragioni di sicurezza del sistema operativo, tale autorizzazione può essere
+revocata soltanto dall'utente o da una policy di gestione del dispositivo.
+
+L'accesso alle impostazioni su Android e iOS è protetto dall'autenticazione
+locale del dispositivo. Il sistema propone biometria quando disponibile e usa
+PIN o passcode del dispositivo come metodo di recupero; ClantoDesk non riceve e
+non conserva i dati biometrici o la credenziale di sblocco. L'autenticazione
+viene richiesta nuovamente dopo che l'app è passata in background.
 
 ### Funzioni gestite e temporaneamente non esposte
 

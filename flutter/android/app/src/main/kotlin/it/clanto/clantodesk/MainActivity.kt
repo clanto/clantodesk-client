@@ -33,16 +33,18 @@ import androidx.annotation.RequiresApi
 import org.json.JSONArray
 import org.json.JSONObject
 import com.hjq.permissions.XXPermissions
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import kotlin.concurrent.thread
 
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     companion object {
         const val EXTRA_OPEN_CHAT = "open_chat"
         var flutterMethodChannel: MethodChannel? = null
+        var isInForeground = false
+            private set
         private var _rdClipboardManager: RdClipboardManager? = null
         val rdClipboardManager: RdClipboardManager?
             get() = _rdClipboardManager;
@@ -458,6 +460,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onStop() {
+        isInForeground = false
         super.onStop()
         val disableFloatingWindow = FFI.getLocalOption("disable-floating-window") == "Y"
         if (!disableFloatingWindow && MainService.isReady) {
@@ -467,9 +470,14 @@ class MainActivity : FlutterActivity() {
 
     override fun onStart() {
         super.onStart()
+        isInForeground = true
         stopService(Intent(this, FloatingWindowService::class.java))
         if (intent?.getBooleanExtra(EXTRA_OPEN_CHAT, false) == true) {
             intent.removeExtra(EXTRA_OPEN_CHAT)
+            getSharedPreferences(FLOATING_STATE_PREFERENCES, Context.MODE_PRIVATE)
+                .edit()
+                .putInt(FLOATING_UNREAD_MESSAGES, 0)
+                .apply()
             Handler(Looper.getMainLooper()).postDelayed({
                 flutterMethodChannel?.invokeMethod("open_chat", null)
             }, 300)

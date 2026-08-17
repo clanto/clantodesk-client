@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="it.clanto.clantodesk">
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <!-- Il trasferimento file usa SAF per la selezione e MediaStore per Download.
          Non richiede MANAGE_EXTERNAL_STORAGE né READ_EXTERNAL_STORAGE. -->

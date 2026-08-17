@@ -711,7 +711,7 @@ class ConnectionManager extends StatelessWidget {
                           style: Theme.of(context).textTheme.bodyMedium,
                         ).marginOnly(bottom: 5),
                   client.authorized
-                      ? _buildDisconnectButton(client)
+                      ? _buildDisconnectButton(context, client)
                       : _buildNewConnectionHint(serverModel, client),
                   if (client.incomingVoiceCall && !client.inVoiceCall)
                     ..._buildNewVoiceCallHint(context, serverModel, client),
@@ -719,14 +719,11 @@ class ConnectionManager extends StatelessWidget {
             .toList());
   }
 
-  Widget _buildDisconnectButton(Client client) {
+  Widget _buildDisconnectButton(BuildContext context, Client client) {
     final disconnectButton = ElevatedButton.icon(
       style: ButtonStyle(backgroundColor: MaterialStatePropertyAll(Colors.red)),
       icon: const Icon(Icons.close),
-      onPressed: () {
-        bind.cmCloseConnection(connId: client.id);
-        gFFI.invokeMethod("cancel_notification", client.id);
-      },
+      onPressed: () => _showDisconnectOptions(context, client),
       label: Text(translate("Disconnect")),
     );
     final buttons = [disconnectButton];
@@ -756,6 +753,42 @@ class ConnectionManager extends StatelessWidget {
         children: buttons,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
       );
+    }
+  }
+
+  Future<void> _showDisconnectOptions(
+      BuildContext context, Client client) async {
+    final action = await gFFI.dialogManager
+        .show<String>((setState, close, context) => CustomAlertDialog(
+              title: Text(translate("End remote session")),
+              content: Text(translate("android_disconnect_service_tip")),
+              actions: [
+                TextButton(
+                    onPressed: close, child: Text(translate("Cancel"))),
+                TextButton(
+                    onPressed: () => close("disconnect"),
+                    child: Text(translate("Disconnect only"))),
+                ElevatedButton(
+                    onPressed: () => close("stop"),
+                    child: Text(translate("Disconnect and stop service"))),
+              ],
+              onCancel: close,
+            ));
+    if (action == "disconnect") {
+      bind.cmCloseConnection(connId: client.id);
+      gFFI.invokeMethod("cancel_notification", client.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(translate("Service remains active")),
+          action: SnackBarAction(
+            label: translate("Stop now"),
+            onPressed: () => gFFI.serverModel.stopService(),
+          ),
+        ));
+      }
+    } else if (action == "stop") {
+      gFFI.invokeMethod("cancel_notification", client.id);
+      await gFFI.serverModel.stopService();
     }
   }
 
@@ -943,7 +976,11 @@ void androidChannelInit() {
           }
         case "open_chat":
           {
-            HomePage.homeKey.currentState?.showChatPage();
+            if (gFFI.chatModel.currentKey.connId == ChatModel.clientModeID) {
+              gFFI.chatModel.showChatWindowOverlay();
+            } else {
+              HomePage.homeKey.currentState?.showChatPage();
+            }
             break;
           }
       }

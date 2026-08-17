@@ -1,0 +1,3 @@
+- Verbeterde meldingen voor chat en spraakoproepen tijdens bediening op afstand.
+- Ongelezenberichtenteller en directe chattoegang toegevoegd aan het zwevende ClantoDesk-pictogram.
+- Toegang tot instellingen beveiligd en keuzes voor ontkoppelen en service stoppen verduidelijkt.

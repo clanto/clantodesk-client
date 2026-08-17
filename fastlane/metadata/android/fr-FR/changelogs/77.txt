@@ -1,0 +1,3 @@
+- Amélioration des notifications de chat et d'appel vocal pendant le contrôle à distance.
+- Ajout du badge de messages non lus et de l'accès direct au chat depuis l'icône flottante ClantoDesk.
+- Protection de l'accès aux paramètres et clarification des choix de déconnexion et d'arrêt du service.

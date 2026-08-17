@@ -15,6 +15,8 @@ use hbb_common::{
 };
 use serde::Serialize;
 use serde_json::json;
+#[cfg(target_os = "android")]
+use scrap::android::call_main_service_set_by_name;
 #[cfg(target_os = "windows")]
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::{
@@ -1005,6 +1007,21 @@ impl InvokeUiSession for FlutterHandler {
     }
 
     fn new_message(&self, msg: String) {
+        #[cfg(target_os = "android")]
+        {
+            let message_json = serde_json::to_string(&json!({
+                "id": -1,
+                "text": &msg,
+            }))
+            .unwrap_or_default();
+            if let Err(e) = call_main_service_set_by_name(
+                "chat_client_mode",
+                Some(&message_json),
+                None,
+            ) {
+                log::debug!("call_main_service_set_by_name fail,{}", e);
+            }
+        }
         self.push_event("chat_client_mode", &[("text", &msg)], &[]);
     }
 

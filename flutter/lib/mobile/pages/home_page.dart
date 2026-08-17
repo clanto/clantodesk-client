@@ -5,6 +5,7 @@ import 'package:flutter_hbb/web/settings_page.dart';
 import 'package:get/get.dart';
 import '../../common.dart';
 import '../../common/widgets/chat_page.dart';
+import '../../clanto/settings_auth.dart';
 import '../../models/platform_model.dart';
 import '../../models/state_model.dart';
 import 'connection_page.dart';
@@ -24,11 +25,12 @@ class HomePage extends StatefulWidget {
   HomePageState createState() => HomePageState();
 }
 
-class HomePageState extends State<HomePage> {
+class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   var _selectedIndex = 0;
   int get selectedIndex => _selectedIndex;
   final List<PageShape> _pages = [];
   int _chatPageTabIndex = -1;
+  bool _authenticatingSettings = false;
   bool get isChatPageCurrentTab => isAndroid
       ? _selectedIndex == _chatPageTabIndex
       : false; // change this when ios have chat page
@@ -51,7 +53,61 @@ class HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     initPages();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused &&
+        _selectedIndex == _pages.length - 1 &&
+        !_authenticatingSettings) {
+      setState(() => _selectedIndex = 0);
+      return;
+    }
+    if (state == AppLifecycleState.resumed &&
+        _selectedIndex == _pages.length - 1 &&
+        !_authenticatingSettings) {
+      _openSettings(_selectedIndex);
+    }
+  }
+
+  Future<void> _openSettings(int index) async {
+    if (_authenticatingSettings) return;
+    _authenticatingSettings = true;
+    final authenticated = await ClantoSettingsAuth.authenticate(
+        translate("Authenticate to open settings"));
+    _authenticatingSettings = false;
+    if (!mounted) return;
+    if (!authenticated) {
+      showToast(translate("Device authentication required"));
+    }
+    setState(() => _selectedIndex = authenticated ? index : 0);
+  }
+
+  Future<void> _onNavigationTap(int index) async {
+    if (index == _pages.length - 1) {
+      await _openSettings(index);
+      return;
+    }
+    setState(() {
+      if (_selectedIndex != index) {
+        _selectedIndex = index;
+        if (isChatPageCurrentTab) {
+          gFFI.chatModel.hideChatIconOverlay();
+          gFFI.chatModel.hideChatWindowOverlay();
+          gFFI.chatModel.mobileClearClientUnread(
+              gFFI.chatModel.currentKey.connId);
+          gFFI.invokeMethod("clear_floating_unread");
+        }
+      }
+    });
   }
 
   void initPages() {
@@ -98,19 +154,7 @@ class HomePageState extends State<HomePage> {
             type: BottomNavigationBarType.fixed,
             selectedItemColor: MyTheme.accent, //
             unselectedItemColor: MyTheme.darkGray,
-            onTap: (index) => setState(() {
-              // close chat overlay when go chat page
-              if (_selectedIndex != index) {
-                _selectedIndex = index;
-                if (isChatPageCurrentTab) {
-                  gFFI.chatModel.hideChatIconOverlay();
-                  gFFI.chatModel.hideChatWindowOverlay();
-                  gFFI.chatModel.mobileClearClientUnread(
-                      gFFI.chatModel.currentKey.connId);
-                  gFFI.invokeMethod("clear_floating_unread");
-                }
-              }
-            }),
+            onTap: _onNavigationTap,
           ),
           body: _pages.elementAt(_selectedIndex),
         ));
