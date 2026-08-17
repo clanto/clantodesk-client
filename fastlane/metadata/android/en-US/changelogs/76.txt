@@ -1,0 +1,2 @@
+- Improved chat and voice call notifications during remote control.
+- Added unread message badges and direct chat access from the ClantoDesk floating icon.

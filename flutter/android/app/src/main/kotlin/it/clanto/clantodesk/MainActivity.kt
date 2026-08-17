@@ -39,6 +39,7 @@ import kotlin.concurrent.thread
 
 class MainActivity : FlutterActivity() {
     companion object {
+        const val EXTRA_OPEN_CHAT = "open_chat"
         var flutterMethodChannel: MethodChannel? = null
         private var _rdClipboardManager: RdClipboardManager? = null
         val rdClipboardManager: RdClipboardManager?
@@ -106,6 +107,11 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+
     override fun onDestroy() {
         Log.e(logTag, "onDestroy")
         mainService?.let {
@@ -157,6 +163,13 @@ class MainActivity : FlutterActivity() {
                     } ?: let {
                         result.success(false)
                     }
+                }
+                "clear_floating_unread" -> {
+                    getSharedPreferences(FLOATING_STATE_PREFERENCES, Context.MODE_PRIVATE)
+                        .edit()
+                        .putInt(FLOATING_UNREAD_MESSAGES, 0)
+                        .apply()
+                    result.success(true)
                 }
                 "check_permission" -> {
                     if (call.arguments is String) {
@@ -453,5 +466,11 @@ class MainActivity : FlutterActivity() {
     override fun onStart() {
         super.onStart()
         stopService(Intent(this, FloatingWindowService::class.java))
+        if (intent?.getBooleanExtra(EXTRA_OPEN_CHAT, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_CHAT)
+            Handler(Looper.getMainLooper()).postDelayed({
+                flutterMethodChannel?.invokeMethod("open_chat", null)
+            }, 300)
+        }
     }
 }

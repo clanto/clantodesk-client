@@ -426,6 +426,8 @@ class ChatModel with ChangeNotifier {
             _currentKey != messagekey) {
           client.unreadChatMessageCount.value += 1;
           mobileUpdateUnreadSum();
+        } else {
+          gFFI.invokeMethod("clear_floating_unread");
         }
       }
       chatUser = ChatUser(id: client.peerId, firstName: client.name);

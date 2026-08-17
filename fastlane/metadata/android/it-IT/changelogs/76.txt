@@ -1,0 +1,2 @@
+- Migliorate le notifiche per chat e chiamate vocali durante il controllo remoto.
+- Aggiunti badge dei messaggi non letti e accesso diretto alla chat dall'icona flottante ClantoDesk.

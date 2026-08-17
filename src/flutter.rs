@@ -1526,6 +1526,23 @@ pub mod connection_manager {
         }
 
         fn new_message(&self, id: i32, text: String) {
+            // Notify through the Android service as well: the Flutter UI may be
+            // paused or hidden while the phone is being controlled remotely.
+            #[cfg(target_os = "android")]
+            {
+                let message_json = serde_json::to_string(&json!({
+                    "id": id,
+                    "text": &text,
+                }))
+                .unwrap_or_default();
+                if let Err(e) = call_main_service_set_by_name(
+                    "chat_server_mode",
+                    Some(&message_json),
+                    None,
+                ) {
+                    log::debug!("call_main_service_set_by_name fail,{}", e);
+                }
+            }
             self.push_event(
                 "chat_server_mode",
                 &[("id", &id.to_string()), ("text", &text)],

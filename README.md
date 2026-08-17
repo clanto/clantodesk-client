@@ -21,7 +21,8 @@ mantenuto come mirror di upstream.
 - ricevere assistenza remota anche su Android;
 - trasferire file in entrambe le direzioni;
 - sincronizzare appunti e audio quando consentito;
-- usare chat, terminale, inoltro porte e le altre funzioni supportate dal core;
+- usare chat testuale e chiamate vocali durante l'assistenza;
+- usare terminale, inoltro porte e le altre funzioni supportate dal core;
 - gestire sessioni, autorizzazioni e configurazioni centralizzate.
 
 Su Android e iOS, i file da inviare vengono scelti con il selettore documenti
@@ -51,7 +52,53 @@ include, tra le altre, queste personalizzazioni:
   MediaStore su Android, ed esportazione documenti tramite app File su iOS;
 - informativa e consenso espliciti prima dell'attivazione del servizio Android
   di Accessibilità;
+- icona flottante Android con branding ClantoDesk, badge dei messaggi non letti
+  e accesso diretto alla chat;
+- notifiche Android riconoscibili per nuovi messaggi e richieste di chiamata
+  vocale, con apertura diretta della chat dalla relativa notifica;
+- impronta crittografica presentata nell'interfaccia come “Impronta di
+  sicurezza”, con uno stato esplicito quando non è ancora disponibile;
+- configurazione dell'infrastruttura gestita e non modificabile dall'utente
+  nelle build ufficiali;
 - branding, icone, installer, servizi e metadati specifici ClantoDesk.
+
+### Esperienza Android durante il controllo remoto
+
+Quando un computer controlla un dispositivo Android, ClantoDesk mantiene
+disponibile un'icona flottante con il proprio marchio. Se arrivano messaggi di
+chat mentre l'app è in background, l'icona mostra il numero dei messaggi non
+letti fino a `99+` e resta interamente visibile per non tagliare il badge.
+
+Il menu dell'icona mostra `Chat (N)` quando ci sono messaggi da leggere. La voce
+apre direttamente la scheda Chat e azzera il contatore. Lo stesso collegamento
+diretto viene usato dalle notifiche dei nuovi messaggi. Entrando nella chat
+dalla barra di navigazione dell'app, il conteggio viene sincronizzato e
+azzerato allo stesso modo.
+
+Le richieste di chiamata vocale usano una notifica distinta e chiaramente
+identificata come chiamata, invece di una richiesta generica. Le notifiche
+Android richiedono il relativo permesso nelle versioni del sistema che lo
+prevedono.
+
+### Funzioni gestite e temporaneamente non esposte
+
+Le build ufficiali ClantoDesk ricevono in fase di compilazione gli indirizzi
+dei server rendezvous, relay e API e la chiave pubblica del server. Questi
+valori sono bloccati e la schermata `ID/Relay Server` è nascosta su mobile e
+desktop, per impedire che l'infrastruttura fidata venga sostituita per errore.
+Gli indirizzi dei server e `RS_PUB_KEY` non sono credenziali segrete: la chiave
+è pubblica e deve poter essere distribuita nel client.
+
+Le sezioni seguenti restano implementate nel codice ma non sono esposte nelle
+build distribuite finché i servizi Clanto corrispondenti non saranno pronti:
+
+- `Account / Accedi`, che richiede un backend account compatibile;
+- `Registra dispositivo` (deployment Android), che richiede API e token di
+  registrazione emessi dal backend Clanto.
+
+Nascondere queste sezioni evita di presentare percorsi di autenticazione non
+utilizzabili e mantiene le normali funzioni dell'app accessibili senza un
+account Clanto durante la revisione degli store.
 
 Le differenze operative e le trappole da conoscere prima di modificare il fork
 sono documentate in [CLANTO.md](CLANTO.md).

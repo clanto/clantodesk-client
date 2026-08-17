@@ -33,6 +33,15 @@ class HomePageState extends State<HomePage> {
       ? _selectedIndex == _chatPageTabIndex
       : false; // change this when ios have chat page
 
+  void showChatPage() {
+    if (_chatPageTabIndex < 0 || _chatPageTabIndex >= _pages.length) return;
+    setState(() => _selectedIndex = _chatPageTabIndex);
+    gFFI.chatModel.hideChatIconOverlay();
+    gFFI.chatModel.hideChatWindowOverlay();
+    gFFI.chatModel.mobileClearClientUnread(gFFI.chatModel.currentKey.connId);
+    gFFI.invokeMethod("clear_floating_unread");
+  }
+
   void refreshPages() {
     setState(() {
       initPages();
@@ -98,6 +107,7 @@ class HomePageState extends State<HomePage> {
                   gFFI.chatModel.hideChatWindowOverlay();
                   gFFI.chatModel.mobileClearClientUnread(
                       gFFI.chatModel.currentKey.connId);
+                  gFFI.invokeMethod("clear_floating_unread");
                 }
               }
             }),

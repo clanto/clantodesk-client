@@ -941,6 +941,11 @@ void androidChannelInit() {
             }
             break;
           }
+        case "open_chat":
+          {
+            HomePage.homeKey.currentState?.showChatPage();
+            break;
+          }
       }
     } catch (e) {
       debugPrintStack(label: "MethodCallHandler err:$e");

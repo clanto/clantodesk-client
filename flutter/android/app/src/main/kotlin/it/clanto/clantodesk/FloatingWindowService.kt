@@ -7,7 +7,10 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -29,11 +32,15 @@ import com.caverock.androidsvg.SVG
 import ffi.FFI
 import kotlin.math.abs
 
+const val FLOATING_STATE_PREFERENCES = "clantodesk_floating_state"
+const val FLOATING_UNREAD_MESSAGES = "unread_messages"
+
 class FloatingWindowService : Service(), View.OnTouchListener {
 
     private lateinit var windowManager: WindowManager
     private lateinit var layoutParams: WindowManager.LayoutParams
     private lateinit var floatingView: ImageView
+    private lateinit var baseDrawable: Drawable
     private lateinit var originalDrawable: Drawable
     private lateinit var leftHalfDrawable: Drawable
     private lateinit var rightHalfDrawable: Drawable
@@ -42,6 +49,7 @@ class FloatingWindowService : Service(), View.OnTouchListener {
     private var lastDownX = 0f
     private var lastDownY = 0f
     private var viewCreated = false;
+    private var unreadMessages = 0
     private var keepScreenOn = KeepScreenOn.DURING_CONTROLLED
 
     companion object {
@@ -92,7 +100,7 @@ class FloatingWindowService : Service(), View.OnTouchListener {
     private fun createView(windowManager: WindowManager) {
         floatingView = ImageView(this)
         viewCreated = true
-        originalDrawable = resources.getDrawable(R.drawable.floating_window, null)
+        baseDrawable = resources.getDrawable(R.mipmap.ic_launcher, null)
         if (customSvg.isNotEmpty()) {
             try {
                 val svg = SVG.getFromString(customSvg)
@@ -100,7 +108,7 @@ class FloatingWindowService : Service(), View.OnTouchListener {
                 // This make the svg render clear
                svg.documentWidth = viewWidth * 1f
                svg.documentHeight = viewHeight * 1f
-                originalDrawable = svg.renderToPicture().let {
+                baseDrawable = svg.renderToPicture().let {
                     BitmapDrawable(
                         resources,
                         Bitmap.createBitmap(it.width, it.height, Bitmap.Config.ARGB_8888)
@@ -114,35 +122,8 @@ class FloatingWindowService : Service(), View.OnTouchListener {
                 e.printStackTrace()
             }
         }
-        val originalBitmap = Bitmap.createBitmap(
-            originalDrawable.intrinsicWidth,
-            originalDrawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
-        val canvas = Canvas(originalBitmap)
-        originalDrawable.setBounds(
-            0,
-            0,
-            originalDrawable.intrinsicWidth,
-            originalDrawable.intrinsicHeight
-        )
-        originalDrawable.draw(canvas)
-        val leftHalfBitmap = Bitmap.createBitmap(
-            originalBitmap,
-            0,
-            0,
-            originalDrawable.intrinsicWidth / 2,
-            originalDrawable.intrinsicHeight
-        )
-        val rightHalfBitmap = Bitmap.createBitmap(
-            originalBitmap,
-            originalDrawable.intrinsicWidth / 2,
-            0,
-            originalDrawable.intrinsicWidth / 2,
-            originalDrawable.intrinsicHeight
-        )
-        leftHalfDrawable = BitmapDrawable(resources, leftHalfBitmap)
-        rightHalfDrawable = BitmapDrawable(resources, rightHalfBitmap)
+        unreadMessages = getUnreadMessages()
+        rebuildFloatingDrawables()
 
         floatingView.setImageDrawable(rightHalfDrawable)
         floatingView.setOnTouchListener(this)
@@ -175,6 +156,70 @@ class FloatingWindowService : Service(), View.OnTouchListener {
 
         windowManager.addView(floatingView, layoutParams)
         moveToScreenSide()
+    }
+
+    private fun rebuildFloatingDrawables() {
+        val originalBitmap = Bitmap.createBitmap(
+            baseDrawable.intrinsicWidth,
+            baseDrawable.intrinsicHeight,
+            Bitmap.Config.ARGB_8888
+        )
+        val canvas = Canvas(originalBitmap)
+        baseDrawable.setBounds(
+            0,
+            0,
+            baseDrawable.intrinsicWidth,
+            baseDrawable.intrinsicHeight
+        )
+        baseDrawable.draw(canvas)
+        if (unreadMessages > 0) {
+            val radius = originalBitmap.width * 0.18f
+            val centerX = originalBitmap.width - radius
+            val centerY = radius
+            val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(211, 47, 47)
+            }
+            canvas.drawCircle(centerX, centerY, radius, badgePaint)
+            val badgeText = if (unreadMessages > 99) "99+" else unreadMessages.toString()
+            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.DEFAULT_BOLD
+                textSize = radius * if (badgeText.length > 2) 0.9f else 1.2f
+            }
+            val textY = centerY - (textPaint.ascent() + textPaint.descent()) / 2
+            canvas.drawText(badgeText, centerX, textY, textPaint)
+        }
+        originalDrawable = BitmapDrawable(resources, originalBitmap)
+        val leftHalfBitmap = Bitmap.createBitmap(
+            originalBitmap,
+            0,
+            0,
+            originalBitmap.width / 2,
+            originalBitmap.height
+        )
+        val rightHalfBitmap = Bitmap.createBitmap(
+            originalBitmap,
+            originalBitmap.width / 2,
+            0,
+            originalBitmap.width / 2,
+            originalBitmap.height
+        )
+        leftHalfDrawable = BitmapDrawable(resources, leftHalfBitmap)
+        rightHalfDrawable = BitmapDrawable(resources, rightHalfBitmap)
+    }
+
+    private fun getUnreadMessages(): Int =
+        getSharedPreferences(FLOATING_STATE_PREFERENCES, MODE_PRIVATE)
+            .getInt(FLOATING_UNREAD_MESSAGES, 0)
+
+    private fun clearUnreadMessages() {
+        getSharedPreferences(FLOATING_STATE_PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putInt(FLOATING_UNREAD_MESSAGES, 0)
+            .apply()
+        unreadMessages = 0
+        rebuildFloatingDrawables()
     }
 
     private fun onFirstCreate(windowManager: WindowManager) {
@@ -267,17 +312,23 @@ class FloatingWindowService : Service(), View.OnTouchListener {
         val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val wh = getScreenSize(windowManager)
         val w = wh.first
-        if (layoutParams.x < w / 2) {
+        val dockLeft = layoutParams.x < w / 2
+        if (unreadMessages > 0) {
+            layoutParams.x = if (dockLeft) 0 else w - viewWidth
+            layoutParams.width = viewWidth
+            floatingView.setImageDrawable(originalDrawable)
+        } else if (dockLeft) {
             layoutParams.x = 0
+            layoutParams.width = viewWidth / 2
             floatingView.setImageDrawable(rightHalfDrawable)
         } else {
             layoutParams.x = w - viewWidth / 2
+            layoutParams.width = viewWidth / 2
             floatingView.setImageDrawable(leftHalfDrawable)
         }
         if (center) {
             layoutParams.y = (wh.second - viewHeight) / 2
         }
-        layoutParams.width = viewWidth / 2
         windowManager.updateViewLayout(floatingView, layoutParams)
         lastLayoutX = layoutParams.x
         lastLayoutY = layoutParams.y
@@ -302,23 +353,33 @@ class FloatingWindowService : Service(), View.OnTouchListener {
 
      private fun showPopupMenu() {
          val popupMenu = PopupMenu(this, floatingView)
-         val idShowRustDesk = 0
-         popupMenu.menu.add(0, idShowRustDesk, 0, translate("Show ClantoDesk"))
+         val idShowClantoDesk = 0
+         val showClantoDesk = translate("Show RustDesk").replace("RustDesk", "ClantoDesk")
+         popupMenu.menu.add(0, idShowClantoDesk, 0, showClantoDesk)
+         val idChat = 3
+         if (unreadMessages > 0) {
+             popupMenu.menu.add(0, idChat, 1, "${translate("Chat")} ($unreadMessages)")
+         }
          // For host side, clipboard sync
          val idSyncClipboard = 1
          val isServiceSyncEnabled = (MainActivity.rdClipboardManager?.isCaptureStarted ?: false) && FFI.isServiceClipboardEnabled()
          if (isServiceSyncEnabled) {
-             popupMenu.menu.add(0, idSyncClipboard, 0, translate("Update client clipboard"))
+             popupMenu.menu.add(0, idSyncClipboard, 2, translate("Update client clipboard"))
          }
          val idStopService = 2
          val hideStopService = FFI.getBuildinOption("hide-stop-service") == "Y"
          if (!hideStopService) {
-             popupMenu.menu.add(0, idStopService, 0, translate("Stop service"))
+             popupMenu.menu.add(0, idStopService, 3, translate("Stop service"))
          }
          popupMenu.setOnMenuItemClickListener { menuItem ->
              when (menuItem.itemId) {
-                 idShowRustDesk -> {
+                 idShowClantoDesk -> {
                      openMainActivity()
+                     true
+                 }
+                 idChat -> {
+                     clearUnreadMessages()
+                     openMainActivity(openChat = true)
                      true
                  }
                 idSyncClipboard -> {
@@ -339,9 +400,10 @@ class FloatingWindowService : Service(), View.OnTouchListener {
      }
 
 
-    private fun openMainActivity() {
+    private fun openMainActivity(openChat: Boolean = false) {
         val intent = Intent(this, MainActivity::class.java)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        intent.putExtra(MainActivity.EXTRA_OPEN_CHAT, openChat)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT
@@ -370,6 +432,12 @@ class FloatingWindowService : Service(), View.OnTouchListener {
     private val handler = Handler(Looper.getMainLooper())
     private val runnable = object : Runnable {
         override fun run() {
+            val latestUnreadMessages = getUnreadMessages()
+            if (latestUnreadMessages != unreadMessages) {
+                unreadMessages = latestUnreadMessages
+                rebuildFloatingDrawables()
+                moveToScreenSide()
+            }
             if (updateKeepScreenOnLayoutParams()) {
                 windowManager.updateViewLayout(floatingView, layoutParams)
             }

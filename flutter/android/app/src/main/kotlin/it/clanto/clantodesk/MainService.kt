@@ -171,6 +171,16 @@ class MainService : Service() {
                     e.printStackTrace()
                 }
             }
+            "chat_server_mode" -> {
+                try {
+                    val jsonObject = JSONObject(arg1)
+                    val id = jsonObject.getInt("id")
+                    val text = jsonObject.getString("text")
+                    chatMessageNotification(id, text)
+                } catch (e: JSONException) {
+                    e.printStackTrace()
+                }
+            }
             "stop_capture" -> {
                 Log.d(logTag, "from rust:stop_capture")
                 stopCapture()
@@ -691,15 +701,48 @@ class MainService : Service() {
 
     private fun voiceCallRequestNotification(
         clientID: Int,
-        type: String,
+        _type: String,
         username: String,
         peerId: String
     ) {
         val notification = notificationBuilder
             .setOngoing(false)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setContentTitle(translate("Do you accept?"))
-            .setContentText("$type:$username-$peerId")
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setOnlyAlertOnce(false)
+            .setStyle(null)
+            .setContentTitle(translate("Voice call"))
+            .setContentText("${translate("Do you accept?")} $username - $peerId")
+            .build()
+        notificationManager.notify(getClientNotifyID(clientID), notification)
+    }
+
+    private fun chatMessageNotification(clientID: Int, text: String) {
+        val floatingState = getSharedPreferences(FLOATING_STATE_PREFERENCES, MODE_PRIVATE)
+        val unreadMessages = floatingState.getInt(FLOATING_UNREAD_MESSAGES, 0)
+        floatingState.edit()
+            .putInt(FLOATING_UNREAD_MESSAGES, (unreadMessages + 1).coerceAtMost(999))
+            .apply()
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            action = Intent.ACTION_MAIN
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            putExtra(MainActivity.EXTRA_OPEN_CHAT, true)
+        }
+        val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.getActivity(this, clientID, intent, FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
+        } else {
+            PendingIntent.getActivity(this, clientID, intent, FLAG_UPDATE_CURRENT)
+        }
+        val notification = notificationBuilder
+            .setOngoing(false)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setOnlyAlertOnce(false)
+            .setContentTitle("${translate("Chat")} - ClantoDesk")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(pendingIntent)
             .build()
         notificationManager.notify(getClientNotifyID(clientID), notification)
     }

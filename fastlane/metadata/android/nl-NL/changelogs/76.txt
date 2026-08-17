@@ -1,0 +1,2 @@
+- Verbeterde meldingen voor chat en spraakoproepen tijdens bediening op afstand.
+- Ongelezenberichtenteller en directe chattoegang toegevoegd aan het zwevende ClantoDesk-pictogram.
