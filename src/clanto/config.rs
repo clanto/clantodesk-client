@@ -13,6 +13,19 @@ use hbb_common::{
 pub fn apply_build_config() {
     *config::APP_NAME.write().unwrap() = "ClantoDesk".to_owned();
 
+    // ClantoDesk usa un'infrastruttura gestita: l'account cloud non e' ancora
+    // disponibile e i parametri dei server non devono essere modificabili
+    // dall'interfaccia. Queste opzioni sono rispettate sia da Flutter mobile
+    // sia dal client desktop.
+    config::HARD_SETTINGS
+        .write()
+        .unwrap()
+        .insert("disable-account".to_owned(), "Y".to_owned());
+    config::BUILTIN_SETTINGS
+        .write()
+        .unwrap()
+        .insert("hide-server-settings".to_owned(), "Y".to_owned());
+
     // ORG e' dichiarato solo su macOS. Entra sia nel percorso di configurazione
     // sia nei nomi dei plist di servizio generati dai template upstream.
     #[cfg(target_os = "macos")]
@@ -22,19 +35,19 @@ pub fn apply_build_config() {
 
     if let Some(server) = option_env!("RENDEZVOUS_SERVER").filter(|v| !v.is_empty()) {
         *config::PROD_RENDEZVOUS_SERVER.write().unwrap() = server.to_owned();
-        config::DEFAULT_SETTINGS
+        config::OVERWRITE_SETTINGS
             .write()
             .unwrap()
             .insert("custom-rendezvous-server".to_owned(), server.to_owned());
     }
     if let Some(key) = option_env!("RS_PUB_KEY").filter(|v| !v.is_empty()) {
-        config::DEFAULT_SETTINGS
+        config::OVERWRITE_SETTINGS
             .write()
             .unwrap()
             .insert("key".to_owned(), key.to_owned());
     }
     if let Some(server) = option_env!("API_SERVER").filter(|v| !v.is_empty()) {
-        config::DEFAULT_SETTINGS
+        config::OVERWRITE_SETTINGS
             .write()
             .unwrap()
             .insert("api-server".to_owned(), server.to_owned());

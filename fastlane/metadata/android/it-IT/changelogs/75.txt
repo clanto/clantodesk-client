@@ -1,0 +1,2 @@
+- Chiarito lo stato dell'impronta di sicurezza del dispositivo.
+- Nascosti temporaneamente i controlli di registrazione finché il relativo servizio Clanto non sarà disponibile.

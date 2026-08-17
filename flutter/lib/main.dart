@@ -576,7 +576,7 @@ _registerEventHandler() {
       NativeUiHandler.instance.onEvent(evt);
     });
   }
-  if (isAndroid) {
+  if (isAndroid && clantoDeploymentUiEnabled) {
     platformFFI.registerEventHandler(
         'android_needs_deploy', 'android_needs_deploy', (_) async {
       WidgetsBinding.instance.addPostFrameCallback((_) {

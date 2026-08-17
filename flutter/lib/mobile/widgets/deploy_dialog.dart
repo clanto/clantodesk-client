@@ -6,7 +6,13 @@ import '../../models/platform_model.dart';
 
 const _deployDialogTag = 'android-deploy-device';
 
+// Il server Clanto open source non espone ancora l'endpoint di registrazione.
+// Una sola costante governa la voce nelle impostazioni e il popup automatico,
+// mantenendo il flusso pronto per il backend futuro.
+const clantoDeploymentUiEnabled = false;
+
 void showDeployPromptDialog() {
+  if (!clantoDeploymentUiEnabled) return;
   gFFI.dialogManager.dismissByTag(_deployDialogTag);
   gFFI.dialogManager.show<bool>((setState, close, context) {
     submit() => close(true);
@@ -28,6 +34,7 @@ void showDeployPromptDialog() {
 }
 
 void showDeployDialog() {
+  if (!clantoDeploymentUiEnabled) return;
   gFFI.dialogManager.dismissByTag(_deployDialogTag);
   final tokenController = TextEditingController();
   final idController = TextEditingController();

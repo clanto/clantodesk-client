@@ -1,0 +1,2 @@
+- Clarified the device security fingerprint status.
+- Temporarily hidden device registration controls until the Clanto server registration service is available.

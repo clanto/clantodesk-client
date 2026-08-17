@@ -731,7 +731,9 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                 onPressed: (context) {
                   changeSocks5Proxy();
                 }),
-          if (isAndroid && !bind.isOutgoingOnly())
+          if (clantoDeploymentUiEnabled &&
+              isAndroid &&
+              !bind.isOutgoingOnly())
             SettingsTile(
                 title: Text(translate('Deploy')),
                 leading: Icon(Icons.cloud_upload),
@@ -981,7 +983,9 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                   title: Text(translate("Fingerprint")),
                   value: Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text(_fingerprint),
+                    child: Text(_fingerprint.isEmpty
+                        ? translate('no fingerprints')
+                        : _fingerprint),
                   ),
                   leading: Icon(Icons.fingerprint)),
             SettingsTile(

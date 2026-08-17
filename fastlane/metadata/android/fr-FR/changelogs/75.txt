@@ -1,0 +1,2 @@
+- Clarification de l’état de l’empreinte de sécurité de l’appareil.
+- Masquage temporaire des contrôles d’enregistrement jusqu’à la disponibilité du service Clanto.
