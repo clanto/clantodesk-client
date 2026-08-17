@@ -8,6 +8,7 @@ package it.clanto.clantodesk
  */
 
 import ffi.FFI
+import it.clanto.clantodesk.clanto.ClantoChatNotifier
 import it.clanto.clantodesk.clanto.ClantoDownloads
 
 import android.Manifest
@@ -293,6 +294,7 @@ class MainActivity : FlutterFragmentActivity() {
                 "on_voice_call_closed" -> {
                     onVoiceCallClosed()
                 }
+                "clanto_chat_notification" -> ClantoChatNotifier.publish(this, call.argument<String>("text"), result)
                 "clanto_publish_download" -> {
                     val args = call.arguments as? Map<*, *>
                     val path = args?.get("path") as? String

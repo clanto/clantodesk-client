@@ -718,12 +718,12 @@ class MainService : Service() {
     }
 
     private fun chatMessageNotification(clientID: Int, text: String) {
-        if (MainActivity.isInForeground) return
         val floatingState = getSharedPreferences(FLOATING_STATE_PREFERENCES, MODE_PRIVATE)
         val unreadMessages = floatingState.getInt(FLOATING_UNREAD_MESSAGES, 0)
         floatingState.edit()
             .putInt(FLOATING_UNREAD_MESSAGES, (unreadMessages + 1).coerceAtMost(999))
             .apply()
+        if (MainActivity.isInForeground) return
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
             action = Intent.ACTION_MAIN
@@ -736,13 +736,6 @@ class MainService : Service() {
         } else {
             PendingIntent.getActivity(this, notificationID, intent, FLAG_UPDATE_CURRENT)
         }
-        val publicNotification = NotificationCompat.Builder(this, notificationChannel)
-            .setSmallIcon(R.mipmap.ic_stat_logo)
-            .setContentTitle("ClantoDesk")
-            .setContentText(translate("New message"))
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .build()
         val notification = NotificationCompat.Builder(this, notificationChannel)
             .setSmallIcon(R.mipmap.ic_stat_logo)
             .setOngoing(false)
@@ -757,8 +750,6 @@ class MainService : Service() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(pendingIntent)
             .setColor(ContextCompat.getColor(this, R.color.primary))
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setPublicVersion(publicNotification)
             .build()
         notificationManager.notify(notificationID, notification)
     }

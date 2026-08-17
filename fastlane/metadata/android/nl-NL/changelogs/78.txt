@@ -1,0 +1,3 @@
+- Chatmeldingen met de berichttekst zijn hersteld.
+- De ongelezenberichtenteller en chatoptie van het zwevende pictogram worden nu ook bijgewerkt wanneer de app geopend is.
+- Chatmeldingen op de achtergrond toegevoegd wanneer de telefoon een computer bedient.

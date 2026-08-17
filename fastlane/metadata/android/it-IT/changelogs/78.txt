@@ -1,0 +1,3 @@
+- Ripristinate le notifiche di chat con il testo del messaggio.
+- Il badge dei messaggi non letti e la voce chat dell'icona flottante si aggiornano anche con l'app aperta.
+- Aggiunte le notifiche di chat in background quando il telefono controlla un computer.

@@ -1,0 +1,3 @@
+- Rétablissement des notifications de chat avec le texte du message.
+- Le badge des messages non lus et l'entrée de chat de l'icône flottante se mettent à jour même lorsque l'application est ouverte.
+- Ajout des notifications de chat en arrière-plan lorsque le téléphone contrôle un ordinateur.

@@ -10,6 +10,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_hbb/clanto/chat_notification.dart';
 import 'package:flutter_hbb/common/widgets/peers_view.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/ab_model.dart';
@@ -367,6 +368,7 @@ class FfiModel with ChangeNotifier {
       } else if (name == 'permission') {
         updatePermission(evt, peerId);
       } else if (name == 'chat_client_mode') {
+        if (isAndroid) ClantoChatNotification.publish(evt['text'] ?? '');
         parent.target?.chatModel
             .receive(ChatModel.clientModeID, evt['text'] ?? '');
       } else if (name == 'chat_server_mode') {
