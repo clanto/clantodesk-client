@@ -416,8 +416,6 @@ class InputService : AccessibilityService() {
         } else {
         }
 
-        Log.d(logTag, "onKeyEvent $keyEvent textToCommit:$textToCommit")
-
         var ke: KeyEventAndroid? = null
         if (Build.VERSION.SDK_INT < 33 || textToCommit == null) {
             ke = KeyEventConverter.toAndroidKeyEvent(keyEvent)
@@ -453,7 +451,6 @@ class InputService : AccessibilityService() {
             handler.post {
                 ke?.let { event ->
                     val possibleNodes = possibleAccessibiltyNodes()
-                    Log.d(logTag, "possibleNodes:$possibleNodes")
                     for (item in possibleNodes) {
                         val success = trySendKeyEvent(event, item, textToCommit)
                         if (success) {
@@ -561,8 +558,6 @@ class InputService : AccessibilityService() {
 
         val rootInActiveWindow = getRootInActiveWindow()
 
-        Log.d(logTag, "focusInput:$focusInput focusAccessibilityInput:$focusAccessibilityInput rootInActiveWindow:$rootInActiveWindow")
-
         if (focusInput != null) {
             if (focusInput.isFocusable() && focusInput.isEditable()) {
                 insertAccessibilityNode(linkedList, focusInput)
@@ -580,8 +575,6 @@ class InputService : AccessibilityService() {
         }
 
         val childFromFocusInput = findChildNode(focusInput)
-        Log.d(logTag, "childFromFocusInput:$childFromFocusInput")
-
         if (childFromFocusInput != null) {
             insertAccessibilityNode(linkedList, childFromFocusInput)
         }
@@ -590,8 +583,6 @@ class InputService : AccessibilityService() {
         if (childFromFocusAccessibilityInput != null) {
             insertAccessibilityNode(linkedList, childFromFocusAccessibilityInput)
         }
-        Log.d(logTag, "childFromFocusAccessibilityInput:$childFromFocusAccessibilityInput")
-
         if (rootInActiveWindow != null) {
             insertAccessibilityNode(linkedList, rootInActiveWindow)
         }
@@ -630,8 +621,6 @@ class InputService : AccessibilityService() {
         }
 
         var success = false
-
-        Log.d(logTag, "existing text:$text textToCommit:$textToCommit textSelectionStart:$textSelectionStart textSelectionEnd:$textSelectionEnd")
 
         if (textToCommit != null) {
             if ((textSelectionStart == -1) || (textSelectionEnd == -1)) {

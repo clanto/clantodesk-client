@@ -34,7 +34,7 @@ pub fn core_main() -> Option<Vec<String>> {
     }
     crate::load_custom_client();
     // Dopo load_custom_client: anche quello puo' fornire rendezvous server e chiave.
-    if !crate::common::ensure_own_server_configured() {
+    if !crate::clanto::config::ensure_own_server_configured() {
         return None;
     }
     #[cfg(windows)]

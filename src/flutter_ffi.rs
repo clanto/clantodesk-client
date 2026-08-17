@@ -78,7 +78,7 @@ fn initialize(app_dir: &str, custom_client_config: &str) {
         // Il custom client e' gia' stato letto sopra. Su mobile non c'e' un valore di ritorno
         // che fermi l'avvio, quindi terminiamo qui invece di ricadere sui server pubblici
         // RustDesk.
-        if !crate::common::ensure_own_server_configured() {
+        if !crate::clanto::config::ensure_own_server_configured() {
             std::process::exit(1);
         }
     }

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
+// SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
+
 // Impostazioni delle destinazioni di audit ClantoDesk.
 //
 // Gli eventi di connessione e trasferimento file nascono in

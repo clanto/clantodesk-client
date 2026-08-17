@@ -1,10 +1,16 @@
 [package]
 name = "rustdesk"
 version = "1.4.9"
-authors = ["rustdesk <info@rustdesk.com>"]
+authors = [
+    "Purslane Ltd and the RustDesk contributors <info@rustdesk.com>",
+    "Clanto Services srls <info@clanto.it>",
+]
 edition = "2021"
 build= "build.rs"
-description = "Clantodesk Remote Desktop"
+description = "ClantoDesk Remote Desktop"
+license = "AGPL-3.0-only"
+homepage = "https://clanto.it"
+repository = "https://github.com/clanto/clantodesk-client"
 default-run = "rustdesk"
 rust-version = "1.75"
 
@@ -211,7 +217,7 @@ exclude = ["vdi/host", "examples/custom_plugin"]
 libxdo-sys = { path = "libs/libxdo-sys-stub" }
 
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2026 Clanto Services srls. All rights reserved."
+LegalCopyright = "Copyright © 2020-2026 Purslane Ltd, RustDesk contributors and Clanto Services srls."
 ProductName = "Clantodesk"
 FileDescription = "Clantodesk Remote Desktop"
 OriginalFilename = "clantodesk.exe"

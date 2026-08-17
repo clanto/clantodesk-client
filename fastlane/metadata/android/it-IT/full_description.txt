@@ -1,0 +1,12 @@
+ClantoDesk è l'applicazione di desktop remoto e assistenza tecnica di Clanto Services, derivata dal progetto open source RustDesk.
+
+Puoi usare uno smartphone o tablet Android per collegarti a computer Windows, macOS e Linux autorizzati, visualizzarne lo schermo e controllare mouse e tastiera. Un dispositivo Android può anche ricevere assistenza remota quando l'utente avvia esplicitamente il servizio e concede le autorizzazioni necessarie.
+
+Il trasferimento file funziona in entrambe le direzioni. Per inviare un file da Android, ClantoDesk apre il selettore documenti di sistema: scegli esattamente quali file condividere, compresi quelli disponibili tramite provider cloud. I file ricevuti da un computer vengono pubblicati nella raccolta Download. ClantoDesk non richiede l'accesso indiscriminato a tutti i file del dispositivo.
+
+Quando viene abilitato il controllo remoto di Android, ClantoDesk usa AccessibilityService esclusivamente per riprodurre tocchi, scorrimenti e input da tastiera inviati durante una sessione autorizzata. Prima di aprire le impostazioni Accessibilità di Android, l'app mostra un'informativa dedicata e richiede un consenso esplicito. L'Accessibilità non viene utilizzata per azioni autonome, pubblicità o raccolta dati.
+
+Le connessioni utilizzano l'infrastruttura rendezvous, relay e API Clanto configurata nella build ufficiale. Le funzioni disponibili durante una sessione includono controllo remoto, trasferimento file, sincronizzazione degli appunti, audio, chat, terminale e inoltro porte, quando supportate da entrambi i dispositivi e consentite dai relativi amministratori.
+
+Codice sorgente: https://github.com/clanto/clantodesk-client
+Privacy e documentazione: https://supporto.clanto.it/documentazione/

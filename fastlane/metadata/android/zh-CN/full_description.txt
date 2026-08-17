@@ -1,12 +1,12 @@
-开源远程桌面应用，开源 TeamViewer 替代方案。
-源代码：https://github.com/rustdesk/rustdesk
-文档：https://rustdesk.com/docs/en/manual/mobile/
+ClantoDesk 是 Clanto Services 推出的远程桌面和技术支持应用，基于开源 RustDesk 项目开发。
 
-为了让远程设备通过鼠标或触摸控制您的 Android 设备，您需要允许 RustDesk 使用“Accessibility”服务，RustDesk 使用 AccessibilityService API 来实现 Addroid 远程控制。
+您可以使用 Android 手机或平板电脑连接到已获授权的 Windows、macOS 和 Linux 电脑，查看屏幕并控制鼠标和键盘。用户明确启动服务并授予必要权限后，Android 设备也可以接受远程协助。
 
-除了远程控制，您还可以使用 RustDesk 在 Android 设备和 PC 之间轻松传输文件。
+文件可以双向传输。从 Android 发送文件时，ClantoDesk 会打开系统文档选择器，让您准确选择要共享的文件，也可以选择云存储提供商中的文件。从电脑接收的文件会保存到“下载”集合中。ClantoDesk 不会请求对设备全部文件的无限制访问权限。
 
-您完全掌控数据，不用担心安全问题。您可以使用我们的注册/中继服务器，或者自建，亦或者开发您的版本。
-自托管服务器是免费和开源的：https://github.com/rustdesk/rustdesk-server
+启用 Android 远程控制后，ClantoDesk 仅使用 AccessibilityService 执行已授权的远程触摸、滚动和键盘操作。应用会先显示专门说明并征得明确同意，然后才打开 Android 无障碍设置。无障碍功能不会用于自主操作、广告或数据收集。
 
-请从：https://rustdesk.com 下载并安装桌面版，然后您可以通过手机访问和控制您的桌面，或从桌面控制您的手机。
+连接使用官方版本中配置的 Clanto 会合、转发和 API 基础设施。在双方设备支持且管理员允许的情况下，会话功能包括远程控制、文件传输、剪贴板同步、音频、聊天、终端和端口转发。
+
+源代码：https://github.com/clanto/clantodesk-client
+隐私信息和文档：https://supporto.clanto.it/documentazione/

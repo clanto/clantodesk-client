@@ -2,13 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="it.clanto.clantodesk">
 
-    <!-- MANAGE_EXTERNAL_STORAGE rimosso: Play lo consente solo a file manager, backup
-         e antivirus. Il trasferimento file usa la cartella dell'app (scoped storage). -->
+    <!-- Il trasferimento file usa SAF per la selezione e MediaStore per Download.
+         Non richiede MANAGE_EXTERNAL_STORAGE né READ_EXTERNAL_STORAGE. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />

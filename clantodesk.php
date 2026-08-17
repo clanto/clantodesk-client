@@ -13,7 +13,7 @@ $PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=it.clanto.clant
 $APP_STORE_URL  = "https://apps.apple.com/app/clantodesk/id6740578631";
 
 // GitHub Base URL
-$REPO_URL = "https://github.com/clanto/clantodesk";
+$REPO_URL = "https://github.com/clanto/clantodesk-client";
 $RELEASE_URL = "{$REPO_URL}/releases/tag/{$LATEST_TAG}";
 $DOWNLOAD_BASE = "{$REPO_URL}/releases/download/{$LATEST_TAG}";
 

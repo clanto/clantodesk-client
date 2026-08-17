@@ -151,6 +151,17 @@ class _FileManagerPageState extends State<FileManagerPage> {
                     PopupMenuItem(
                       child: Row(
                         children: [
+                          Icon(Icons.upload_file,
+                              color: Theme.of(context).iconTheme.color),
+                          SizedBox(width: 5),
+                          Text(translate("Send files"))
+                        ],
+                      ),
+                      value: "pick_files",
+                    ),
+                    PopupMenuItem(
+                      child: Row(
+                        children: [
                           Icon(Icons.refresh,
                               color: Theme.of(context).iconTheme.color),
                           SizedBox(width: 5),
@@ -203,6 +214,8 @@ class _FileManagerPageState extends State<FileManagerPage> {
                 onSelected: (v) {
                   if (v == "refresh") {
                     currentFileController.refresh();
+                  } else if (v == "pick_files") {
+                    model.pickAndSendLocalFiles();
                   } else if (v == "select") {
                     model.localController.selectedItems.clear();
                     model.remoteController.selectedItems.clear();

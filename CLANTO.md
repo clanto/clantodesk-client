@@ -1,7 +1,8 @@
 # Note sul fork ClantoDesk
 
 Questo repo è un fork di [rustdesk/rustdesk](https://github.com/rustdesk/rustdesk).
-Branch di lavoro: `clnt_1.4.9`. `master` è un mirror di upstream, non ci si sviluppa.
+I branch di lavoro seguono lo schema `clnt_X.Y.Z`. `master` è un mirror di
+upstream, non ci si sviluppa.
 
 Qui stanno solo le cose che **non si capiscono leggendo il codice** e che portano a
 fare la modifica sbagliata. Per il resto vale la documentazione upstream (`AGENTS.md`).
@@ -64,7 +65,8 @@ Il client **rifiuta di avviarsi** se al build mancano `RENDEZVOUS_SERVER` o
 `RS_PUB_KEY`, o se la chiave configurata è quella pubblica di RustDesk. Senza
 questo controllo ricadrebbe su `rs-ny.rustdesk.com` e `admin.rustdesk.com` senza
 segnalare nulla. Vedi `ensure_own_server_configured()` in
-[src/common.rs](src/common.rs), chiamata **dopo** `load_custom_client()` perché
+[src/clanto/config.rs](src/clanto/config.rs), chiamata **dopo**
+`load_custom_client()` perché
 anche quello può fornire server e chiave.
 
 Per una build di sviluppo locale:
@@ -98,6 +100,13 @@ trenta righe intrecciate nel corpo di una funzione upstream conflittano sempre.
 Dove possibile usare i meccanismi che esistono già invece di modificare il codice:
 `DEFAULT_SETTINGS` / `OVERWRITE_SETTINGS` per le opzioni, `get_app_name()` invece
 dei letterali, `option_env!` per i valori iniettati al build.
+
+I moduli interamente Clanto si trovano in `src/clanto/`, `flutter/lib/clanto/`,
+nel package Android `it.clanto.clantodesk.clanto` e, quando Xcode lo richiede,
+in `flutter/ios/Runner/`. Non si spostano invece in una cartella radice unica i
+file di packaging, le risorse o gli hook che devono restare nei percorsi attesi
+dai rispettivi tool. L'inventario di provenienza e licenza è in
+[CLANTO-CONTRIBUTIONS.md](CLANTO-CONTRIBUTIONS.md).
 
 ## Debito noto
 

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
+import 'package:flutter_hbb/clanto/mobile_file_transfer.dart';
 import 'package:flutter_hbb/utils/event_loop.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
@@ -99,6 +100,22 @@ class FileModel {
   Future<void> refreshAll() async {
     if (!isWeb) await localController.refresh();
     await remoteController.refresh();
+  }
+
+  Future<void> pickAndSendLocalFiles() async {
+    final picked = await MobileFileTransfer.pickFiles();
+    if (picked.isEmpty) {
+      return;
+    }
+    final items = SelectedItems(isLocal: true);
+    for (final file in picked) {
+      items.add(Entry()
+        ..entryType = 4
+        ..name = file.name
+        ..path = file.path
+        ..size = file.size);
+    }
+    await localController.sendFiles(items, remoteController.directoryData());
   }
 
   void receiveFileDir(Map<String, dynamic> evt) {
@@ -589,11 +606,18 @@ class FileController {
     }
     jobController.registerTransferConflictBatch(transferJobIds);
     for (final (from, jobID) in transferJobs) {
+      final to = PathUtil.join(toPath, from.name, isWindows);
+      final jobIndex = jobController.getJob(jobID);
+      if (jobIndex >= 0) {
+        final job = jobController.jobTable[jobIndex];
+        job.to = to;
+        job.transferIsDirectory = from.isDirectory;
+      }
       bind.sessionSendFiles(
           sessionId: sessionId,
           actId: jobID,
           path: from.path,
-          to: PathUtil.join(toPath, from.name, isWindows),
+          to: to,
           fileNum: 0,
           includeHidden: showHidden,
           isRemote: isRemoteToLocal,
@@ -1099,6 +1123,24 @@ class JobController {
       if (fileNum != null) job.fileNum = fileNum;
       if (speed != null) job.speed = speed;
       job.state = JobState.done;
+    }
+    if (job.state == JobState.done &&
+        (isAndroid || isIOS) &&
+        job.type == JobType.transfer &&
+        job.isRemoteToLocal &&
+        !job.transferIsDirectory &&
+        !job.publishedToDevice &&
+        job.err != 'cancel' &&
+        job.to.isNotEmpty) {
+      job.publishedToDevice = true;
+      try {
+        await MobileFileTransfer.publishReceivedFile(job.to, job.fileName);
+      } catch (e) {
+        job.publishedToDevice = false;
+        debugPrint('Failed to publish received file ${job.to}: $e');
+        job.state = JobState.error;
+        job.err = e.toString();
+      }
     }
     jobTable.refresh();
     if (job.state == JobState.done || job.state == JobState.error) {
@@ -1630,6 +1672,8 @@ class JobProgress {
   // var isRemote = false;
   // to-do use enum
   var isRemoteToLocal = false;
+  var transferIsDirectory = false;
+  var publishedToDevice = false;
   var jobName = "";
   var fileName = "";
   var remote = "";
@@ -1650,6 +1694,8 @@ class JobProgress {
     fileNum = 0;
     speed = 0;
     finishedSize = 0;
+    transferIsDirectory = false;
+    publishedToDevice = false;
     jobName = "";
     fileName = "";
     fileCount = 0;

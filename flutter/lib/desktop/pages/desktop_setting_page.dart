@@ -2465,10 +2465,28 @@ class _AboutState extends State<_About> {
                   ).marginSymmetric(vertical: 4.0)),
               InkWell(
                   onTap: () {
-                    launchUrlString('https://rustdesk.com');
+                    launchUrlString('https://clanto.it');
                   },
                   child: Text(
                     translate('Website'),
+                    style: linkStyle,
+                  ).marginSymmetric(vertical: 4.0)),
+              InkWell(
+                  onTap: () {
+                    launchUrlString(
+                        'https://github.com/clanto/clantodesk-client');
+                  },
+                  child: Text(
+                    'Source code · AGPL-3.0-only',
+                    style: linkStyle,
+                  ).marginSymmetric(vertical: 4.0)),
+              InkWell(
+                  onTap: () {
+                    launchUrlString(
+                        'https://www.gnu.org/licenses/agpl-3.0.html');
+                  },
+                  child: Text(
+                    'GNU AGPL v3 license',
                     style: linkStyle,
                   ).marginSymmetric(vertical: 4.0)),
               Container(

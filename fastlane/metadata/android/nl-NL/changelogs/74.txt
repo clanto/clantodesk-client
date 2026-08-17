@@ -1,0 +1,7 @@
+ClantoDesk 1.4.9 (74)
+
+- Bestandsoverdracht in beide richtingen tussen Android en computers is hersteld.
+- De systeemdocumentkiezer ondersteunt ook bestanden van cloudproviders.
+- Ontvangen bestanden worden zonder onbeperkte opslagtoegang in Downloads geplaatst.
+- Duidelijke informatie en uitdrukkelijke toestemming toegevoegd voordat de toegankelijkheidsinstellingen worden geopend.
+- Controles van de Clanto-infrastructuur en privacy- en juridische informatie verbeterd.

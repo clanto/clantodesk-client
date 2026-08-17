@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">ClantoDesk</string>
-    <string name="accessibility_service_description">Questo servizio è necessario per consentire il controllo remoto del dispositivo (clic, scorrimento, tastiera) da un\'altra postazione autorizzata. Nessun dato sensibile viene raccolto o condiviso.</string>
+    <string name="accessibility_service_description">Allows a remote operator authorized by the user to perform taps, scrolling, and keyboard input. It may access active windows and editable fields solely to apply commands during the remote session.</string>
 </resources>

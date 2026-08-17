@@ -1,0 +1,7 @@
+ClantoDesk 1.4.9 (74)
+
+- Ripristinato il trasferimento file bidirezionale fra Android e computer.
+- Aggiunto il selettore di sistema, inclusi i provider cloud.
+- I file ricevuti vengono pubblicati in Download senza accesso indiscriminato alla memoria.
+- Aggiunti informativa e consenso prima delle impostazioni Accessibilità.
+- Migliorati controlli Clanto, informazioni privacy e avvisi legali.

@@ -8,7 +8,9 @@ package it.clanto.clantodesk
  */
 
 import ffi.FFI
+import it.clanto.clantodesk.clanto.ClantoDownloads
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -273,6 +275,46 @@ class MainActivity : FlutterActivity() {
                 }
                 "on_voice_call_closed" -> {
                     onVoiceCallClosed()
+                }
+                "clanto_publish_download" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val path = args?.get("path") as? String
+                    val name = args?.get("name") as? String
+                    if (path.isNullOrBlank() || name.isNullOrBlank()) {
+                        result.error("invalid_arguments", "Percorso o nome file non valido", null)
+                    } else {
+                        val publish = {
+                            thread {
+                                try {
+                                    val published = ClantoDownloads.publish(applicationContext, path, name)
+                                    runOnUiThread { result.success(published) }
+                                } catch (e: Exception) {
+                                    Log.e(logTag, "Pubblicazione in Download fallita", e)
+                                    runOnUiThread {
+                                        result.error("publish_failed", e.message, null)
+                                    }
+                                }
+                            }
+                        }
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+                            !XXPermissions.isGranted(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+                            XXPermissions.with(this)
+                                .permission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                .request { _, allGranted ->
+                                    if (allGranted) {
+                                        publish()
+                                    } else {
+                                        result.error(
+                                            "permission_denied",
+                                            "Accesso alla cartella Download negato",
+                                            null
+                                        )
+                                    }
+                                }
+                        } else {
+                            publish()
+                        }
+                    }
                 }
                 else -> {
                     result.error("-1", "No such method", null)

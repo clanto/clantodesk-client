@@ -122,41 +122,7 @@ impl Drop for SimpleCallOnReturn {
 }
 
 pub fn global_init() -> bool {
-    *config::APP_NAME.write().unwrap() = "ClantoDesk".to_owned();
-    // Impostato qui e non nel submodule hbb_common, che resta upstream puro.
-    // Va prima di qualsiasi accesso a Config: ORG entra nel percorso di
-    // configurazione (ProjectDirs::from("", ORG, APP_NAME)) e nei nomi dei plist
-    // di servizio (com.carriez.ClantoDesk_service.plist -> it.clanto.*).
-    // ORG e' dichiarato solo per macOS in hbb_common/src/config.rs:55.
-    #[cfg(target_os = "macos")]
-    {
-        *config::ORG.write().unwrap() = "it.clanto".to_owned();
-    }
-    if let Some(rendezvous_server) = option_env!("RENDEZVOUS_SERVER") {
-        if !rendezvous_server.is_empty() {
-            *config::PROD_RENDEZVOUS_SERVER.write().unwrap() = rendezvous_server.to_owned();
-            config::DEFAULT_SETTINGS
-                .write()
-                .unwrap()
-                .insert("custom-rendezvous-server".to_owned(), rendezvous_server.to_owned());
-        }
-    }
-    if let Some(rs_pub_key) = option_env!("RS_PUB_KEY") {
-        if !rs_pub_key.is_empty() {
-            config::DEFAULT_SETTINGS
-                .write()
-                .unwrap()
-                .insert("key".to_owned(), rs_pub_key.to_owned());
-        }
-    }
-    if let Some(api_server) = option_env!("API_SERVER") {
-        if !api_server.is_empty() {
-            config::DEFAULT_SETTINGS
-                .write()
-                .unwrap()
-                .insert("api-server".to_owned(), api_server.to_owned());
-        }
-    }
+    crate::clanto::config::apply_build_config();
     log::info!(
         "Server config: using_public_server={}, rendezvous_server={}, api_server={}",
         using_public_server(),
@@ -173,60 +139,6 @@ pub fn global_init() -> bool {
         }
     }
     true
-}
-
-/// Fail closed: senza i nostri server e la nostra chiave il client ricadrebbe sui default
-/// upstream (`rs-ny.rustdesk.com`, chiave pubblica RustDesk, `https://admin.rustdesk.com`),
-/// mandando il traffico dei nostri utenti su infrastruttura di terzi senza che se ne accorgano.
-/// Meglio rifiutare l'avvio che degradare in silenzio.
-///
-/// Va chiamata DOPO `load_custom_client`/`read_custom_client`, che possono a loro volta
-/// fornire server e chiave. Ritorna false se l'avvio deve essere interrotto.
-///
-/// Per i build di sviluppo locale si puo' compilare con `CLANTO_ALLOW_PUBLIC_SERVER=1`.
-pub fn ensure_own_server_configured() -> bool {
-    match check_own_server_configured() {
-        Ok(()) => true,
-        Err(e) => {
-            log::error!("{}", e);
-            eprintln!("{}", e);
-            false
-        }
-    }
-}
-
-fn check_own_server_configured() -> Result<(), String> {
-    let allow_public = option_env!("CLANTO_ALLOW_PUBLIC_SERVER").unwrap_or("") == "1";
-
-    let mut problems = Vec::new();
-    if using_public_server() {
-        problems.push("nessun rendezvous server configurato (RENDEZVOUS_SERVER)");
-    }
-    let key = Config::get_option("key");
-    if key.is_empty() {
-        problems.push("nessuna chiave pubblica configurata (RS_PUB_KEY)");
-    } else if key == config::RS_PUB_KEY {
-        problems.push("la chiave pubblica configurata e' quella pubblica di RustDesk");
-    }
-    if problems.is_empty() {
-        return Ok(());
-    }
-
-    let detail = problems.join("; ");
-    if allow_public {
-        log::warn!(
-            "ATTENZIONE: build di sviluppo, si ricade sull'infrastruttura pubblica RustDesk ({}). \
-             Non distribuire questo binario.",
-            detail
-        );
-        return Ok(());
-    }
-    Err(format!(
-        "Avvio interrotto: configurazione server Clanto assente o non valida ({}). \
-         Questo binario e' stato compilato senza i secret RENDEZVOUS_SERVER/RS_PUB_KEY \
-         e ricadrebbe sui server pubblici RustDesk.",
-        detail
-    ))
 }
 
 pub fn global_clean() {}

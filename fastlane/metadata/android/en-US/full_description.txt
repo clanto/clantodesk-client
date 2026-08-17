@@ -1,11 +1,12 @@
-An open-source remote desktop application, the open source TeamViewer alternative.
-Source code: https://github.com/rustdesk/rustdesk
-Doc: https://rustdesk.com/docs/en/manual/mobile/
+ClantoDesk is Clanto Services' remote desktop and technical support application, based on the open-source RustDesk project.
 
-In order for a remote device to control your Android device via mouse or touch, you need to allow RustDesk to use the "Accessibility" service, RustDesk uses AccessibilityService API to implement Android remote control.
+Use your Android phone or tablet to connect to authorized Windows, macOS and Linux computers, view their screen and control mouse and keyboard input. Android devices can also receive remote assistance when the user explicitly starts the service and grants the required permissions.
 
-In addition to remote control, you can also transfer files between Android devices and PCs easily with RustDesk.
+File transfer works in both directions. When sending a file from Android, ClantoDesk opens the system document picker so you choose exactly which files to share, including files offered by cloud providers. Files received from a computer are published in the Download collection. ClantoDesk does not request unrestricted access to all files on the device.
 
-You have full control of your data, with no concerns about security. You can use our rendezvous/relay server, or self-hosting, or write your own rendezvous/relay server. Self-hosting server is free and open source: https://github.com/rustdesk/rustdesk-server
+When Android remote control is enabled, ClantoDesk uses AccessibilityService only to reproduce authorized remote touch, scroll and keyboard actions. The app shows a dedicated disclosure and asks for explicit consent before opening Android accessibility settings. Accessibility is not used for autonomous actions, advertising or data collection.
 
-Please download and install desktop version from: https://rustdesk.com, then you can access and control your desktop from your mobile, or control your mobile from desktop.
+Connections use the Clanto rendezvous, relay and API infrastructure configured in the official build. Available session features include remote control, file transfer, clipboard synchronization, audio, chat, terminal and port forwarding when supported by both devices and allowed by their administrators.
+
+Source code: https://github.com/clanto/clantodesk-client
+Privacy information and documentation: https://supporto.clanto.it/documentazione/

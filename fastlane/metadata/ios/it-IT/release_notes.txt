@@ -1,0 +1,6 @@
+Versione 1.4.9
+
+- Aggiunto il trasferimento file bidirezionale fra iPhone/iPad e computer.
+- Aggiunta la selezione dei file tramite il picker documenti di iOS.
+- Aggiunta l'esportazione dei file ricevuti verso “Su iPhone/iPad”, iCloud Drive e provider esterni tramite l'app File.
+- Migliorati i controlli sull'infrastruttura Clanto, le informazioni privacy e gli avvisi legali.

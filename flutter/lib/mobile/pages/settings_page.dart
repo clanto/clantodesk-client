@@ -36,7 +36,9 @@ class SettingsPage extends StatefulWidget implements PageShape {
   State<SettingsPage> createState() => _SettingsState();
 }
 
-const url = 'https://rustdesk.com/';
+const url = 'https://clanto.it/';
+const sourceUrl = 'https://github.com/clanto/clantodesk-client';
+const licenseUrl = 'https://www.gnu.org/licenses/agpl-3.0.html';
 
 enum KeepScreenOn {
   never,
@@ -960,7 +962,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                 title: Text(translate("Version: ") + version),
                 value: Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('rustdesk.com',
+                  child: Text('clanto.it',
                       style: TextStyle(
                         decoration: TextDecoration.underline,
                       )),
@@ -987,7 +989,17 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
               onPressed: (context) =>
                   launchUrlString('https://supporto.clanto.it/documentazione/privacy-clantodesk/'),
               leading: Icon(Icons.privacy_tip),
-            )
+            ),
+            SettingsTile(
+              title: Text('Source code · AGPL-3.0-only'),
+              onPressed: (context) => launchUrlString(sourceUrl),
+              leading: Icon(Icons.code),
+            ),
+            SettingsTile(
+              title: Text('GNU AGPL v3 license'),
+              onPressed: (context) => launchUrlString(licenseUrl),
+              leading: Icon(Icons.description_outlined),
+            ),
           ],
         ),
       ],
@@ -1098,12 +1110,11 @@ void showAbout(OverlayDialogManager dialogManager) {
         Text('Version: $version'),
         InkWell(
             onTap: () async {
-              const url = 'https://rustdesk.com/';
               await launchUrl(Uri.parse(url));
             },
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('rustdesk.com',
+              child: Text('clanto.it',
                   style: TextStyle(
                     decoration: TextDecoration.underline,
                   )),

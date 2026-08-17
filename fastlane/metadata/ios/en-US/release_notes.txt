@@ -1,0 +1,6 @@
+Version 1.4.9
+
+- Added bidirectional file transfer between iPhone/iPad and computers.
+- Added file selection through the iOS document picker.
+- Added export of received files to “On My iPhone/iPad”, iCloud Drive and external providers through the Files app.
+- Improved Clanto infrastructure checks, privacy information and legal notices.

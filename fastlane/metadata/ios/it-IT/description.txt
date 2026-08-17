@@ -1,0 +1,12 @@
+ClantoDesk è l'applicazione di desktop remoto e assistenza tecnica di Clanto Services, derivata dal progetto open source RustDesk.
+
+Collegati da iPhone o iPad a computer Windows, macOS e Linux autorizzati, visualizza lo schermo remoto e controlla mouse e tastiera durante la sessione.
+
+Il trasferimento file funziona in entrambe le direzioni. Per inviare un file dal dispositivo mobile, ClantoDesk apre il selettore documenti di iOS: scegli esattamente quali file condividere, compresi quelli disponibili su iCloud Drive o tramite provider esterni. Quando ricevi un file dal computer, ClantoDesk apre l'app File e ti consente di scegliere dove conservarlo fra “Su iPhone/iPad”, iCloud Drive e gli altri provider installati. Se annulli l'esportazione, una copia rimane nella cartella Documents di ClantoDesk.
+
+Le connessioni utilizzano l'infrastruttura rendezvous, relay e API Clanto configurata nella build ufficiale. Le funzioni disponibili includono controllo remoto, trasferimento file, sincronizzazione degli appunti, audio, chat, terminale e inoltro porte, quando supportate da entrambi i dispositivi e consentite dai relativi amministratori.
+
+ClantoDesk deve essere usato esclusivamente su dispositivi propri o con l'autorizzazione del relativo proprietario.
+
+Codice sorgente: https://github.com/clanto/clantodesk-client
+Privacy e documentazione: https://supporto.clanto.it/documentazione/

@@ -17,6 +17,7 @@ cert.pfx
 *png
 !flutter/assets/icon.png
 !flutter/assets/icon_tray_macos.png
+!fastlane/metadata/android/en-US/images/featureGraphic.png
 *svg
 *jpg
 sciter.dll

@@ -1,11 +1,12 @@
-Een open-source toepassing voor bureaublad op afstand, het open-source alternatief voor TeamViewer.
-Bron code: https://github.com/rustdesk/rustdesk
-Doc: https://rustdesk.com/docs/en/manual/mobile/
+ClantoDesk is de toepassing van Clanto Services voor extern bureaublad en technische ondersteuning, gebaseerd op het open-sourceproject RustDesk.
 
-Om ervoor te zorgen dat een extern apparaat uw Android-apparaat via muis of aanraking kan besturen, moet u RustDesk toestaan de "Toegankelijkheid" service te gebruiken. RustDesk gebruikt AccessibilityService API om Android afstandsbediening te kunnen implementeren.
+Gebruik uw Android-telefoon of -tablet om verbinding te maken met geautoriseerde Windows-, macOS- en Linux-computers, het scherm te bekijken en muis- en toetsenbordinvoer te bedienen. Een Android-apparaat kan ook ondersteuning op afstand ontvangen wanneer de gebruiker de service uitdrukkelijk start en de vereiste toestemmingen verleent.
 
-Naast bediening op afstand kunt u met RustDesk ook eenvoudig bestanden overzetten tussen Android-apparaten en pc's.
+Bestandsoverdracht werkt in beide richtingen. Bij het verzenden van een bestand vanaf Android opent ClantoDesk de documentkiezer van het systeem, zodat u precies kiest welke bestanden u deelt, ook vanuit cloudproviders. Bestanden die vanaf een computer worden ontvangen, worden in de map Downloads geplaatst. ClantoDesk vraagt geen onbeperkte toegang tot alle bestanden op het apparaat.
 
-U hebt volledige controle over uw gegevens, en u hoeft zich geen zorgen te maken over de veiligheid. U kunt onze rendez-vous/relay server gebruiken, of zelf hosten, of uw eigen rendez-vous/relay server schrijven. Self-hosting server is gratis en open source: https://github.com/rustdesk/rustdesk-server
+Wanneer externe bediening van Android is ingeschakeld, gebruikt ClantoDesk AccessibilityService uitsluitend om geautoriseerde aanrakingen, veegbewegingen en toetsenbordinvoer op afstand uit te voeren. De app toont afzonderlijke informatie en vraagt om uitdrukkelijke toestemming voordat de Android-instellingen voor toegankelijkheid worden geopend. Toegankelijkheid wordt niet gebruikt voor autonome acties, advertenties of gegevensverzameling.
 
-Download en installeer de desktop versie vanaf: https://rustdesk.com, dan kunt u uw desktop benaderen en bedienen vanaf uw mobiel, of uw mobiel bedienen vanaf uw desktop.
+Verbindingen gebruiken de Clanto-infrastructuur voor rendezvous, relay en API die in de officiële build is geconfigureerd. Beschikbare sessiefuncties zijn onder meer externe bediening, bestandsoverdracht, klembordsynchronisatie, audio, chat, terminal en poortdoorschakeling wanneer beide apparaten dit ondersteunen en hun beheerders dit toestaan.
+
+Broncode: https://github.com/clanto/clantodesk-client
+Privacy en documentatie: https://supporto.clanto.it/documentazione/

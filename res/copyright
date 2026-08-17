@@ -1,12 +1,17 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: ClantoDesk
 Upstream-Contact: Clanto Services srls <info@clanto.it>
-Source: https://github.com/clanto/clantodesk
+Source: https://github.com/clanto/clantodesk-client
 
 Files: *
 Copyright: 2026 Clanto Services srls
            2020-2026 Purslane Ltd and the RustDesk contributors
 License: AGPL-3.0-only
+Comment: ClantoDesk is derived from RustDesk. The ClantoDesk name, logos and
+ visual identity are trademarks or distinctive signs of Clanto Services srls.
+ No trademark rights or endorsement are granted by the copyright license; see
+ TRADEMARKS.md in the corresponding source. This does not alter the
+ AGPL-3.0-only license of the covered files.
 
 License: AGPL-3.0-only
  This program is free software: you can redistribute it and/or modify it
@@ -22,4 +27,4 @@ License: AGPL-3.0-only
  License version 3 can be found in "/usr/share/common-licenses/AGPL-3".
  .
  The corresponding source code is available at
- https://github.com/clanto/clantodesk
+ https://github.com/clanto/clantodesk-client

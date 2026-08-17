@@ -1,11 +1,12 @@
-Une application de bureau à distance open source, l'alternative open source à TeamViewer.
-Code source : https://github.com/rustdesk/rustdesk
-Doc : https://rustdesk.com/docs/en/manual/mobile/
+ClantoDesk est l’application de bureau à distance et d’assistance technique de Clanto Services, basée sur le projet open source RustDesk.
 
-Pour qu'un appareil distant puisse contrôler votre appareil Android via la souris ou le toucher, vous devez autoriser RustDesk à utiliser le service "Accessibilité", RustDesk utilise l'API AccessibilityService pour implémenter la télécommande Addroid.
+Utilisez votre téléphone ou tablette Android pour vous connecter à des ordinateurs Windows, macOS et Linux autorisés, afficher leur écran et contrôler la souris et le clavier. Un appareil Android peut également recevoir une assistance à distance lorsque l’utilisateur démarre explicitement le service et accorde les autorisations nécessaires.
 
-En plus du contrôle à distance, vous pouvez également transférer facilement des fichiers entre des appareils Android et des PC avec RustDesk.
+Le transfert de fichiers fonctionne dans les deux sens. Pour envoyer un fichier depuis Android, ClantoDesk ouvre le sélecteur de documents du système afin que vous choisissiez précisément les fichiers à partager, y compris ceux proposés par des services cloud. Les fichiers reçus depuis un ordinateur sont publiés dans le dossier Téléchargements. ClantoDesk ne demande pas un accès illimité à tous les fichiers de l’appareil.
 
-Vous avez le contrôle total de vos données, sans aucun souci de sécurité. Vous pouvez utiliser notre serveur de rendez-vous/relais, ou l'auto-hébergement, ou écrire votre propre serveur de rendez-vous/relais. Le serveur auto-hébergé est gratuit et open source : https://github.com/rustdesk/rustdesk-server
+Lorsque le contrôle à distance Android est activé, ClantoDesk utilise AccessibilityService uniquement pour reproduire les actions tactiles, les défilements et les saisies clavier autorisés à distance. L’application affiche une information dédiée et demande un consentement explicite avant d’ouvrir les paramètres d’accessibilité Android. L’accessibilité n’est pas utilisée pour des actions autonomes, la publicité ou la collecte de données.
 
-Veuillez télécharger et installer la version de bureau à partir de : https://rustdesk.com, vous pourrez alors accéder et contrôler votre bureau à partir de votre mobile, ou contrôler votre mobile à partir du bureau.
+Les connexions utilisent l’infrastructure de rendez-vous, de relais et d’API Clanto configurée dans la version officielle. Les fonctions disponibles comprennent le contrôle à distance, le transfert de fichiers, la synchronisation du presse-papiers, l’audio, le chat, le terminal et la redirection de ports lorsque les deux appareils les prennent en charge et que leurs administrateurs les autorisent.
+
+Code source : https://github.com/clanto/clantodesk-client
+Confidentialité et documentation : https://supporto.clanto.it/documentazione/

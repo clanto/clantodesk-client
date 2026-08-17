@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_hbb/clanto/accessibility_disclosure.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/main.dart';
 import 'package:flutter_hbb/mobile/pages/settings_page.dart';
@@ -895,6 +896,7 @@ String getLoginDialogTag(int id) {
 }
 
 showInputWarnAlert(FFI ffi) {
+  final disclosure = clantoAccessibilityDisclosure();
   ffi.dialogManager.show((setState, close, context) {
     submit() {
       AndroidPermissionManager.startAction(kActionAccessibilitySettings);
@@ -902,18 +904,16 @@ showInputWarnAlert(FFI ffi) {
     }
 
     return CustomAlertDialog(
-      title: Text(translate("How to get Android input permission?")),
+      title: Text(disclosure.title),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(translate("android_input_permission_tip1")),
-          const SizedBox(height: 10),
-          Text(translate("android_input_permission_tip2")),
+          Text(disclosure.body),
         ],
       ),
       actions: [
-        dialogButton("Cancel", onPressed: close, isOutline: true),
-        dialogButton("Open System Setting", onPressed: submit),
+        dialogButton(disclosure.decline, onPressed: close, isOutline: true),
+        dialogButton(disclosure.accept, onPressed: submit),
       ],
       onSubmit: submit,
       onCancel: close,
