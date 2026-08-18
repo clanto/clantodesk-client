@@ -300,7 +300,7 @@ Version: %s
 Architecture: %s
 Maintainer: ClantoDesk <info@clanto.it>
 Homepage: https://clanto.it
-Depends: libgtk-3-0t64 | libgtk-3-0, libxcb-randr0, libxdo3 | libxdo4, libxfixes3, libxcb-shape0, libxcb-xfixes0, libasound2t64 | libasound2, libsystemd0, curl, libva2, libva-drm2, libva-x11-2, libgstreamer-plugins-base1.0-0, libpam0g, gstreamer1.0-pipewire%s
+Depends: libgtk-3-0t64 | libgtk-3-0, libxcb-randr0, libxdo3 | libxdo4, libxfixes3, libxcb-shape0, libxcb-xfixes0, libasound2t64 | libasound2, libsystemd0, curl, libva2, libva-drm2, libva-x11-2, libgstreamer-plugins-base1.0-0, gstreamer1.0-pipewire%s
 Recommends: libayatana-appindicator3-1
 Description: A remote control software.
 
@@ -324,8 +324,6 @@ def build_flutter_deb(version, features):
     system2('flutter build linux --release')
     system2('mkdir -p tmpdeb/usr/bin/')
     system2('mkdir -p tmpdeb/usr/share/clantodesk')
-    system2('mkdir -p tmpdeb/etc/clantodesk/')
-    system2('mkdir -p tmpdeb/etc/pam.d/')
     system2('mkdir -p tmpdeb/usr/share/clantodesk/files/systemd/')
     system2('mkdir -p tmpdeb/usr/share/icons/hicolor/256x256/apps/')
     system2('mkdir -p tmpdeb/usr/share/icons/hicolor/scalable/apps/')
@@ -344,12 +342,6 @@ def build_flutter_deb(version, features):
         'cp ../res/clantodesk.desktop tmpdeb/usr/share/applications/clantodesk.desktop')
     system2(
         'cp ../res/clantodesk-link.desktop tmpdeb/usr/share/applications/clantodesk-link.desktop')
-    system2(
-        'cp ../res/startwm.sh tmpdeb/etc/clantodesk/')
-    system2(
-        'cp ../res/xorg.conf tmpdeb/etc/clantodesk/')
-    system2(
-        'cp ../res/pam.d/clantodesk.debian tmpdeb/etc/pam.d/clantodesk')
     system2(
         "echo \"#!/bin/sh\" >> tmpdeb/usr/share/clantodesk/files/polkit && chmod a+x tmpdeb/usr/share/clantodesk/files/polkit")
 
@@ -630,13 +622,7 @@ def main():
                     'cp res/clantodesk.desktop tmpdeb/usr/share/applications/clantodesk.desktop')
                 system2(
                     'cp res/clantodesk-link.desktop tmpdeb/usr/share/applications/clantodesk-link.desktop')
-                os.system('mkdir -p tmpdeb/etc/clantodesk/')
-                os.system('cp -a res/startwm.sh tmpdeb/etc/rustdesk/')
-                os.system('mkdir -p tmpdeb/etc/X11/rustdesk/')
-                os.system('cp res/xorg.conf tmpdeb/etc/X11/rustdesk/')
                 os.system('cp -a DEBIAN/* tmpdeb/DEBIAN/')
-                os.system('mkdir -p tmpdeb/etc/pam.d/')
-                os.system('cp pam.d/clantodesk.debian tmpdeb/etc/pam.d/rustdesk')
                 system2('strip tmpdeb/usr/bin/rustdesk')
                 system2('mkdir -p tmpdeb/usr/share/clantodesk')
                 system2('mv tmpdeb/usr/bin/rustdesk tmpdeb/usr/share/rustdesk/')
