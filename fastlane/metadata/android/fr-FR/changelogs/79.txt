@@ -1,0 +1,1 @@
+- Le texte des messages de chat est désormais affiché dans la notification même lorsque l'écran du téléphone est partagé.

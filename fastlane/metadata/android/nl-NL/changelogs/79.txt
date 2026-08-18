@@ -1,0 +1,1 @@
+- De tekst van chatberichten wordt nu in de melding getoond, ook terwijl het telefoonscherm wordt gedeeld.

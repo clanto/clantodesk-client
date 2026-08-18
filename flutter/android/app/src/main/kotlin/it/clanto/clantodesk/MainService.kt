@@ -50,6 +50,8 @@ const val DEFAULT_NOTIFY_TITLE = "ClantoDesk"
 const val DEFAULT_NOTIFY_TEXT = "Service is running"
 const val DEFAULT_NOTIFY_ID = 1
 const val NOTIFY_ID_OFFSET = 100
+// Canale chat separato: PUBLIC, cosi il testo resta visibile anche durante lo screen sharing.
+const val CHAT_NOTIFY_CHANNEL = "ClantoDesk Chat"
 
 const val MIME_TYPE = MediaFormat.MIMETYPE_VIDEO_VP9
 
@@ -736,7 +738,7 @@ class MainService : Service() {
         } else {
             PendingIntent.getActivity(this, notificationID, intent, FLAG_UPDATE_CURRENT)
         }
-        val notification = NotificationCompat.Builder(this, notificationChannel)
+        val notification = NotificationCompat.Builder(this, ensureChatChannel())
             .setSmallIcon(R.mipmap.ic_stat_logo)
             .setOngoing(false)
             .setAutoCancel(true)
@@ -752,6 +754,22 @@ class MainService : Service() {
             .setColor(ContextCompat.getColor(this, R.color.primary))
             .build()
         notificationManager.notify(notificationID, notification)
+    }
+
+    private fun ensureChatChannel(): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return notificationChannel
+        if (notificationManager.getNotificationChannel(CHAT_NOTIFY_CHANNEL) == null) {
+            val channel = NotificationChannel(
+                CHAT_NOTIFY_CHANNEL,
+                "ClantoDesk Chat",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "ClantoDesk Chat Channel"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+        return CHAT_NOTIFY_CHANNEL
     }
 
     private fun getClientNotifyID(clientID: Int): Int {

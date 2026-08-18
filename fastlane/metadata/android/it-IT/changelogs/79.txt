@@ -1,0 +1,1 @@
+- Il testo dei messaggi di chat ora è visibile nella notifica anche mentre lo schermo del telefono è condiviso.

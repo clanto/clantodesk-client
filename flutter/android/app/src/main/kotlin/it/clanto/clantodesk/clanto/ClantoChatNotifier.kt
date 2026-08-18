@@ -40,7 +40,10 @@ object ClantoChatNotifier {
                         CHANNEL_ID,
                         "ClantoDesk Chat",
                         NotificationManager.IMPORTANCE_HIGH
-                    )
+                    ).apply {
+                        // PUBLIC: il testo resta visibile anche su lockscreen/screen sharing.
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    }
                 )
             }
             val intent = Intent(appContext, MainActivity::class.java).apply {

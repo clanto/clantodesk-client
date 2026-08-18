@@ -1,0 +1,1 @@
+- Chat message text is now shown in the notification even while the phone screen is being shared.
