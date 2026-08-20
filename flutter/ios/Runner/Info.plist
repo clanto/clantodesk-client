@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ClantoDesk accede alla libreria foto solo quando scegli un'immagine da inviare al computer collegato. Nessun contenuto viene letto o trasferito senza una tua selezione esplicita.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>ClantoDesk usa Face ID per proteggere l'accesso alle impostazioni dell'app.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
