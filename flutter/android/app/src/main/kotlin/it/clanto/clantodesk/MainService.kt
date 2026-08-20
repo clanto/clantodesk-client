@@ -38,6 +38,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
+import it.clanto.clantodesk.clanto.ClantoChatNotifier
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 import org.json.JSONException
@@ -50,8 +51,6 @@ const val DEFAULT_NOTIFY_TITLE = "ClantoDesk"
 const val DEFAULT_NOTIFY_TEXT = "Service is running"
 const val DEFAULT_NOTIFY_ID = 1
 const val NOTIFY_ID_OFFSET = 100
-// Canale chat separato: PUBLIC, cosi il testo resta visibile anche durante lo screen sharing.
-const val CHAT_NOTIFY_CHANNEL = "ClantoDesk Chat"
 
 const val MIME_TYPE = MediaFormat.MIMETYPE_VIDEO_VP9
 
@@ -173,7 +172,7 @@ class MainService : Service() {
                     e.printStackTrace()
                 }
             }
-            "chat_server_mode", "chat_client_mode" -> {
+            "chat_server_mode" -> {
                 try {
                     val jsonObject = JSONObject(arg1)
                     val id = jsonObject.getInt("id")
@@ -725,51 +724,12 @@ class MainService : Service() {
         floatingState.edit()
             .putInt(FLOATING_UNREAD_MESSAGES, (unreadMessages + 1).coerceAtMost(999))
             .apply()
-        if (MainActivity.isInForeground) return
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
-            action = Intent.ACTION_MAIN
-            addCategory(Intent.CATEGORY_LAUNCHER)
-            putExtra(MainActivity.EXTRA_OPEN_CHAT, true)
-        }
-        val notificationID = getClientNotifyID(clientID)
-        val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.getActivity(this, notificationID, intent, FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
-        } else {
-            PendingIntent.getActivity(this, notificationID, intent, FLAG_UPDATE_CURRENT)
-        }
-        val notification = NotificationCompat.Builder(this, ensureChatChannel())
-            .setSmallIcon(R.mipmap.ic_stat_logo)
-            .setOngoing(false)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setDefaults(Notification.DEFAULT_ALL)
-            .setContentTitle(translate("New message"))
-            .setContentText(text)
-            .setSubText("ClantoDesk")
-            .setTicker(translate("New message"))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(pendingIntent)
-            .setColor(ContextCompat.getColor(this, R.color.primary))
-            .build()
-        notificationManager.notify(notificationID, notification)
-    }
-
-    private fun ensureChatChannel(): String {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return notificationChannel
-        if (notificationManager.getNotificationChannel(CHAT_NOTIFY_CHANNEL) == null) {
-            val channel = NotificationChannel(
-                CHAT_NOTIFY_CHANNEL,
-                "ClantoDesk Chat",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "ClantoDesk Chat Channel"
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
-        return CHAT_NOTIFY_CHANNEL
+        ClantoChatNotifier.publish(
+            this,
+            getClientNotifyID(clientID),
+            text,
+            openChat = true
+        )
     }
 
     private fun getClientNotifyID(clientID: Int): Int {

@@ -19,8 +19,9 @@ import it.clanto.clantodesk.R
 import it.clanto.clantodesk.translate
 
 object ClantoChatNotifier {
-    private const val CHANNEL_ID = "clantodesk_controller_chat"
-    private const val NOTIFICATION_ID = 2
+    private const val CHANNEL_ID = "clantodesk_chat_messages_v2"
+    private const val CHANNEL_NAME = "ClantoDesk chat messages"
+    private const val CONTROLLER_NOTIFICATION_ID = 2
 
     @SuppressLint("UnspecifiedImmutableFlag")
     fun publish(context: Context, text: String?, result: MethodChannel.Result) {
@@ -28,54 +29,66 @@ object ClantoChatNotifier {
             result.error("invalid_arguments", "Testo del messaggio mancante", null)
             return
         }
-        if (!MainActivity.isInForeground) {
-            val appContext = context.applicationContext
-            val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE)
-                as NotificationManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                notificationManager.getNotificationChannel(CHANNEL_ID) == null
-            ) {
-                notificationManager.createNotificationChannel(
-                    NotificationChannel(
-                        CHANNEL_ID,
-                        "ClantoDesk Chat",
-                        NotificationManager.IMPORTANCE_HIGH
-                    ).apply {
-                        // PUBLIC: il testo resta visibile anche su lockscreen/screen sharing.
-                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                    }
-                )
-            }
-            val intent = Intent(appContext, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
-                action = Intent.ACTION_MAIN
-                addCategory(Intent.CATEGORY_LAUNCHER)
-            }
-            val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT
-            }
-            val pendingIntent = PendingIntent.getActivity(
-                appContext,
-                NOTIFICATION_ID,
-                intent,
-                pendingIntentFlags
-            )
-            val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_stat_logo)
-                .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-                .setDefaults(Notification.DEFAULT_ALL)
-                .setContentTitle(translate("New message"))
-                .setContentText(text)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-                .setContentIntent(pendingIntent)
-                .setColor(ContextCompat.getColor(appContext, R.color.primary))
-                .build()
-            notificationManager.notify(NOTIFICATION_ID, notification)
-        }
+        publish(context, CONTROLLER_NOTIFICATION_ID, text, openChat = false)
         result.success(null)
+    }
+
+    @SuppressLint("UnspecifiedImmutableFlag")
+    fun publish(context: Context, notificationID: Int, text: String, openChat: Boolean) {
+        if (MainActivity.isInForeground) return
+
+        val appContext = context.applicationContext
+        val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE)
+            as NotificationManager
+        ensureChannel(notificationManager)
+        val intent = Intent(appContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            action = Intent.ACTION_MAIN
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            if (openChat) putExtra(MainActivity.EXTRA_OPEN_CHAT, true)
+        }
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            appContext,
+            notificationID,
+            intent,
+            pendingIntentFlags
+        )
+        val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_stat_logo)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setDefaults(Notification.DEFAULT_ALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentTitle(translate("New message"))
+            .setContentText(text)
+            .setSubText("ClantoDesk")
+            .setTicker(translate("New message"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(pendingIntent)
+            .setColor(ContextCompat.getColor(appContext, R.color.primary))
+            .build()
+        notificationManager.notify(notificationID, notification)
+    }
+
+    private fun ensureChannel(notificationManager: NotificationManager) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            notificationManager.getNotificationChannel(CHANNEL_ID) != null
+        ) return
+
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+        )
     }
 }

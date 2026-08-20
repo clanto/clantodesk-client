@@ -1,0 +1,2 @@
+- Il testo dei messaggi di chat ora è visibile nella notifica anche a schermo bloccato.
+- Un messaggio genera una sola notifica invece di due.

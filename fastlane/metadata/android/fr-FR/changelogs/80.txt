@@ -1,0 +1,2 @@
+- Le texte des messages de chat est désormais visible dans la notification, même sur l'écran de verrouillage.
+- Un message ne génère plus qu'une seule notification au lieu de deux.

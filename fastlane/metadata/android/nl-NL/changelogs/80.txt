@@ -1,0 +1,2 @@
+- De tekst van chatberichten is nu zichtbaar in de melding, ook op het vergrendelscherm.
+- Eén bericht levert één melding op in plaats van twee.
