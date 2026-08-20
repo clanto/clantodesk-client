@@ -1,0 +1,21 @@
+name: iOS only (IPA firmata)
+
+# Costruisce solo l'IPA iOS arm64, senza far ripartire tutta la nightly.
+# Il job iOS di flutter-build.yml gira solo con upload-artifact: true, quindi
+# qui è fissato: senza pubblicazione il target non partirebbe affatto.
+on:
+  workflow_dispatch:
+    inputs:
+      upload-tag:
+        description: "Tag della release su cui pubblicare"
+        type: string
+        default: "nightly"
+
+jobs:
+  run-ios:
+    uses: ./.github/workflows/flutter-build.yml
+    secrets: inherit
+    with:
+      upload-artifact: true
+      upload-tag: ${{ inputs.upload-tag }}
+      targets: ios
