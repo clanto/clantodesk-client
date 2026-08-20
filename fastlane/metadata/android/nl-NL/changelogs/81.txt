@@ -2,3 +2,5 @@
 - Eén bericht levert één melding op in plaats van twee.
 - De authenticatievraag voor instellingen is vertaald en wordt niet opnieuw gesteld nadat deze is gelukt.
 - Instellingen blijven bereikbaar op apparaten zonder ingestelde pincode of vingerafdruk.
+- QR-codelezer verwijderd: de servers komen uit de build en zijn niet te wijzigen.
+- De sessiewerkbalk laat geen lege gekleurde strook boven de pictogrammen meer achter.

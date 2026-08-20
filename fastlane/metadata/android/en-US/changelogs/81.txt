@@ -2,3 +2,5 @@
 - A message raises a single notification instead of two.
 - The settings authentication prompt is translated and is no longer asked again after it succeeds.
 - Settings stay reachable on devices with no PIN or fingerprint configured.
+- QR code reader removed: servers come from the build and cannot be changed.
+- The session toolbar no longer leaves an empty coloured strip above the icons.

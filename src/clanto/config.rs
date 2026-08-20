@@ -52,6 +52,13 @@ pub fn apply_build_config() {
             .unwrap()
             .insert("api-server".to_owned(), server.to_owned());
     }
+    // Il relay va bloccato anche quando non e' fissato in build: la chiave
+    // presente in OVERWRITE_SETTINGS rende impossibile scriverla e cancella un
+    // valore gia' salvato. Vuota significa "quello annunciato dal rendezvous".
+    config::OVERWRITE_SETTINGS.write().unwrap().insert(
+        "relay-server".to_owned(),
+        option_env!("RELAY_SERVER").unwrap_or("").to_owned(),
+    );
 }
 
 /// Impedisce a una build ClantoDesk priva di configurazione di ricadere in

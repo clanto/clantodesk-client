@@ -2,3 +2,5 @@
 - Un message ne génère plus qu'une seule notification au lieu de deux.
 - L'invite d'authentification des paramètres est traduite et n'est plus redemandée après avoir réussi.
 - Les paramètres restent accessibles sur les appareils sans code PIN ni empreinte configurés.
+- Lecteur de codes QR supprimé : les serveurs proviennent de la build et ne sont pas modifiables.
+- La barre d'outils de session ne laisse plus de bande colorée vide au-dessus des icônes.

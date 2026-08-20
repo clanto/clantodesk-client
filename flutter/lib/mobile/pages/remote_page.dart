@@ -555,8 +555,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Widget getBottomAppBar() {
     final ffiModel = Provider.of<FfiModel>(context);
     // Il colore del BottomAppBar dipinge anche il SafeArea interno: senza questo
-    // wrapping l'inset iOS (34pt/20pt) resta vuoto sotto le icone.
-    return MediaQuery.removePadding(
+    // wrapping l'inset iOS (34pt/20pt) resta vuoto sotto le icone. Il context
+    // deve venire dal Builder: quello dello State sta sopra lo Scaffold e
+    // rimetterebbe l'inset superiore dentro la barra in basso.
+    return Builder(
+      builder: (context) => MediaQuery.removePadding(
       context: context,
       removeBottom: true,
       child: BottomAppBar(
@@ -652,6 +655,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       },
               )),
         ],
+      ),
       ),
       ),
     );

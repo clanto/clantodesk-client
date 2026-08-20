@@ -2,3 +2,5 @@
 - Un messaggio genera una sola notifica invece di due.
 - Il prompt di autenticazione delle impostazioni è tradotto e non viene più richiesto di nuovo dopo essere riuscito.
 - Le impostazioni restano raggiungibili sui dispositivi senza PIN o impronta configurati.
+- Rimosso il lettore di codici QR: i server sono fissati dalla build e non sono modificabili.
+- La barra degli strumenti della sessione non lascia più una fascia colorata vuota sopra le icone.

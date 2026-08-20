@@ -77,6 +77,21 @@ CLANTO_ALLOW_PUBLIC_SERVER=1 cargo build ...
 
 Degrada il blocco a warning. Non distribuire binari compilati così.
 
+### Nessuna via per cambiare i server a runtime
+
+`apply_build_config()` mette in `OVERWRITE_SETTINGS` tutte e quattro le chiavi
+dei server — `custom-rendezvous-server`, `key`, `api-server` e `relay-server` —
+perché `is_option_can_save()` rifiuta la scrittura di qualsiasi chiave presente
+lì, **anche se il valore è vuoto**, e cancella un valore già salvato. `relay-server`
+vuoto significa "quello annunciato dal rendezvous", che è il comportamento
+voluto: `RELAY_SERVER` esiste solo per fissarne uno.
+
+Le voci di interfaccia sono chiuse a monte: `hide-server-settings` in
+`BUILTIN_SETTINGS` nasconde "ID/Relay Server" su desktop e mobile, e il **lettore
+di codici QR è stato rimosso** — era l'ultima strada per importare una
+configurazione server, e con esso sono usciti `qr_code_scanner`, `zxing2`,
+`image_picker` e le due autorizzazioni iOS di fotocamera e libreria foto.
+
 ## Cosa controlla la CI prima di compilare
 
 Il job `verify-secrets` in `flutter-build.yml` blocca tutti i build se:

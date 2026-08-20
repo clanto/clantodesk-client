@@ -72,9 +72,5 @@
   <false/>
   <key>io.flutter.embedded_views_preview</key>
   <true/>
-  <key>NSCameraUsageDescription</key>
-  <string>ClantoDesk usa la fotocamera soltanto quando scegli di scansionare un codice QR per configurare o avviare una connessione.</string>
-  <key>NSPhotoLibraryUsageDescription</key>
-  <string>ClantoDesk accede alla libreria foto soltanto quando scegli un'immagine contenente un codice QR.</string>
 </dict>
 </plist>
