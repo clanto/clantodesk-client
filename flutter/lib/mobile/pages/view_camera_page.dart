@@ -292,7 +292,11 @@ class _ViewCameraPageState extends State<ViewCameraPage>
   }
 
   Widget getBottomAppBar() {
-    return BottomAppBar(
+    // Vedi remote_page.dart: senza rimuovere il padding l'inset iOS resta vuoto sotto le icone.
+    return MediaQuery.removePadding(
+      context: context,
+      removeBottom: true,
+      child: BottomAppBar(
       elevation: 10,
       color: MyTheme.accent,
       child: Row(
@@ -356,6 +360,7 @@ class _ViewCameraPageState extends State<ViewCameraPage>
                       },
               )),
         ],
+      ),
       ),
     );
   }
