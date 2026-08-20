@@ -837,9 +837,24 @@ jobs:
 
       - name: Install provisioning profile
         env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
         run: |
           PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          PROFILE_PLIST=$RUNNER_TEMP/build_pp.plist
+          EXPORT_OPTIONS_PATH=$RUNNER_TEMP/ExportOptions.plist
+
+          if [ -z "$APPLE_TEAM_ID" ]; then
+            echo "ERROR: APPLE_TEAM_ID GitHub secret is required for iOS signing."
+            exit 1
+          fi
+
+          echo "Apple development team from APPLE_TEAM_ID: $APPLE_TEAM_ID"
+
+          if grep -nE 'DEVELOPMENT_TEAM = "?[A-Z0-9]{10}"?;' ios/Runner.xcodeproj/project.pbxproj; then
+            echo "ERROR: The iOS project contains a literal Apple team ID; use APPLE_DEVELOPMENT_TEAM instead."
+            exit 1
+          fi
           
           # Decode base64 to provisioning profile file
           printf '%s' "$PROVISIONING_PROFILE_BASE64" | tr -d '[:space:]' | base64 --decode > $PP_PATH
@@ -853,27 +868,45 @@ jobs:
           
           echo "Provisioning profile decoded successfully ($(wc -c < $PP_PATH) bytes)"
           
-          # Extract UUID and Name using security cms (Apple standard method)
-          PROFILE_UUID=$(security cms -D -i "$PP_PATH" 2>/dev/null | plutil -convert xml1 -o - - 2>/dev/null | grep -A1 '<key>UUID</key>' | grep '<string>' | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
-          PROFILE_NAME=$(security cms -D -i "$PP_PATH" 2>/dev/null | plutil -convert xml1 -o - - 2>/dev/null | grep -A1 '<key>Name</key>' | grep '<string>' | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
-          
-          if [ -z "$PROFILE_UUID" ]; then
-            echo "ERROR: Could not extract UUID from provisioning profile"
-            echo "Trying alternative method..."
-            # Fallback: extract raw UUID pattern from binary file
-            PROFILE_UUID=$(strings "$PP_PATH" | grep -E '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' | head -1)
-          fi
-          
-          if [ -z "$PROFILE_UUID" ]; then
-            echo "ERROR: Could not extract UUID with any method"
-            echo "File content preview:"
-            head -c 200 "$PP_PATH" | od -c
+          if ! security cms -D -i "$PP_PATH" > "$PROFILE_PLIST"; then
+            echo "ERROR: Could not decode provisioning profile"
             exit 1
           fi
           
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST" 2>/dev/null || true)
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST" 2>/dev/null || true)
+          PROFILE_TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PROFILE_PLIST" 2>/dev/null || true)
+
+          if [ -z "$PROFILE_UUID" ]; then
+            echo "ERROR: Could not extract UUID from provisioning profile"
+            exit 1
+          fi
+
+          if [ -z "$PROFILE_TEAM_ID" ]; then
+            echo "ERROR: Provisioning profile secret does not contain a TeamIdentifier; iOS signing cannot continue."
+            exit 1
+          fi
+
+          echo "Apple development team from provisioning profile: $PROFILE_TEAM_ID"
+          if [ "$PROFILE_TEAM_ID" != "$APPLE_TEAM_ID" ]; then
+            echo "ERROR: APPLE_TEAM_ID ($APPLE_TEAM_ID) does not match provisioning profile TeamIdentifier ($PROFILE_TEAM_ID)."
+            exit 1
+          fi
+
+          printf 'APPLE_DEVELOPMENT_TEAM=%s\n' "$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+
+          # Local.xcconfig is ignored by Git and is the single source passed to Xcode.
+          printf 'APPLE_DEVELOPMENT_TEAM = %s\n' "$APPLE_TEAM_ID" > flutter/ios/Flutter/Local.xcconfig
+
+          # Keep the versioned export options free of team-specific data. The build-only
+          # copy receives the team ID from APPLE_TEAM_ID.
+          cp flutter/ios/exportOptions.plist "$EXPORT_OPTIONS_PATH"
+          /usr/libexec/PlistBuddy -c "Add :teamID string $APPLE_TEAM_ID" "$EXPORT_OPTIONS_PATH"
+          plutil -lint "$EXPORT_OPTIONS_PATH"
+          
           echo "Installing profile with UUID: $PROFILE_UUID"
           echo "Profile name: $PROFILE_NAME"
-          echo "Expected profile name in ExportOptions.plist: clantodesk_profile"
+          echo "Expected profile name in exportOptions.plist: clantodesk_profile"
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/$PROFILE_UUID.mobileprovision
           echo "Provisioning profile installed successfully"
@@ -897,11 +930,32 @@ jobs:
           pushd flutter
           # Disable automatic signing in Xcode project to use manually installed provisioning profile
           sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/g' ios/Runner.xcodeproj/project.pbxproj
-          # Set the provisioning profile UUID
-          sed -i '' "s/DEVELOPMENT_TEAM = .*;/DEVELOPMENT_TEAM = DCP3L7L7BW;/g" ios/Runner.xcodeproj/project.pbxproj
           # NOTE: We REMOVE --no-codesign because we want it signed now
-          flutter build ipa --release --no-tree-shake-icons --export-options-plist=ios/ExportOptions.plist
+          flutter build ipa --release --no-tree-shake-icons --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
           popd
+
+      - name: Verify iOS signing team
+        shell: bash
+        run: |
+          APP_PATH=flutter/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "ERROR: Signed iOS app was not found at $APP_PATH"
+            exit 1
+          fi
+
+          SIGNED_TEAM=$(codesign -dvvv "$APP_PATH" 2>&1 | sed -n 's/^[[:space:]]*TeamIdentifier=//p' | head -n 1)
+          if [ -z "$SIGNED_TEAM" ]; then
+            echo "ERROR: Could not read TeamIdentifier from the signed iOS app"
+            exit 1
+          fi
+
+          echo "Expected Apple development team: $APPLE_DEVELOPMENT_TEAM"
+          echo "Signed iOS app team: $SIGNED_TEAM"
+          if [ "$SIGNED_TEAM" != "$APPLE_DEVELOPMENT_TEAM" ]; then
+            echo "ERROR: Signed iOS app team does not match APPLE_TEAM_ID"
+            exit 1
+          fi
 
       - name: Rename IPA with version and architecture
         run: |
@@ -954,6 +1008,25 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
+
+      - name: Configure Apple team
+        if: env.MACOS_P12_BASE64 != null && env.UPLOAD_ARTIFACT == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_TEAM_ID" ]; then
+            echo "ERROR: APPLE_TEAM_ID GitHub secret is required for macOS signing."
+            exit 1
+          fi
+
+          if grep -nE 'DEVELOPMENT_TEAM = "?[A-Z0-9]{10}"?;' flutter/macos/Runner.xcodeproj/project.pbxproj; then
+            echo "ERROR: The macOS project contains a literal Apple team ID; use APPLE_DEVELOPMENT_TEAM instead."
+            exit 1
+          fi
+
+          echo "Apple development team from APPLE_TEAM_ID: $APPLE_TEAM_ID"
+          printf 'APPLE_DEVELOPMENT_TEAM=%s\n' "$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+          printf 'APPLE_DEVELOPMENT_TEAM = %s\n' "$APPLE_TEAM_ID" > flutter/macos/Runner/Configs/Local.xcconfig
 
       - name: Import the codesign cert
         if: env.MACOS_P12_BASE64 != null
@@ -1117,6 +1190,16 @@ jobs:
           # start sign the rustdesk.app and dmg
           rm -rf *.dmg || true
           codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict ./flutter/build/macos/Build/Products/Release/ClantoDesk.app -vvv
+          SIGNED_TEAM=$(codesign -dvvv ./flutter/build/macos/Build/Products/Release/ClantoDesk.app 2>&1 | sed -n 's/^[[:space:]]*TeamIdentifier=//p' | head -n 1)
+          if [ -z "$SIGNED_TEAM" ]; then
+            echo "ERROR: Could not read TeamIdentifier from the signed macOS app"
+            exit 1
+          fi
+          echo "Signed macOS app team: $SIGNED_TEAM"
+          if [ "$SIGNED_TEAM" != "$APPLE_DEVELOPMENT_TEAM" ]; then
+            echo "ERROR: Signed macOS app team does not match APPLE_TEAM_ID ($APPLE_DEVELOPMENT_TEAM)"
+            exit 1
+          fi
           create-dmg --icon "ClantoDesk.app" 200 190 --hide-extension "ClantoDesk.app" --window-size 800 400 --app-drop-link 600 185 clantodesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/ClantoDesk.app
           codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict clantodesk-${{ env.VERSION }}.dmg -vvv
           # Notarize the DMG (only if secrets are configured)

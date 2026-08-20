@@ -91,6 +91,35 @@ Il job `verify-secrets` in `flutter-build.yml` blocca tutti i build se:
 `build.py` riscrive da sé la versione in `PKGBUILD`, `rpm.spec` e `rpm-suse.spec`
 leggendola da `Cargo.toml`: quei file non vanno aggiornati a mano.
 
+## Firma Apple locale
+
+Il team Apple non è salvato nei progetti iOS o macOS: `DEVELOPMENT_TEAM` legge
+`APPLE_DEVELOPMENT_TEAM` dalla configurazione opzionale e ignorata da Git
+`flutter/ios/Flutter/Local.xcconfig` oppure
+`flutter/macos/Runner/Configs/Local.xcconfig`. Per compilare e firmare localmente
+con il proprio account, creare il file della piattaforma interessata con il
+proprio team:
+
+```xcconfig
+APPLE_DEVELOPMENT_TEAM = IL_TUO_TEAM_ID
+```
+
+Per iOS, per lasciare a Xcode la scelta del profilo locale, aggiungere anche:
+
+```xcconfig
+CODE_SIGN_STYLE = Automatic
+PROVISIONING_PROFILE_SPECIFIER =
+```
+
+Xcode può quindi scegliere un profilo iOS del proprio account senza modificare
+file versionati. In CI `APPLE_TEAM_ID` è la sola fonte del team: viene scritto
+nelle configurazioni temporanee di entrambe le piattaforme e nella copia
+temporanea di `exportOptions.plist`. Per iOS, il `TeamIdentifier` estratto da
+`PROVISIONING_PROFILE_BASE64` è un controllo incrociato obbligatorio. La firma
+macOS finale resta l'attuale `codesign` esterno, ma ne viene verificato il team.
+I job stampano il team configurato e verificano quello della firma prima di
+pubblicare l'artefatto.
+
 ## Aggiungere funzionalità senza pagarle a ogni merge
 
 Un hook, non venti modifiche sparse: la logica in un modulo proprio, e **una riga**

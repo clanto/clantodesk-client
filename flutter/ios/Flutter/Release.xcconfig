@@ -3,3 +3,4 @@
 CODE_SIGN_STYLE = Manual
 CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution
 PROVISIONING_PROFILE_SPECIFIER = clantodesk_profile
+#include? "Local.xcconfig"
