@@ -1,2 +1,4 @@
 - Le texte des messages de chat est désormais visible dans la notification, même sur l'écran de verrouillage.
 - Un message ne génère plus qu'une seule notification au lieu de deux.
+- L'invite d'authentification des paramètres est traduite et n'est plus redemandée après avoir réussi.
+- Les paramètres restent accessibles sur les appareils sans code PIN ni empreinte configurés.

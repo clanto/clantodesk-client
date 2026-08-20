@@ -71,11 +71,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       setState(() => _selectedIndex = 0);
       return;
     }
-    if (state == AppLifecycleState.resumed &&
-        _selectedIndex == _pages.length - 1 &&
-        !_authenticatingSettings) {
-      _openSettings(_selectedIndex);
-    }
   }
 
   Future<void> _openSettings(int index) async {

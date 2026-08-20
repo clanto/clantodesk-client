@@ -1,2 +1,4 @@
 - Il testo dei messaggi di chat ora è visibile nella notifica anche a schermo bloccato.
 - Un messaggio genera una sola notifica invece di due.
+- Il prompt di autenticazione delle impostazioni è tradotto e non viene più richiesto di nuovo dopo essere riuscito.
+- Le impostazioni restano raggiungibili sui dispositivi senza PIN o impronta configurati.

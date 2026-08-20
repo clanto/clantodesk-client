@@ -1,2 +1,4 @@
 - De tekst van chatberichten is nu zichtbaar in de melding, ook op het vergrendelscherm.
 - Eén bericht levert één melding op in plaats van twee.
+- De authenticatievraag voor instellingen is vertaald en wordt niet opnieuw gesteld nadat deze is gelukt.
+- Instellingen blijven bereikbaar op apparaten zonder ingestelde pincode of vingerafdruk.

@@ -1,2 +1,4 @@
 - Chat message text is now visible in the notification even on the lock screen.
 - A message raises a single notification instead of two.
+- The settings authentication prompt is translated and is no longer asked again after it succeeds.
+- Settings stay reachable on devices with no PIN or fingerprint configured.
