@@ -13,15 +13,6 @@ on:
       targets:
         type: string
         default: "all"
-      # Ruolo delle build Android, propagato a Rust e a Gradle come CONN_TYPE:
-      #   outgoing -> solo client, la variante del Play Store
-      #   incoming -> solo host, la variante dei monitor interattivi
-      #   vuoto    -> build completa, comportamento storico
-      # Le due varianti hanno applicationId diversi e non si aggiornano a
-      # vicenda: vanno pubblicate su tag distinti. Vedi CLANTO.md.
-      conn-type:
-        type: string
-        default: ""
 
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
@@ -1295,12 +1286,18 @@ jobs:
     # (app/build.gradle): un'unica variabile, cosi' core e manifest non possono
     # divergere.
     env:
-      CONN_TYPE: ${{ inputs.conn-type }}
-    name: build rustdesk android apk ${{ matrix.job.target }}
+      CONN_TYPE: ${{ matrix.role.value }}
+    name: build rustdesk android apk ${{ matrix.job.target }} ${{ matrix.role.value }}
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
       matrix:
+        # Ogni architettura si costruisce due volte: la variante client, che va
+        # sul Play Store, e la variante host per i monitor interattivi. Il
+        # prefisso nel nome file tiene separati gli artefatti sulla release.
+        role:
+          - { value: outgoing, prefix: "" }
+          - { value: incoming, prefix: "host-" }
         job:
           - {
               arch: aarch64,
@@ -1484,7 +1481,7 @@ jobs:
       - name: Upload Rustdesk library to Artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: librustdesk.so.${{ matrix.job.target }}
+          name: librustdesk.so.${{ matrix.job.target }}.${{ matrix.role.value }}
           path: ./target/${{ matrix.job.target }}/release/liblibrustdesk.so
 
       - name: Build rustdesk
@@ -1505,7 +1502,7 @@ jobs:
               # build flutter
               pushd flutter
               flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-arm64 --split-per-abi --no-tree-shake-icons
-              mv build/app/outputs/flutter-apk/app-arm64-v8a-${{ matrix.job.reltype }}.apk ../clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
+              mv build/app/outputs/flutter-apk/app-arm64-v8a-${{ matrix.job.reltype }}.apk ../clantodesk-${{ env.VERSION }}-${{ matrix.role.prefix }}${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
             ;;
             armv7-linux-androideabi)
               mkdir -p ./flutter/android/app/src/main/jniLibs/armeabi-v7a
@@ -1514,7 +1511,7 @@ jobs:
               # build flutter
               pushd flutter
               flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-arm --split-per-abi --no-tree-shake-icons
-              mv build/app/outputs/flutter-apk/app-armeabi-v7a-${{ matrix.job.reltype }}.apk ../clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
+              mv build/app/outputs/flutter-apk/app-armeabi-v7a-${{ matrix.job.reltype }}.apk ../clantodesk-${{ env.VERSION }}-${{ matrix.role.prefix }}${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
             ;;
             x86_64-linux-android)
               mkdir -p ./flutter/android/app/src/main/jniLibs/x86_64
@@ -1523,7 +1520,7 @@ jobs:
               # build flutter
               pushd flutter
               flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-x64 --split-per-abi --no-tree-shake-icons
-              mv build/app/outputs/flutter-apk/app-x86_64-${{ matrix.job.reltype }}.apk ../clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
+              mv build/app/outputs/flutter-apk/app-x86_64-${{ matrix.job.reltype }}.apk ../clantodesk-${{ env.VERSION }}-${{ matrix.role.prefix }}${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
             ;;
             i686-linux-android)
               mkdir -p ./flutter/android/app/src/main/jniLibs/x86
@@ -1532,12 +1529,12 @@ jobs:
               # build flutter
               pushd flutter
               flutter build apk "--${{ matrix.job.reltype }}" --target-platform android-x86 --split-per-abi --no-tree-shake-icons
-              mv build/app/outputs/flutter-apk/app-x86-${{ matrix.job.reltype }}.apk ../clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
+              mv build/app/outputs/flutter-apk/app-x86-${{ matrix.job.reltype }}.apk ../clantodesk-${{ env.VERSION }}-${{ matrix.role.prefix }}${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk
             ;;
           esac
           popd
           mkdir -p signed-apk; pushd signed-apk
-          mv ../clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk .
+          mv ../clantodesk-${{ env.VERSION }}-${{ matrix.role.prefix }}${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk .
 
       # https://github.com/r0adkll/sign-android-release/issues/84#issuecomment-1889636075
       - name: Setup sign tool version variable
@@ -1565,7 +1562,7 @@ jobs:
         if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
+          name: clantodesk-${{ env.VERSION }}-${{ matrix.role.prefix }}${{ matrix.job.arch }}.apk
           path: ${{steps.sign-rustdesk.outputs.signedReleaseFile}}
 
       - name: Publish signed apk package
@@ -1584,7 +1581,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            signed-apk/clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
+            signed-apk/clantodesk-${{ env.VERSION }}-${{ matrix.role.prefix }}${{ matrix.job.arch }}.apk
 
   build-rustdesk-android-universal:
     needs: [build-rustdesk-android]
@@ -1595,7 +1592,9 @@ jobs:
       reltype: release
       x86_target: "" # can be ",android-x86"
       suffix: ""
-      CONN_TYPE: ${{ inputs.conn-type }}
+      # L'APK universale e l'AAB sono la variante del Play Store: qui il ruolo
+      # non e' una scelta del chiamante.
+      CONN_TYPE: outgoing
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
@@ -1675,13 +1674,13 @@ jobs:
       - name: Download Rustdesk library from Artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: librustdesk.so.aarch64-linux-android
+          name: librustdesk.so.aarch64-linux-android.outgoing
           path: ./flutter/android/app/src/main/jniLibs/arm64-v8a
 
       - name: Download Rustdesk library from Artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: librustdesk.so.armv7-linux-androideabi
+          name: librustdesk.so.armv7-linux-androideabi.outgoing
           path: ./flutter/android/app/src/main/jniLibs/armeabi-v7a
 
       - name: Download Rustdesk library from Artifacts
@@ -1694,7 +1693,7 @@ jobs:
         if: ${{ env.reltype == 'debug' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: librustdesk.so.i686-linux-android
+          name: librustdesk.so.i686-linux-android.outgoing
           path: ./flutter/android/app/src/main/jniLibs/x86
 
       - name: Build rustdesk
@@ -1753,7 +1752,7 @@ jobs:
       # passato. Un manifest riportato male da un merge upstream fallisce qui,
       # prima che l'AAB raggiunga lo store.
       - name: Verify build role
-        if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true' && inputs.conn-type != ''
+        if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -1762,23 +1761,13 @@ jobs:
 
           fail() { echo "ERRORE: $1"; exit 1; }
 
-          if [ "${{ inputs.conn-type }}" = "outgoing" ]; then
-            for sym in AccessibilityService MediaProjection SYSTEM_ALERT_WINDOW RECORD_AUDIO; do
-              printf '%s' "$MF" | grep -qa "$sym" \
-                && fail "la variante client dichiara $sym: manifest sbagliato"
-            done
-            printf '%s' "$MF" | grep -qa "it.clanto.clantodesk.host" \
-              && fail "la variante client usa l'applicationId della variante host"
-            echo "variante client verificata: nessun permesso di controllo, applicationId corretto"
-          fi
-
-          if [ "${{ inputs.conn-type }}" = "incoming" ]; then
-            printf '%s' "$MF" | grep -qa "it.clanto.clantodesk.host" \
-              || fail "la variante host non usa l'applicationId .host: Play sovrascriverebbe le installazioni manuali"
-            printf '%s' "$MF" | grep -qa "AccessibilityService" \
-              || fail "la variante host non dichiara il servizio di accessibilita': non potrebbe essere controllata"
-            echo "variante host verificata: applicationId dedicato e servizio di input presente"
-          fi
+          for sym in AccessibilityService MediaProjection SYSTEM_ALERT_WINDOW RECORD_AUDIO; do
+            printf '%s' "$MF" | grep -qa "$sym" \
+              && fail "l'AAB dichiara $sym: non e' la variante client"
+          done
+          printf '%s' "$MF" | grep -qa "it.clanto.clantodesk.host" \
+            && fail "l'AAB usa l'applicationId della variante host"
+          echo "AAB verificato: variante client, nessun permesso di controllo"
 
       - name: Upload Artifacts
         if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'

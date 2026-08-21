@@ -164,12 +164,25 @@ divergere.
 |---|---|---|---|---|
 | `outgoing` | solo client | `it.clanto.clantodesk` | ClantoDesk | Play Store |
 | `incoming` | solo host | `it.clanto.clantodesk.host` | ClantoDesk Host | monitor interattivi, a mano |
-| non impostata | completa | `it.clanto.clantodesk` | ClantoDesk | build storiche, desktop |
+| non impostata | completa | `it.clanto.clantodesk` | ClantoDesk | desktop, dove non si applica |
 
 Il lato client sparisce da `initPages()` con `isIncomingOnly()`; il lato
 controllato sparisce perché `RendezvousMediator::start_all` non registra il
 dispositivo (`src/rendezvous_mediator.rs`), quindi **non ha un ID
 raggiungibile**. Non è un'interfaccia nascosta: è l'assenza dalla rete.
+
+Le due varianti escono dallo **stesso** run di `android-only.yml`: la matrice di
+`build-rustdesk-android` moltiplica ogni architettura per i due ruoli, e il
+prefisso `host-` nel nome file tiene separati gli artefatti sulla release.
+`build-rustdesk-android-universal` invece è fissato a `outgoing`, perché l'APK
+universale e l'AAB sono la variante del Play Store.
+
+| Artefatto | Ruolo |
+|---|---|
+| `clantodesk-X.Y.Z-<arch>.apk` | client |
+| `clantodesk-X.Y.Z-universal.apk` | client |
+| `clantodesk-X.Y.Z-universal.aab` | client, quello che va su Play |
+| `clantodesk-X.Y.Z-host-<arch>.apk` | host, nessun AAB |
 
 **I due `applicationId` devono restare distinti.** Con lo stesso package e la
 stessa chiave di firma, Play prende in carico anche le installazioni fatte a
