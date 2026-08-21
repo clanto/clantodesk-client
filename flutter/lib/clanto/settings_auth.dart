@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
+import 'package:flutter_hbb/clanto/settings_password.dart';
 import 'package:flutter_hbb/common.dart' show translate;
 import 'package:local_auth/local_auth.dart';
 // ignore: depend_on_referenced_packages
@@ -14,6 +15,11 @@ class ClantoSettingsAuth {
   static final LocalAuthentication _auth = LocalAuthentication();
 
   static Future<bool> authenticate(String reason) async {
+    // A locally configured password wins over the device credential: on a shared
+    // appliance the device PIN is often known to everyone who uses it.
+    if (ClantoLocalPassword.isSet) {
+      return await promptClantoLocalPassword(reason);
+    }
     try {
       // This is false only when the device has neither enrolled biometrics nor
       // a secure device credential, so settings must remain reachable.

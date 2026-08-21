@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import '../../common.dart';
 import '../../common/widgets/chat_page.dart';
 import '../../clanto/settings_auth.dart';
+import '../../clanto/settings_password.dart';
 import '../../models/platform_model.dart';
 import '../../models/state_model.dart';
 import 'connection_page.dart';
@@ -30,6 +31,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int get selectedIndex => _selectedIndex;
   final List<PageShape> _pages = [];
   int _chatPageTabIndex = -1;
+  int _serverPageTabIndex = -1;
   bool _authenticatingSettings = false;
   bool get isChatPageCurrentTab => isAndroid
       ? _selectedIndex == _chatPageTabIndex
@@ -91,6 +93,16 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _openSettings(index);
       return;
     }
+    // La schermata host mostra ID e password di connessione: su un dispositivo
+    // condiviso chiunque potrebbe fotografarli e rientrare piu' tardi.
+    if (index == _serverPageTabIndex && ClantoLocalPassword.guardsHostPage) {
+      final ok = await promptClantoLocalPassword(
+          translate("Authenticate to open the host screen"));
+      if (!ok) {
+        showToast(translate("Device authentication required"));
+        return;
+      }
+    }
     setState(() {
       if (_selectedIndex != index) {
         _selectedIndex = index;
@@ -114,6 +126,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     if (isAndroid && !bind.isOutgoingOnly()) {
       _chatPageTabIndex = _pages.length;
+      _serverPageTabIndex = _pages.length + 1;
       _pages.addAll([ChatPage(type: ChatPageType.mobileMain), ServerPage()]);
     }
     _pages.add(SettingsPage());

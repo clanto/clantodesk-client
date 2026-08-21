@@ -11,6 +11,7 @@ import 'package:settings_ui/settings_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import '../../clanto/settings_password.dart';
 import '../../common.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/login.dart';
@@ -715,6 +716,10 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             ],
           ),
         SettingsSection(title: Text(translate("Settings")), tiles: [
+          // Alternativa a PIN e biometria per i dispositivi che non ne hanno,
+          // e opzione per coprire anche la schermata host.
+          if (isAndroid)
+            ...clantoLocalPasswordTiles(refresh: () => setState(() {})),
           if (!disabledSettings && !_hideNetwork && !_hideServer)
             SettingsTile(
                 title: Text(translate('ID/Relay Server')),

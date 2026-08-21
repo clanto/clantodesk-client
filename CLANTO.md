@@ -196,6 +196,33 @@ esiste quindi un conflitto che avvisi, e questi punti vanno verificati a mano.
    non dipende dalla memoria di nessuno. Se lo si tocca, si tocca la sola rete
    di sicurezza che resta.
 
+## Password locale delle impostazioni
+
+`flutter/lib/clanto/settings_password.dart`. Nasce per i monitor interattivi:
+`local_auth` su un dispositivo senza PIN né biometria non ha nulla da
+verificare, e `ClantoSettingsAuth.authenticate` apriva le impostazioni a
+chiunque.
+
+Se impostata, la password **ha la precedenza** sull'autenticazione di sistema:
+su un apparato condiviso il PIN del dispositivo è spesso noto a tutti quelli che
+lo usano, quindi non è un segreto utilizzabile.
+
+Con l'ambito `settings+host` protegge anche la scheda della schermata host, che
+mostra ID e password di connessione. Su un monitor d'aula quelle credenziali
+sono fisse: senza il blocco chiunque le fotografa e rientra quando vuole.
+
+Memorizzata come `pbkdf2-sha256$<iter>$<salt>$<dk>` nelle opzioni locali, mai in
+chiaro. `crypto` è dichiarato in `pubspec.yaml` proprio per questo: è Dart puro,
+non aggiunge codice nativo.
+
+- Rimuoverla richiede di conoscerla, altrimenti chi ha il dispositivo in mano la
+  disattiva e apre le impostazioni.
+- **Dimenticarla non ha recupero in-app**: si svuotano i dati dell'app o si
+  reinstalla. Su un monitor già consegnato va messa in verbale.
+- Il blocco della schermata host è agganciato al tocco della scheda in
+  `_onNavigationTap`. Se un percorso futuro portasse a `ServerPage` senza passare
+  da lì, salterebbe il controllo.
+
 ## Debito noto
 
 - `res/msi/Package/License.rtf` è un testo **provvisorio** che rimanda alla policy
