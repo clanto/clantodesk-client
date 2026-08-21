@@ -13,6 +13,15 @@ on:
       targets:
         type: string
         default: "all"
+      # Ruolo delle build Android, propagato a Rust e a Gradle come CONN_TYPE:
+      #   outgoing -> solo client, la variante del Play Store
+      #   incoming -> solo host, la variante dei monitor interattivi
+      #   vuoto    -> build completa, comportamento storico
+      # Le due varianti hanno applicationId diversi e non si aggiornano a
+      # vicenda: vanno pubblicate su tag distinti. Vedi CLANTO.md.
+      conn-type:
+        type: string
+        default: ""
 
 # NOTE: F-Droid builder script 'flutter/build_fdroid.sh' reads environment
 # variables from this workflow!
@@ -1282,6 +1291,11 @@ jobs:
   build-rustdesk-android:
     needs: [generate-bridge]
     if: ${{ inputs.targets == 'all' || inputs.targets == 'android' }}
+    # Letta sia da cargo (option_env! in src/clanto/config.rs) sia da Gradle
+    # (app/build.gradle): un'unica variabile, cosi' core e manifest non possono
+    # divergere.
+    env:
+      CONN_TYPE: ${{ inputs.conn-type }}
     name: build rustdesk android apk ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     strategy:
@@ -1581,6 +1595,7 @@ jobs:
       reltype: release
       x86_target: "" # can be ",android-x86"
       suffix: ""
+      CONN_TYPE: ${{ inputs.conn-type }}
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
@@ -1732,6 +1747,38 @@ jobs:
           mkdir -p signed-apk
           mv ./flutter/build/app/outputs/flutter-apk/app-${{ env.reltype }}.apk signed-apk/clantodesk-${{ env.VERSION }}-universal${{ env.suffix }}.apk
           mv ./flutter/build/app/outputs/bundle/${{ env.reltype }}/app-${{ env.reltype }}.aab signed-apk/clantodesk-${{ env.VERSION }}-universal${{ env.suffix }}.aab
+
+      # Il ruolo della build e' un invariante di sicurezza, non una preferenza:
+      # va verificato sull'artefatto, non dedotto dal fatto che il job sia
+      # passato. Un manifest riportato male da un merge upstream fallisce qui,
+      # prima che l'AAB raggiunga lo store.
+      - name: Verify build role
+        if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true' && inputs.conn-type != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB="signed-apk/clantodesk-${{ env.VERSION }}-universal${{ env.suffix }}.aab"
+          MF=$(unzip -p "$AAB" base/manifest/AndroidManifest.xml | tr -d '\0')
+
+          fail() { echo "ERRORE: $1"; exit 1; }
+
+          if [ "${{ inputs.conn-type }}" = "outgoing" ]; then
+            for sym in AccessibilityService MediaProjection SYSTEM_ALERT_WINDOW RECORD_AUDIO; do
+              printf '%s' "$MF" | grep -qa "$sym" \
+                && fail "la variante client dichiara $sym: manifest sbagliato"
+            done
+            printf '%s' "$MF" | grep -qa "it.clanto.clantodesk.host" \
+              && fail "la variante client usa l'applicationId della variante host"
+            echo "variante client verificata: nessun permesso di controllo, applicationId corretto"
+          fi
+
+          if [ "${{ inputs.conn-type }}" = "incoming" ]; then
+            printf '%s' "$MF" | grep -qa "it.clanto.clantodesk.host" \
+              || fail "la variante host non usa l'applicationId .host: Play sovrascriverebbe le installazioni manuali"
+            printf '%s' "$MF" | grep -qa "AccessibilityService" \
+              || fail "la variante host non dichiara il servizio di accessibilita': non potrebbe essere controllata"
+            echo "variante host verificata: applicationId dedicato e servizio di input presente"
+          fi
 
       - name: Upload Artifacts
         if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'

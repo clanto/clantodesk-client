@@ -1,0 +1,25 @@
+name: Android host only (monitor interattivi)
+
+# Variante HOST: solo lato controllato, nessun client. Va sui monitor
+# interattivi, installata a mano, e non passa dal Play Store.
+#
+# applicationId it.clanto.clantodesk.host, distinto dalla variante client: senza
+# questa separazione Play aggiornerebbe le installazioni manuali sostituendole
+# con la variante client, che non puo' essere assistita.
+on:
+  workflow_dispatch:
+    inputs:
+      upload-tag:
+        description: "Tag della release su cui pubblicare"
+        type: string
+        default: "nightly-host"
+
+jobs:
+  run-android-host:
+    uses: ./.github/workflows/flutter-build.yml
+    secrets: inherit
+    with:
+      upload-artifact: true
+      upload-tag: ${{ inputs.upload-tag }}
+      targets: android
+      conn-type: incoming

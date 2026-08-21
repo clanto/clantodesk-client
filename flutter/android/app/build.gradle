@@ -81,6 +81,20 @@ protobuf {
     }
 }
 
+// Ruolo della build. Unica fonte di verita' condivisa con il core: e' la stessa
+// CONN_TYPE che src/clanto/config.rs mette in HARD_SETTINGS. Cosi' manifest,
+// applicationId e comportamento del core non possono divergere.
+//   outgoing -> solo client, variante pubblicata sul Play Store
+//   incoming -> solo host, variante per i monitor interattivi
+//   non impostata -> build completa, comportamento storico
+def clantoRole = (System.getenv("CONN_TYPE") ?: "").trim()
+if (!["", "outgoing", "incoming"].contains(clantoRole)) {
+    throw new GradleException(
+        "CONN_TYPE non valido: '${clantoRole}'. Ammessi: outgoing, incoming, oppure non impostata.")
+}
+def clantoIsHost = clantoRole == "incoming"
+def clantoIsClient = clantoRole == "outgoing"
+
 android {
     compileSdkVersion 34
     sourceSets {
@@ -88,6 +102,12 @@ android {
 
         main.proto.srcDirs += '../../../libs/hbb_common/protos'
         main.proto.includes += "message.proto"
+
+        // La variante client usa un manifest ridotto: niente AccessibilityService,
+        // MediaProjection, overlay, microfono ne' avvio al boot. Vedi CLANTO.md.
+        if (clantoIsClient) {
+            main.manifest.srcFile 'src/main/AndroidManifest-client.xml'
+        }
     }
 
     compileOptions {
@@ -97,7 +117,16 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "it.clanto.clantodesk"
+        // La variante host ha un package proprio: senza questo Play
+        // aggiornerebbe le installazioni manuali sostituendole con la variante
+        // client, che non puo' essere assistita.
+        applicationId clantoIsHost ? "it.clanto.clantodesk.host" : "it.clanto.clantodesk"
+        // Il nome visibile e' un segnaposto del manifest, non config::APP_NAME:
+        // quello alimenta i percorsi di configurazione e non va toccato.
+        manifestPlaceholders = [
+            appLabel  : clantoIsHost ? "ClantoDesk Host" : "ClantoDesk",
+            inputLabel: clantoIsHost ? "ClantoDesk Host Input" : "ClantoDesk Input",
+        ]
         minSdkVersion 22
         targetSdkVersion 35
         versionCode flutterVersionCode.toInteger()

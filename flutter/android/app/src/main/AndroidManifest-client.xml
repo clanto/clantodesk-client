@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Manifest della variante CLIENT (CONN_TYPE=outgoing), quella pubblicata
+     sul Play Store. E' una copia RIDOTTA di AndroidManifest.xml: mancano
+     il servizio di accessibilita', la cattura schermo, l'overlay, il
+     microfono e l'avvio al boot, perche' in questa variante il dispositivo
+     non puo' essere controllato. Ogni modifica al manifest principale va valutata anche
+     qui; dimenticarla fa mancare un componente e l'app fallisce in modo
+     visibile, non silenzioso. Il job di build verifica che i simboli
+     sensibili non ricompaiano. Vedi CLANTO.md. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="it.clanto.clantodesk">
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
@@ -6,18 +14,13 @@
     <!-- Il trasferimento file usa SAF per la selezione e MediaStore per Download.
          Non richiede MANAGE_EXTERNAL_STORAGE né READ_EXTERNAL_STORAGE. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <queries>
         <intent>
@@ -29,37 +32,10 @@
     <application
         android:name=".MainApplication"
         android:icon="@mipmap/ic_launcher"
-        android:label="${appLabel}"
+        android:label="ClantoDesk"
         android:requestLegacyExternalStorage="true"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true">
-
-        <receiver
-            android:name=".BootReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter android:priority="1000">
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <!--ACTION_BOOT_COMPLETED for debug test on no root device-->
-                <action android:name="it.clanto.clantodesk.DEBUG_BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
-
-        <service
-            android:name=".InputService"
-            android:enabled="true"
-            android:exported="false"
-            android:label="${inputLabel}"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
 
         <activity
             android:name=".MainActivity"
@@ -88,15 +64,6 @@
             android:name=".PermissionRequestTransparentActivity"
             android:excludeFromRecents="true"
             android:theme="@style/Transparent" />
-
-        <service
-            android:name=".MainService"
-            android:enabled="true"
-            android:foregroundServiceType="mediaProjection" />
-
-        <service
-            android:name=".FloatingWindowService"
-            android:enabled="true" />
 
         <!--
  Don't delete the meta-data below.

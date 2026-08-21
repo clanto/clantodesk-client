@@ -59,6 +59,35 @@ pub fn apply_build_config() {
         "relay-server".to_owned(),
         option_env!("RELAY_SERVER").unwrap_or("").to_owned(),
     );
+
+    // Ruolo della build, fissato alla compilazione e non modificabile a runtime.
+    // "outgoing" toglie il lato controllato: `RendezvousMediator::start_all` non
+    // registra il dispositivo, quindi non ha un ID raggiungibile. "incoming"
+    // toglie il lato client. Assente = entrambi.
+    //
+    // INVARIANTE DEL FORK: questa riga deve restare qui. Spostarla in una
+    // sostituzione del workflow la rende invisibile a chi riporta le modifiche
+    // upstream, e una sostituzione mancata produce in silenzio la variante
+    // permissiva. Vedi CLANTO.md.
+    if let Some(role) = option_env!("CONN_TYPE").filter(|v| !v.is_empty()) {
+        match role {
+            "outgoing" | "incoming" => {
+                config::HARD_SETTINGS
+                    .write()
+                    .unwrap()
+                    .insert("conn-type".to_owned(), role.to_owned());
+                log::info!("build role: conn-type={}", role);
+            }
+            other => {
+                // Un valore non riconosciuto non deve degradare in "tutto
+                // permesso": e' un errore di build, non una preferenza.
+                panic!(
+                    "CONN_TYPE non valido: '{}'. Valori ammessi: outgoing, incoming.",
+                    other
+                );
+            }
+        }
+    }
 }
 
 /// Impedisce a una build ClantoDesk priva di configurazione di ricadere in

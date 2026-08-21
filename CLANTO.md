@@ -152,6 +152,50 @@ file di packaging, le risorse o gli hook che devono restare nei percorsi attesi
 dai rispettivi tool. L'inventario di provenienza e licenza è in
 [CLANTO-CONTRIBUTIONS.md](CLANTO-CONTRIBUTIONS.md).
 
+## Due varianti Android: client e host
+
+`CONN_TYPE`, iniettata al build, decide il **ruolo** della build. È letta due
+volte dalla stessa variabile — da `option_env!` in `src/clanto/config.rs`, che la
+mette in `HARD_SETTINGS["conn-type"]`, e da `System.getenv` in
+`flutter/android/app/build.gradle` — proprio perché core e manifest non possano
+divergere.
+
+| `CONN_TYPE` | Ruolo | `applicationId` | Nome | Dove va |
+|---|---|---|---|---|
+| `outgoing` | solo client | `it.clanto.clantodesk` | ClantoDesk | Play Store |
+| `incoming` | solo host | `it.clanto.clantodesk.host` | ClantoDesk Host | monitor interattivi, a mano |
+| non impostata | completa | `it.clanto.clantodesk` | ClantoDesk | build storiche, desktop |
+
+Il lato client sparisce da `initPages()` con `isIncomingOnly()`; il lato
+controllato sparisce perché `RendezvousMediator::start_all` non registra il
+dispositivo (`src/rendezvous_mediator.rs`), quindi **non ha un ID
+raggiungibile**. Non è un'interfaccia nascosta: è l'assenza dalla rete.
+
+**I due `applicationId` devono restare distinti.** Con lo stesso package e la
+stessa chiave di firma, Play prende in carico anche le installazioni fatte a
+mano: un monitor interattivo verrebbe aggiornato alla variante client e non
+potrebbe più essere assistito.
+
+### Invarianti che ogni porting da upstream deve preservare
+
+Il fork non fa `git merge upstream`: le modifiche si riportano a mano. Non
+esiste quindi un conflitto che avvisi, e questi punti vanno verificati a mano.
+
+1. Il blocco `CONN_TYPE` resta **in `apply_build_config()`**. Mai una
+   sostituzione `sed` nel workflow: il porting guarda il codice, non le
+   pipeline, e una sostituzione mancata non fallisce — produce in silenzio la
+   variante permissiva.
+2. Un valore di `CONN_TYPE` non riconosciuto **fa fallire il build**, sia in
+   Rust sia in Gradle. Non deve mai degradare in "build completa".
+3. `src/main/AndroidManifest-client.xml` è una copia **ridotta** del manifest
+   principale. Ogni modifica al principale va valutata anche lì.
+4. `android:label` passa dai segnaposto `${appLabel}` e `${inputLabel}`. Il nome
+   visibile **non** si cambia toccando `config::APP_NAME`: quello alimenta i
+   percorsi di configurazione.
+5. Lo step `Verify build role` di `flutter-build.yml` è l'unico controllo che
+   non dipende dalla memoria di nessuno. Se lo si tocca, si tocca la sola rete
+   di sicurezza che resta.
+
 ## Debito noto
 
 - `res/msi/Package/License.rtf` è un testo **provvisorio** che rimanda alla policy
