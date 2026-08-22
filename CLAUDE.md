@@ -1,2 +1,2 @@
-AGENTS.md
-CLANTO.md
+@AGENTS.md
+@CLANTO.md
