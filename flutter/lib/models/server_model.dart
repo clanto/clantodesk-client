@@ -211,13 +211,10 @@ class ServerModel with ChangeNotifier {
       _audioOk = audioOption != 'N';
     }
 
-    // file: senza MANAGE_EXTERNAL_STORAGE non c'e' permesso da verificare,
-    // il trasferimento lavora nella cartella dell'app.
-    {
-      final fileOption =
-          await bind.mainGetOption(key: kOptionEnableFileTransfer);
-      _fileOk = fileOption != 'N';
-    }
+    // Android file transfer is confined to app-specific storage. Files enter
+    // and leave the workspace through Android's system document picker.
+    final fileOption = await bind.mainGetOption(key: kOptionEnableFileTransfer);
+    _fileOk = fileOption != 'N';
 
     // clipboard
     final clipOption = await bind.mainGetOption(key: kOptionEnableClipboard);
@@ -318,7 +315,6 @@ class ServerModel with ChangeNotifier {
     if (clients.any((c) => !c.disconnected)) {
       await showClientsMayNotBeChangedAlert(parent.target);
     }
-    // Nessun permesso da chiedere: scoped storage, cartella dell'app.
     _fileOk = !_fileOk;
     bind.mainSetOption(
         key: kOptionEnableFileTransfer,

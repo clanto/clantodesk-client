@@ -11,8 +11,8 @@
     package="it.clanto.clantodesk">
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
-    <!-- Il trasferimento file usa SAF per la selezione e MediaStore per Download.
-         Non richiede MANAGE_EXTERNAL_STORAGE né READ_EXTERNAL_STORAGE. -->
+    <!-- Scoped storage: import/export via SAF. WRITE_EXTERNAL_STORAGE solo fino ad
+         Android 10, per pubblicare i file ricevuti in Download (ClantoDownloads). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -33,7 +33,6 @@
         android:name=".MainApplication"
         android:icon="@mipmap/ic_launcher"
         android:label="ClantoDesk"
-        android:requestLegacyExternalStorage="true"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true">
 

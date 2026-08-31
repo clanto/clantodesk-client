@@ -170,10 +170,10 @@ class PlatformFFI {
       _startListenEvent(_ffiBind); // global event
       try {
         if (isAndroid) {
-          // Cartella dell'app: leggibile senza MANAGE_EXTERNAL_STORAGE, che Play
-          // non concede alle app di assistenza remota.
-          final d = await getExternalStorageDirectory();
-          _homeDir = d?.path ?? (await getApplicationDocumentsDirectory()).path;
+          // Android file transfer uses app-specific storage. User-selected
+          // files enter and leave this workspace through the system picker.
+          _homeDir = (await getExternalStorageDirectory())?.path ??
+              (await getApplicationSupportDirectory()).path;
         } else if (isIOS) {
           // The previous code was `_homeDir = (await getDownloadsDirectory())?.path ?? '';`,
           // which provided the `downloads` path in the sandbox.
@@ -305,6 +305,12 @@ class PlatformFFI {
   invokeMethod(String method, [dynamic arguments]) async {
     if (!isAndroid) return Future<bool>(() => false);
     return await _toAndroidChannel.invokeMethod(method, arguments);
+  }
+
+  Future<T?> invokeMethodWithResult<T>(String method,
+      [dynamic arguments]) async {
+    if (!isAndroid) return null;
+    return await _toAndroidChannel.invokeMethod<T>(method, arguments);
   }
 
   void syncAndroidServiceAppDirConfigPath() {

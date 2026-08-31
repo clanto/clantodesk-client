@@ -2627,7 +2627,6 @@ connect(BuildContext context, String id,
     }
   } else {
     if (isFileTransfer) {
-      // Su Android nessun permesso: scoped storage, cartella dell'app.
       if (isWeb) {
         Navigator.push(
           context,
