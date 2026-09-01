@@ -1,6 +1,6 @@
 [package]
 name = "rustdesk"
-version = "1.4.9"
+version = "1.5.0"
 authors = [
     "Purslane Ltd and the RustDesk contributors <info@rustdesk.com>",
     "Clanto Services srls <info@clanto.it>",
