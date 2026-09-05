@@ -790,5 +790,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("terminal-clipboard-write-tip", ""),
         ("Allow terminal apps to copy to clipboard", ""),
         ("Enable", "Abilita"),
+        ("Reuse one connection for port forwarding", "Riutilizza una sola connessione per l'inoltro delle porte"),
+        ("port-forward-mux-tip", "Fa passare tutte le connessioni di un inoltro di porte su un'unica connessione verso il dispositivo remoto, invece di connettersi e autenticarsi di nuovo per ognuna."),
     ].iter().cloned().collect();
 }
