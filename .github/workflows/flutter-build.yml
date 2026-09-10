@@ -1215,8 +1215,6 @@ jobs:
 
       - name: Codesign app and create signed dmg
         if: env.MACOS_P12_BASE64 != null && env.UPLOAD_ARTIFACT == 'true'
-        env:
-          MACOS_CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
         run: |
           # Patch create-dmg to give more attempts to unmount image
           CREATE_DMG="$(command -v create-dmg)"
@@ -1227,9 +1225,10 @@ jobs:
           security unlock-keychain -p ${{ secrets.MACOS_P12_PASSWORD }} rustdesk.keychain
           # start sign the rustdesk.app and dmg
           rm -rf *.dmg || true
+          # the identity secret carries its own shell quoting, so expand it inline like the dmg codesign below
           bash ./.github/scripts/sign-macos-app.sh \
             ./flutter/build/macos/Build/Products/Release/ClantoDesk.app \
-            "$MACOS_CODESIGN_IDENTITY" \
+            ${{ secrets.MACOS_CODESIGN_IDENTITY }} \
             ./flutter/macos/Runner/Release.entitlements
           SIGNED_TEAM=$(codesign -dvvv ./flutter/build/macos/Build/Products/Release/ClantoDesk.app 2>&1 | sed -n 's/^[[:space:]]*TeamIdentifier=//p' | head -n 1)
           if [ -z "$SIGNED_TEAM" ]; then
