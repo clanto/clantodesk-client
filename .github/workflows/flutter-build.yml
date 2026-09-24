@@ -2494,11 +2494,13 @@ jobs:
           sudo pip3 install git+https://github.com/rustdesk-org/appimage-builder.git
           # run appimage-builder
           pushd appimage
+          ./build-apprun.sh ${{ matrix.job.arch }}
           sudo appimage-builder --skip-tests --recipe ./AppImageBuilder-${{ matrix.job.arch }}.yml
           # Only rename if the generated file doesn't already match the target name
           if [ ! -f clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}.AppImage ]; then
             sudo mv clantodesk-*.AppImage clantodesk-${{ env.VERSION }}-${{ matrix.job.arch }}.AppImage || true
           fi
+          cmp AppDir/AppRun appimage-build/AppRun/v2.0.0/AppRun-Release-${{ matrix.job.arch }}
       - name: Publish appimage package
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
