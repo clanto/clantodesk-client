@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
+import 'package:flutter_hbb/clanto/about_links.dart';
 import 'package:flutter_hbb/clanto/audit_settings.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
@@ -1816,10 +1817,9 @@ class _DisplayState extends State<_Display> {
 
   Widget viewStyle(BuildContext context) {
     final isOptFixed = isOptionFixed(kOptionViewStyle);
-    onChanged(String value) {
-      bind.mainSetUserDefaultOption(key: kOptionViewStyle, value: value).then((_) {
-        setState(() {});
-      });
+    onChanged(String value) async {
+      await bind.mainSetUserDefaultOption(key: kOptionViewStyle, value: value);
+      setState(() {});
     }
 
     final groupValue = bind.mainGetUserDefaultOption(key: kOptionViewStyle);
@@ -1839,20 +1839,18 @@ class _DisplayState extends State<_Display> {
 
   Widget scrollStyle(BuildContext context) {
     final isOptFixed = isOptionFixed(kOptionScrollStyle);
-    onChanged(String value) {
-      bind.mainSetUserDefaultOption(
-          key: kOptionScrollStyle, value: value).then((_) {
-        setState(() {});
-      });
+    onChanged(String value) async {
+      await bind.mainSetUserDefaultOption(
+          key: kOptionScrollStyle, value: value);
+      setState(() {});
     }
 
     final groupValue = bind.mainGetUserDefaultOption(key: kOptionScrollStyle);
 
-    onEdgeScrollEdgeThicknessChanged(double value) {
-      bind.mainSetUserDefaultOption(
-          key: kOptionEdgeScrollEdgeThickness, value: value.round().toString()).then((_) {
-        setState(() {});
-      });
+    onEdgeScrollEdgeThicknessChanged(double value) async {
+      await bind.mainSetUserDefaultOption(
+          key: kOptionEdgeScrollEdgeThickness, value: value.round().toString());
+      setState(() {});
     }
 
     return _Card(title: 'Default Scroll Style', children: [
@@ -1887,11 +1885,10 @@ class _DisplayState extends State<_Display> {
   }
 
   Widget imageQuality(BuildContext context) {
-    onChanged(String value) {
-      bind.mainSetUserDefaultOption(
-          key: kOptionImageQuality, value: value).then((_) {
-        setState(() {});
-      });
+    onChanged(String value) async {
+      await bind.mainSetUserDefaultOption(
+          key: kOptionImageQuality, value: value);
+      setState(() {});
     }
 
     final isOptFixed = isOptionFixed(kOptionImageQuality);
@@ -1945,11 +1942,10 @@ class _DisplayState extends State<_Display> {
   }
 
   Widget codec(BuildContext context) {
-    onChanged(String value) {
-      bind.mainSetUserDefaultOption(
-          key: kOptionCodecPreference, value: value).then((_) {
-        setState(() {});
-      });
+    onChanged(String value) async {
+      await bind.mainSetUserDefaultOption(
+          key: kOptionCodecPreference, value: value);
+      setState(() {});
     }
 
     final groupValue =
@@ -2455,40 +2451,7 @@ class _AboutState extends State<_About> {
                 SelectionArea(
                     child: Text('${translate('Fingerprint')}: $fingerprint')
                         .marginSymmetric(vertical: 4.0)),
-              InkWell(
-                  onTap: () {
-                    launchUrlString('https://supporto.clanto.it/documentazione/privacy-clantodesk/');
-                  },
-                  child: Text(
-                    translate('Privacy Statement'),
-                    style: linkStyle,
-                  ).marginSymmetric(vertical: 4.0)),
-              InkWell(
-                  onTap: () {
-                    launchUrlString('https://clanto.it');
-                  },
-                  child: Text(
-                    translate('Website'),
-                    style: linkStyle,
-                  ).marginSymmetric(vertical: 4.0)),
-              InkWell(
-                  onTap: () {
-                    launchUrlString(
-                        'https://github.com/clanto/clantodesk-client');
-                  },
-                  child: Text(
-                    'Source code · AGPL-3.0-only',
-                    style: linkStyle,
-                  ).marginSymmetric(vertical: 4.0)),
-              InkWell(
-                  onTap: () {
-                    launchUrlString(
-                        'https://www.gnu.org/licenses/agpl-3.0.html');
-                  },
-                  child: Text(
-                    'GNU AGPL v3 license',
-                    style: linkStyle,
-                  ).marginSymmetric(vertical: 4.0)),
+              ...clantoAboutLinks(linkStyle),
               Container(
                 decoration: const BoxDecoration(color: Color(0xFF2c8cff)),
                 padding:
@@ -2501,7 +2464,7 @@ class _AboutState extends State<_About> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Copyright © ${DateTime.now().toString().substring(0, 4)} Clanto Services srls.\n$license',
+                            'Copyright © ${DateTime.now().toString().substring(0, 4)} $clantoCopyrightHolder.\n$license',
                             style: const TextStyle(color: Colors.white),
                           ),
                           Text(
