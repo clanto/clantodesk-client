@@ -1497,7 +1497,10 @@ pub fn rename_exe_cmd(src_exe: &str, path: &str) -> ResultType<String> {
         .to_string_lossy()
         .to_string();
     let app_name = crate::get_app_name();
-    if src_exe_filename == format!("{app_name}.exe") {
+    // Il build del fork produce `<app>.exe` minuscolo (--app-name clantodesk): non va rinominato.
+    if src_exe_filename == format!("{app_name}.exe")
+        || src_exe_filename == format!("{}.exe", app_name.to_lowercase())
+    {
         Ok("".to_owned())
     } else {
         Ok(format!(
