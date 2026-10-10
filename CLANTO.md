@@ -75,6 +75,11 @@ Con server e chiave fissati al build (`servers_fixed_at_build()` in
 non cambia host né chiave, e `read_custom_client()` ignora `custom.txt` con un
 warning. Le build di sviluppo senza server restano invariate.
 
+Nessun traffico verso server di terzi: `webrtc_allowed()` e `public_stun_allowed()` in
+`src/clanto/config.rs` valgono `false`. WebRTC userebbe i STUN pubblici scritti in
+`hbb_common`, e `test_ipv6()` li interrogherebbe a ogni avvio solo per un IPv6 punch che
+con i nostri server è spento. Si riaccendono quando ci sarà uno STUN/TURN Clanto.
+
 Per una build di sviluppo locale:
 
 ```bash

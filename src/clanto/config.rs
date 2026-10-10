@@ -13,6 +13,12 @@ pub fn webrtc_allowed() -> bool {
     false
 }
 
+/// Nessun probe verso STUN pubblici: manderebbe l'IP del dispositivo a terzi.
+/// Il probe IPv6 tornerà con uno STUN Clanto.
+pub fn public_stun_allowed() -> bool {
+    false
+}
+
 /// Applica branding e valori server iniettati al build prima che `Config`
 /// venga usata per calcolare percorsi o impostazioni predefinite.
 pub fn apply_build_config() {
