@@ -17,7 +17,8 @@ encoding = 'utf-8'
 
 def generate_md5_table(folder: str, level) -> dict:
     res: dict = dict()
-    curdir = os.curdir
+    # os.curdir is the literal ".": restoring it left us inside `folder`.
+    curdir = os.getcwd()
     os.chdir(folder)
     for root, _, files in os.walk('.'):
         # remove ./
