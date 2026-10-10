@@ -4,7 +4,7 @@ updates:
   # Finche' il default resta master, queste voci non producono PR su clnt_1.4.9.
   - package-ecosystem: "gitsubmodule"
     directory: "/"
-    target-branch: "clnt_1.4.9"
+    target-branch: "clnt_1.5.0"
     schedule:
       interval: "daily"
     commit-message:
@@ -16,7 +16,7 @@ updates:
   # arrivano ne' aggiornamenti ne' alert di sicurezza su di esse.
   - package-ecosystem: "github-actions"
     directory: "/"
-    target-branch: "clnt_1.4.9"
+    target-branch: "clnt_1.5.0"
     schedule:
       interval: "weekly"
     commit-message:
@@ -26,7 +26,7 @@ updates:
 
   - package-ecosystem: "cargo"
     directory: "/"
-    target-branch: "clnt_1.4.9"
+    target-branch: "clnt_1.5.0"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -37,7 +37,7 @@ updates:
 
   - package-ecosystem: "pub"
     directory: "/flutter"
-    target-branch: "clnt_1.4.9"
+    target-branch: "clnt_1.5.0"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
