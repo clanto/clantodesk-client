@@ -1772,6 +1772,23 @@ pub fn quit_gui() {
     unsafe { gtk_main_quit() };
 }
 
+/// Al primo avvio la UI può precedere il `--server` che il servizio sta per lanciare:
+/// se ne avviasse uno proprio, quel `--server` la chiuderebbe e la rilancerebbe.
+pub async fn wait_for_service_server() -> bool {
+    if Config::get_option("stop-service") == "Y" || !crate::check_process("--service", false) {
+        return false;
+    }
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if crate::ipc::connect(500, "").await.is_ok() {
+            return true;
+        }
+        hbb_common::sleep(0.5).await;
+    }
+    log::warn!("--server of the service did not show up in time");
+    false
+}
+
 /*
 pub fn exec_privileged(args: &[&str]) -> ResultType<Child> {
     Ok(Command::new("pkexec").args(args).spawn()?)

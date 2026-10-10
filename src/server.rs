@@ -741,6 +741,11 @@ pub async fn start_server(is_server: bool, no_server: bool) {
                     hbb_common::sleep(1.0).await;
                     std::thread::spawn(|| start_server(false, true));
                 } else {
+                    #[cfg(target_os = "linux")]
+                    if crate::platform::linux::wait_for_service_server().await {
+                        std::thread::spawn(|| start_server(false, false));
+                        return;
+                    }
                     log::info!("try start server");
                     std::thread::spawn(|| start_server(true, false));
                 }
