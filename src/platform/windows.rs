@@ -2124,6 +2124,10 @@ pub fn prepare_custom_client_update() -> ResultType<bool> {
 }
 
 pub fn get_license_from_exe_name() -> ResultType<CustomServer> {
+    // Con i server fissati al build il nome dell'eseguibile non li può cambiare.
+    if crate::clanto::config::servers_fixed_at_build() {
+        bail!("license from executable name ignored: servers are fixed at build");
+    }
     let mut exe = std::env::current_exe()?.to_str().unwrap_or("").to_owned();
     // if defined portable appname entry, replace original executable name with it.
     if let Ok(portable_exe) = std::env::var(PORTABLE_APPNAME_RUNTIME_ENV_KEY) {

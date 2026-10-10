@@ -241,7 +241,6 @@ jobs:
   build-rustdesk-android:
     # DISABILITATO da Clanto: vedi la nota su build-for-macOS.
     if: false
-    if: false
     name: build rustdesk android apk ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.os }}
     strategy:

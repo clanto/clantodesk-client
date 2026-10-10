@@ -90,6 +90,18 @@ pub fn apply_build_config() {
     }
 }
 
+/// Vero se rendezvous server e chiave sono fissati al build. In quel caso nome
+/// dell'eseguibile e `custom.txt` non possono sostituirli.
+pub fn servers_fixed_at_build() -> bool {
+    servers_fixed(option_env!("RENDEZVOUS_SERVER"), option_env!("RS_PUB_KEY"))
+}
+
+fn servers_fixed(server: Option<&str>, key: Option<&str>) -> bool {
+    [server, key]
+        .iter()
+        .all(|v| v.is_some_and(|v| !v.is_empty()))
+}
+
 /// Impedisce a una build ClantoDesk priva di configurazione di ricadere in
 /// silenzio sui server e sulla chiave pubblica RustDesk.
 ///
@@ -139,4 +151,24 @@ fn check_own_server_configured() -> Result<(), String> {
          e ricadrebbe sui server pubblici RustDesk.",
         detail
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::servers_fixed;
+
+    #[test]
+    fn fixed_only_when_server_and_key_are_set() {
+        assert!(servers_fixed(Some("rs.example.org"), Some("pubkey")));
+        assert!(!servers_fixed(None, None));
+        assert!(!servers_fixed(Some("rs.example.org"), None));
+        assert!(!servers_fixed(None, Some("pubkey")));
+    }
+
+    #[test]
+    fn empty_values_do_not_count_as_set() {
+        assert!(!servers_fixed(Some(""), Some("pubkey")));
+        assert!(!servers_fixed(Some("rs.example.org"), Some("")));
+        assert!(!servers_fixed(Some(""), Some("")));
+    }
 }

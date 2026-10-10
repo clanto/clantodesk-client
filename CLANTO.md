@@ -69,6 +69,12 @@ segnalare nulla. Vedi `ensure_own_server_configured()` in
 `load_custom_client()` perché
 anche quello può fornire server e chiave.
 
+Con server e chiave fissati al build (`servers_fixed_at_build()` in
+`src/clanto/config.rs`) niente può sostituirli dopo l'avvio: su Windows
+`get_license_from_exe_name()` restituisce errore, quindi rinominare l'eseguibile
+non cambia host né chiave, e `read_custom_client()` ignora `custom.txt` con un
+warning. Le build di sviluppo senza server restano invariate.
+
 Per una build di sviluppo locale:
 
 ```bash
