@@ -170,7 +170,8 @@ l'applicazione mostra un'informativa separata e richiede un consenso esplicito.
 | `flutter/lib/clanto/` | Componenti Flutter specifici ClantoDesk |
 | `flutter/android/.../clanto/` | Componenti Android specifici ClantoDesk |
 | `flutter/ios/Runner/ClantoFileExporter.swift` | Esportazione file specifica iOS |
-| `libs/hbb_common/` | Configurazione, protocolli e utilità condivise |
+| `libs/hbb_common/` | Configurazione, protocolli e utilità condivise con il server |
+| `libs/base/` | Chiavi di opzione, protocollo `message.proto`, trasferimento file e codice di piattaforma usati solo dal client |
 | `libs/scrap/` | Cattura dello schermo |
 | `libs/enigo/` | Controllo di mouse e tastiera |
 | `libs/clipboard/` | Clipboard e trasferimento tramite clipboard |
