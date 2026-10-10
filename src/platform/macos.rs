@@ -342,12 +342,12 @@ fn write_plist_atomically(path: &str, body: &str) -> ResultType<()> {
 
 pub fn write_plists() -> ResultType<()> {
     let daemon_plist_path = format!(
-        "/Library/LaunchDaemons/com.carriez.{}_service.plist",
-        crate::get_app_name()
+        "/Library/LaunchDaemons/{}_service.plist",
+        crate::get_full_name()
     );
     let agent_plist_path = format!(
-        "/Library/LaunchAgents/com.carriez.{}_server.plist",
-        crate::get_app_name()
+        "/Library/LaunchAgents/{}_server.plist",
+        crate::get_full_name()
     );
     let Some(daemon_plist) = PRIVILEGES_SCRIPTS_DIR.get_file("daemon.plist") else {
         bail!("daemon.plist not found in embedded resources");
@@ -1096,7 +1096,7 @@ pub fn update_from_dmg_as_root(dmg_path: &str, expected_version: &str) -> Result
     }
     let app_bundle = format!("/Applications/{}.app", app_name);
     let tmp_dir_output = std::process::Command::new("/usr/bin/mktemp")
-        .args(&["-d", "/tmp/.rustdeskupdate-root-XXXXXX"])
+        .args(&["-d", "/tmp/.clantodeskupdate-root-XXXXXX"])
         .output()?;
     let tmp_dir = String::from_utf8(tmp_dir_output.stdout)
         .map_err(|e| anyhow!("[root-update] mktemp output error: {}", e))?
@@ -1109,8 +1109,9 @@ pub fn update_from_dmg_as_root(dmg_path: &str, expected_version: &str) -> Result
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&tmp_dir, std::fs::Permissions::from_mode(0o700))?;
     }
-    let agent_plist = format!("/Library/LaunchAgents/com.carriez.{}_server.plist", app_name);
-    let daemon_plist = format!("/Library/LaunchDaemons/com.carriez.{}_service.plist", app_name);
+    let full_name = crate::get_full_name();
+    let agent_plist = format!("/Library/LaunchAgents/{}_server.plist", full_name);
+    let daemon_plist = format!("/Library/LaunchDaemons/{}_service.plist", full_name);
 
     log::info!("[root-update] Starting silent root update from {}", dmg_path);
     // Check sessions before extracting to avoid unnecessary work
@@ -1241,9 +1242,9 @@ pub fn update_from_dmg_as_root(dmg_path: &str, expected_version: &str) -> Result
     // Write a shell script that runs detached after this function returns.
     // We cannot directly replace /Applications/RustDesk.app while it is running,
     // so we spawn a script that waits, kills processes, copies, and restarts.
-    let daemon_label = format!("com.carriez.{}_service", app_name);
-    let agent_label = format!("com.carriez.{}_server", app_name);
-    let script_path = format!("{}/rustdesk_update.sh", tmp_dir);
+    let daemon_label = format!("{}_service", full_name);
+    let agent_label = format!("{}_server", full_name);
+    let script_path = format!("{}/clantodesk_update.sh", tmp_dir);
     let script = format!(
         r#"#!/bin/sh
 rollback_done=0
@@ -1541,18 +1542,18 @@ write_new_plists() {{
 restore_old_bundle() {{
     [ "$bundle_swapped" -eq 1 ] || return 0
     if [ ! -d "{app_bundle}.bak" ] || [ -L "{app_bundle}.bak" ]; then
-        echo "[root-update] CRITICAL: valid application backup is unavailable" >> {tmp_dir}/rustdesk_root_update.log
+        echo "[root-update] CRITICAL: valid application backup is unavailable" >> {tmp_dir}/clantodesk_root_update.log
         return 1
     fi
     if [ -e "{app_bundle}" ] || [ -L "{app_bundle}" ]; then
         if [ -e "{app_bundle}.failed-update" ] || [ -L "{app_bundle}.failed-update" ] || \
            ! mv "{app_bundle}" "{app_bundle}.failed-update"; then
-            echo "[root-update] CRITICAL: could not vacate failed bundle safely" >> {tmp_dir}/rustdesk_root_update.log
+            echo "[root-update] CRITICAL: could not vacate failed bundle safely" >> {tmp_dir}/clantodesk_root_update.log
             return 1
         fi
     fi
     if ! mv "{app_bundle}.bak" "{app_bundle}"; then
-        echo "[root-update] CRITICAL: failed to restore application bundle" >> {tmp_dir}/rustdesk_root_update.log
+        echo "[root-update] CRITICAL: failed to restore application bundle" >> {tmp_dir}/clantodesk_root_update.log
         if [ ! -e "{app_bundle}" ] && [ ! -L "{app_bundle}" ]; then
             mv "{app_bundle}.failed-update" "{app_bundle}" 2>/dev/null || true
         fi
@@ -1574,7 +1575,7 @@ rollback_transaction() {{
     restore_old_bundle || restore_failed=1
     cp "{daemon_plist_bak}" "{daemon_plist}" || restore_failed=1
     cp "{agent_plist_bak}" "{agent_plist}" || restore_failed=1
-    touch /var/root/.rustdeskupdate_failed || restore_failed=1
+    touch /var/root/.clantodeskupdate_failed || restore_failed=1
     if ! launchctl load -w "{daemon_plist}" 2>/dev/null && \
        ! launchctl bootstrap system "{daemon_plist}" 2>/dev/null; then
         restore_failed=1
@@ -1587,9 +1588,9 @@ rollback_transaction() {{
         restore_failed=1
     fi
     if [ "$restore_failed" -ne 0 ]; then
-        echo "[root-update] CRITICAL: rollback restoration failed" >> {tmp_dir}/rustdesk_root_update.log
+        echo "[root-update] CRITICAL: rollback restoration failed" >> {tmp_dir}/clantodesk_root_update.log
     else
-        echo "[root-update] Rollback daemon and agents verified healthy" >> {tmp_dir}/rustdesk_root_update.log
+        echo "[root-update] Rollback daemon and agents verified healthy" >> {tmp_dir}/clantodesk_root_update.log
     fi
 }}
 trap rollback_transaction EXIT
@@ -1605,31 +1606,31 @@ for agent_uid in {uid_list}; do
     done
 done
 if ! capture_agent_snapshot; then
-    echo "[root-update] old LaunchAgent readiness check failed before shutdown" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] old LaunchAgent readiness check failed before shutdown" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 capture_stopping_agent_pids
 if ! stop_daemon; then
-    echo "[root-update] daemon did not stop before bundle swap" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] daemon did not stop before bundle swap" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 if ! stop_agents; then
-    echo "[root-update] old LaunchAgent did not stop before bundle swap" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] old LaunchAgent did not stop before bundle swap" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 # Agents have already been verified absent. Stop and verify any remaining GUI
 # processes as well so no process keeps the old bundle mapped across the swap.
 if ! stop_user_bundle_processes; then
-    echo "[root-update] RustDesk GUI process did not stop before bundle swap" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] {app_name} GUI process did not stop before bundle swap" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 staged_bundle="{tmp_dir}/staged.app"
 if [ -e "$staged_bundle" ] || [ -L "$staged_bundle" ]; then
-    echo "[root-update] staged bundle path already exists, aborting" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] staged bundle path already exists, aborting" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 if ! ditto {src_app} "$staged_bundle" 2>/dev/null; then
-    echo "[root-update] ditto failed, aborting update" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] ditto failed, aborting update" >> {tmp_dir}/clantodesk_root_update.log
     rm -rf "$staged_bundle"
     exit 1
 fi
@@ -1638,25 +1639,25 @@ if [ ! -d "$staged_bundle/Contents/MacOS" ] || \
    [ ! -f "$staged_bundle/Contents/MacOS/{app_name}" ] || \
    [ ! -f "$staged_bundle/Contents/MacOS/service" ] || \
    [ ! -f "$staged_bundle/Contents/Info.plist" ]; then
-    echo "[root-update] staged bundle validation failed, aborting" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] staged bundle validation failed, aborting" >> {tmp_dir}/clantodesk_root_update.log
     rm -rf "$staged_bundle"
     exit 1
 fi
 if ! mv {app_bundle} {app_bundle}.bak; then
-    echo "[root-update] backup mv failed, aborting" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] backup mv failed, aborting" >> {tmp_dir}/clantodesk_root_update.log
     rm -rf "$staged_bundle"
     exit 1
 fi
 bundle_swapped=1
 if ! mv "$staged_bundle" {app_bundle}; then
-    echo "[root-update] replacement mv failed, restoring backup" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] replacement mv failed, restoring backup" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 # Install the entire bundle as root-owned.  The LaunchDaemon executes code
 # from this bundle, so no nested framework, helper, or resource may remain
 # user-writable.
 if ! chown -R root:wheel {app_bundle} || ! chmod -R go-w {app_bundle}; then
-    echo "[root-update] chown failed, restoring backup" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] chown failed, restoring backup" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 xattr -r -d com.apple.quarantine {app_bundle} || true
@@ -1671,51 +1672,51 @@ if ! chown root:wheel {app_bundle} || \
    ! chmod 755 {app_bundle}/Contents/MacOS/service || \
    ! chown root:wheel {app_bundle}/Contents/MacOS/{app_name} || \
    ! chmod 755 {app_bundle}/Contents/MacOS/{app_name}; then
-    echo "[root-update] hardening failed, restoring backup" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] hardening failed, restoring backup" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 # Generate launchd definitions from the new, final-location binary.  The
 # subprocess is bounded and its output is retained for diagnosis; failure
 # causes the existing bundle/plists to be restored by the EXIT trap.
 if ! write_new_plists; then
-    echo "[root-update] CRITICAL: new binary failed to write plists" >> {tmp_dir}/rustdesk_root_update.log
-    cat "{tmp_dir}/write-plists.log" >> {tmp_dir}/rustdesk_root_update.log 2>/dev/null || true
+    echo "[root-update] CRITICAL: new binary failed to write plists" >> {tmp_dir}/clantodesk_root_update.log
+    cat "{tmp_dir}/write-plists.log" >> {tmp_dir}/clantodesk_root_update.log 2>/dev/null || true
     exit 1
 fi
-echo "[root-update] Plist definitions written by new binary" >> {tmp_dir}/rustdesk_root_update.log
+echo "[root-update] Plist definitions written by new binary" >> {tmp_dir}/clantodesk_root_update.log
 # Check daemon registration and readiness BEFORE removing backup.  launchctl
 # load/bootstrap only registers the job; the service can still exit immediately.
 if ! launchctl load -w {daemon_plist} 2>/dev/null && \
    ! launchctl bootstrap system {daemon_plist} 2>/dev/null; then
-    echo "[root-update] CRITICAL: daemon reload failed, restoring backup" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] CRITICAL: daemon reload failed, restoring backup" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 if ! daemon_ready; then
-    echo "[root-update] CRITICAL: daemon failed readiness check, restoring" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] CRITICAL: daemon failed readiness check, restoring" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 # Bootstrap agent BEFORE removing backup — needed for rollback on failure.
 # This also uses launchctl load for the login-window/no-console-user case.
 if ! bootstrap_agents || ! agent_ready; then
-    echo "[root-update] CRITICAL: agent bootstrap failed, rolling back" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] CRITICAL: agent bootstrap failed, rolling back" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 # Recheck daemon liveness after the agent is restored and immediately before
 # deleting the only rollback bundle.
 if ! daemon_snapshot_stable || ! agent_snapshot_stable; then
-    echo "[root-update] CRITICAL: daemon or agent stopped before commit, restoring" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] CRITICAL: daemon or agent stopped before commit, restoring" >> {tmp_dir}/clantodesk_root_update.log
     exit 1
 fi
 # Only remove backup after BOTH daemon AND agent confirmed running
 rollback_done=1
 bundle_swapped=0
 if ! rm -rf "{app_bundle}.bak"; then
-    echo "[root-update] WARNING: committed update but could not remove backup" >> {tmp_dir}/rustdesk_root_update.log
+    echo "[root-update] WARNING: committed update but could not remove backup" >> {tmp_dir}/clantodesk_root_update.log
 fi
 for gui_uid in $gui_uids; do
     launchctl asuser "$gui_uid" open -a "{app_bundle}" || true
 done
-echo "[root-update] Done!" >> {tmp_dir}/rustdesk_root_update.log
+echo "[root-update] Done!" >> {tmp_dir}/clantodesk_root_update.log
 rm -rf {tmp_dir}
 "#,
         app_name = app_name,
@@ -1817,7 +1818,7 @@ fn extract_dmg_into_existing_dir(dmg_path: &str, target_dir: &str) -> ResultType
 
 fn extract_dmg_inner(dmg_path: &str, target_dir: &str) -> ResultType<()> {
     let mount_output = Command::new("/usr/bin/mktemp")
-        .args(["-d", "/tmp/.rustdeskmount-XXXXXX"])
+        .args(["-d", "/tmp/.clantodeskmount-XXXXXX"])
         .output()?;
     if !mount_output.status.success() {
         bail!("Failed to create a private DMG mount directory");
