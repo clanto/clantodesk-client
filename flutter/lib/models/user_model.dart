@@ -237,6 +237,8 @@ class UserModel {
   /// Throws on network failure so callers can surface the error and offer a
   /// retry; returns an empty list when the server has no third-party login.
   static Future<List<dynamic>> queryOidcLoginOptions() async {
+    // Account disabilitato: nessuna richiesta di login options.
+    if (bind.isDisableAccount()) return [];
     final url = await bind.mainGetApiServer();
     if (url.trim().isEmpty) return [];
     final resp = await http.get(Uri.parse('$url/api/login-options'));
