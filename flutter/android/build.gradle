@@ -1,7 +1,5 @@
 def legacyPluginNamespaces = [
-    external_path: 'com.pinciat.external_path',
     flutter_keyboard_visibility: 'com.jrai.flutter_keyboard_visibility',
-    qr_code_scanner: 'net.touchcapture.qr.flutterqr',
     sqflite: 'com.tekartik.sqflite',
     uni_links: 'name.avioli.unilinks',
 ]
@@ -9,8 +7,6 @@ def legacyPluginNamespaces = [
 def java8JvmTarget = JavaVersion.VERSION_1_8.toString()
 def java8KotlinJvmTargets = [
     app: java8JvmTarget,
-    external_path: java8JvmTarget,
-    qr_code_scanner: java8JvmTarget,
 ]
 
 def configureKotlinJvmTarget = { Project project, String kotlinJvmTarget ->

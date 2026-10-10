@@ -111,6 +111,14 @@ android {
         }
     }
 
+    // Librerie native compresse (extractNativeLibs=true): con minSdk 22 è il default,
+    // lo esplicitiamo perché Play su 16 KB dipende da qui e non più da gradle.properties.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     compileOptions {
         coreLibraryDesugaringEnabled true
         targetCompatibility JavaVersion.VERSION_1_8

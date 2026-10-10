@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">ClantoDesk</string>
     <string name="accessibility_service_description">Consente a un operatore remoto autorizzato dall\'utente di eseguire tocchi, scorrimenti e inserimenti da tastiera. Può accedere alle finestre attive e ai campi modificabili esclusivamente per applicare i comandi della sessione remota.</string>
+    <string name="foreground_service_special_use_subtype">Mantiene disponibile l\'host ClantoDesk per connessioni non presidiate autorizzate e per le notifiche in primo piano, senza avviare la cattura dello schermo prima dell\'approvazione dell\'utente.</string>
 </resources>
