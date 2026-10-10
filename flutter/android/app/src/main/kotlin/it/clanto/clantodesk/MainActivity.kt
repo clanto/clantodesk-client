@@ -456,7 +456,7 @@ class MainActivity : FlutterFragmentActivity() {
                             var errorCode = "import_failed"
                             try {
                                 val temporaryFile = File.createTempFile(
-                                    ".rustdesk-import-",
+                                    ".clantodesk-import-",
                                     ".tmp",
                                     destination.parentFile
                                 )
@@ -560,7 +560,7 @@ class MainActivity : FlutterFragmentActivity() {
                                 val parent = destination.parentFile
                                     ?: throw IllegalStateException("The destination has no parent")
                                 temporary = File.createTempFile(
-                                    ".rustdesk-import-dir-",
+                                    ".clantodesk-import-dir-",
                                     ".tmp",
                                     parent
                                 ).also {
@@ -576,7 +576,7 @@ class MainActivity : FlutterFragmentActivity() {
                                         throw IllegalStateException("The destination already exists")
                                     }
                                     val backupFile = File.createTempFile(
-                                        ".rustdesk-import-backup-",
+                                        ".clantodesk-import-backup-",
                                         ".tmp",
                                         parent
                                     )
