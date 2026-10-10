@@ -593,7 +593,8 @@ class _GeneralState extends State<_General> {
           isServer: false,
         ),
       ],
-      if (!incomingOnly)
+      // Fissata a build quando WebRTC non e' consentito: toggle nascosto.
+      if (!incomingOnly && !isOptionFixed(kOptionEnableWebrtc))
         _OptionCheckBox(
           context,
           'Enable WebRTC P2P connection',

@@ -8,6 +8,11 @@ use hbb_common::{
     log,
 };
 
+/// WebRTC resta spento finche' `ice-servers` non punta a STUN/TURN Clanto.
+pub fn webrtc_allowed() -> bool {
+    false
+}
+
 /// Applica branding e valori server iniettati al build prima che `Config`
 /// venga usata per calcolare percorsi o impostazioni predefinite.
 pub fn apply_build_config() {
@@ -25,6 +30,14 @@ pub fn apply_build_config() {
         .write()
         .unwrap()
         .insert("hide-server-settings".to_owned(), "Y".to_owned());
+
+    // enable-webrtc e' LocalConfig: fissarlo qui lo rende non modificabile dalla UI.
+    if !webrtc_allowed() {
+        config::OVERWRITE_LOCAL_SETTINGS
+            .write()
+            .unwrap()
+            .insert("enable-webrtc".to_owned(), "N".to_owned());
+    }
 
     // ORG e' dichiarato solo su macOS. Entra sia nel percorso di configurazione
     // sia nei nomi dei plist di servizio generati dai template upstream.

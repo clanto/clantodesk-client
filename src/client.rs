@@ -589,7 +589,7 @@ impl Client {
     /// Relay-only ICE can then gather nothing. WebSocket does not: it tunnels only the signaling
     /// and relay legs, so the offer keeps full ICE and direct is exactly what it is there for.
     fn should_create_webrtc_offerer(interface: &impl Interface) -> bool {
-        if !crate::get_webrtc_enabled() {
+        if !crate::clanto::config::webrtc_allowed() || !crate::get_webrtc_enabled() {
             return false;
         }
         if Config::is_proxy() {

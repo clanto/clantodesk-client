@@ -893,7 +893,11 @@ impl RendezvousMediator {
         Ok(answer)
     }
 
-    async fn handle_punch_hole(&self, ph: PunchHole, server: ServerPtr) -> ResultType<()> {
+    async fn handle_punch_hole(&self, mut ph: PunchHole, server: ServerPtr) -> ResultType<()> {
+        // WebRTC spento: l'offerta si ignora e si ricade su punch/relay.
+        if !crate::clanto::config::webrtc_allowed() {
+            ph.webrtc_sdp_offer.clear();
+        }
         let mut peer_addr = AddrMangle::decode(&ph.socket_addr);
         let last = *LAST_MSG.lock().await;
         *LAST_MSG.lock().await = (peer_addr, Instant::now());

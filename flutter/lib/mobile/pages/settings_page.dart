@@ -874,7 +874,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                       });
                     },
             ),
-          if (!incomingOnly)
+          if (!incomingOnly && !isOptionFixed(kOptionEnableWebrtc))
             SettingsTile.switchTile(
               title: Text(translate('Enable WebRTC P2P connection')),
               initialValue: _enableWebrtc,
