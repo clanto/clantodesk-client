@@ -7193,6 +7193,7 @@ dependencies = [
  "winit",
  "winreg 0.11.0",
  "winres",
+ "wl-clipboard-rs",
  "wol-rs",
  "x11-clipboard 0.8.1",
  "x11rb 0.12.0",

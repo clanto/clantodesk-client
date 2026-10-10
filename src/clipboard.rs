@@ -97,6 +97,14 @@ fn read_clipboard_message(
     side: ClipboardSide,
     force: bool,
 ) -> Option<(Message, MultiClipboards)> {
+    #[cfg(target_os = "linux")]
+    if side == ClipboardSide::Client && crate::platform::linux_gtk_clipboard::is_active() {
+        let text = crate::platform::linux_gtk_clipboard::read_text(force)?;
+        let clipboards = proto::create_multi_clipboards(vec![ClipboardData::Text(text)]);
+        let mut msg = Message::new();
+        msg.set_multi_clipboards(clipboards.clone());
+        return Some((msg, clipboards));
+    }
     if ctx.is_none() {
         *ctx = ClipboardContext::new().ok();
     }
@@ -250,6 +258,12 @@ pub fn check_clipboard_cm() -> ResultType<MultiClipboards> {
 fn update_clipboard_(multi_clipboards: Vec<Clipboard>, side: ClipboardSide) {
     let to_update_data = proto::from_multi_clipboards(multi_clipboards);
     if to_update_data.is_empty() {
+        return;
+    }
+    #[cfg(target_os = "linux")]
+    if side == ClipboardSide::Client
+        && crate::platform::linux_gtk_clipboard::set_text_if_active(&to_update_data)
+    {
         return;
     }
     do_update_clipboard_(to_update_data, side);
@@ -930,6 +944,9 @@ pub mod clipboard_listener {
             .as_ref()
             .map(|ready| *ready.borrow())
             .unwrap_or(false);
+        if crate::platform::linux_gtk_clipboard::is_active() {
+            return ready;
+        }
         ready
             && listener
                 .handle
@@ -1026,6 +1043,19 @@ pub mod clipboard_listener {
             .insert(name.clone(), tx);
 
         cleanup_stale_listener(&mut listener_lock);
+        #[cfg(target_os = "linux")]
+        if crate::platform::linux_gtk_clipboard::is_active() {
+            if listener_lock.ready.is_none() {
+                let (tx_ready, rx_ready) = watch::channel(false);
+                crate::platform::linux_gtk_clipboard::start(Handler {
+                    subscribers: listener_lock.subscribers.clone(),
+                    ready: Some(tx_ready),
+                });
+                listener_lock.ready = Some(rx_ready);
+            }
+            log::info!("Clipboard listener subscribed: {}", name);
+            return Ok(());
+        }
         if listener_lock.handle.is_none() {
             log::info!("Start clipboard listener thread");
             #[cfg(target_os = "linux")]

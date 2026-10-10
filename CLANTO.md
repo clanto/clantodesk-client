@@ -247,6 +247,17 @@ non aggiunge codice nativo.
   `_onNavigationTap`. Se un percorso futuro portasse a `ServerPage` senza passare
   da lì, salterebbe il controllo.
 
+## Clipboard su Wayland senza data-control
+
+Su Wayland senza `ext/zwlr_data_control` (ChromeOS Crostini, sommelier) clipboard-master e arboard
+ripiegano su X11/Xwayland, che non vede le selezioni delle app Wayland: il testo non passa in nessuna
+direzione. In quel caso, e solo nel processo Flutter del controller, `src/platform/linux_gtk_clipboard.rs`
+usa `GtkClipboard` sulla connessione Wayland della finestra (solo testo; file e immagini restano come
+sono). Si attiva se `WAYLAND_DISPLAY` è impostata, il display GDK è Wayland e la stessa sonda di
+clipboard-master (`is_primary_selection_supported`) fallisce; con `GDK_BACKEND=x11`, X11, KDE e wlroots
+il percorso resta quello vecchio. Gli agganci sono in `clipboard.rs` (lettura, scrittura, listener) e
+`client.rs` (`init()`): tutte le chiamate GTK passano da `glib::idle_add_once` sul thread principale.
+
 ## Debito noto
 
 - `res/msi/Package/License.rtf` è un testo **provvisorio** che rimanda alla policy

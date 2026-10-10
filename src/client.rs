@@ -1915,6 +1915,8 @@ impl Client {
             return None;
         }
 
+        #[cfg(all(target_os = "linux", feature = "flutter"))]
+        crate::platform::linux_gtk_clipboard::init();
         let (tx_cb_result, rx_cb_result) = mpsc::channel();
         if let Err(e) =
             clipboard_listener::subscribe(Self::CLIENT_CLIPBOARD_NAME.to_owned(), tx_cb_result)
