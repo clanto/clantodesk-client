@@ -194,6 +194,7 @@ jobs:
           echo "Secret server presenti."
 
   generate-sbom:
+    needs: [verify-secrets]
     runs-on: ubuntu-latest
 
     permissions:
@@ -205,12 +206,12 @@ jobs:
           submodules: recursive
 
       - name: Install Syft
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
 
       - name: Generate SBOM
         run: |
           syft dir:. \
-            -o cyclonedx-json=rustdesk.sbom.json
+            -o cyclonedx-json=clantodesk.sbom.json
 
       - name: Publish Release
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
@@ -219,7 +220,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            rustdesk.sbom.json
+            clantodesk.sbom.json
 
   generate-bridge:
     needs: [verify-secrets]
