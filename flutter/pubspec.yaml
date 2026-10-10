@@ -61,7 +61,7 @@ dependencies:
   desktop_multi_window:
     git:
       url: https://github.com/rustdesk-org/rustdesk_desktop_multi_window
-      ref: b47e8385e5a75d38319ad706a64b0ead3108b093
+      ref: f8c4fce53014e21b9b58e9f12382bcd45d984d5d
   freezed_annotation: ^2.0.3
   flutter_custom_cursor: ^0.0.4
   window_size:
