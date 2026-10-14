@@ -8,15 +8,19 @@
      visibile, non silenzioso. Il job di build verifica che i simboli
      sensibili non ricompaiano. Vedi CLANTO.md. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="it.clanto.clantodesk">
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <!-- Scoped storage: import/export via SAF. WRITE_EXTERNAL_STORAGE solo fino ad
          Android 10, per pubblicare i file ricevuti in Download (ClantoDownloads). -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
+        android:maxSdkVersion="29"
+        tools:replace="android:maxSdkVersion" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
