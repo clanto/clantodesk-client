@@ -3986,8 +3986,10 @@ bool get isCustomClient {
 
 get defaultOptionLang => isCustomClient ? 'default' : '';
 get defaultOptionTheme => isCustomClient ? 'system' : '';
-get defaultOptionYes => isCustomClient ? 'Y' : '';
-get defaultOptionNo => isCustomClient ? 'N' : '';
+// Sempre espliciti: in ClantoDesk `isCustomClient` e' falso, ma i predefiniti Clanto
+// (src/clanto/config.rs) non sono quelli upstream e '' li farebbe tornare a vincere.
+get defaultOptionYes => 'Y';
+get defaultOptionNo => 'N';
 get defaultOptionWhitelist => isCustomClient ? ',' : '';
 get defaultOptionAccessMode => isCustomClient ? 'custom' : '';
 get defaultOptionApproveMode => isCustomClient ? 'password-click' : '';

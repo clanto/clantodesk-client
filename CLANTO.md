@@ -163,6 +163,21 @@ file di packaging, le risorse o gli hook che devono restare nei percorsi attesi
 dai rispettivi tool. L'inventario di provenienza e licenza è in
 [CLANTO-CONTRIBUTIONS.md](CLANTO-CONTRIBUTIONS.md).
 
+## Predefiniti per i dispositivi nuovi
+
+`apply_new_peer_defaults()` in `src/clanto/config.rs` mette in `DEFAULT_DISPLAY_SETTINGS`
+(non in OVERWRITE: la scelta dell'utente deve poter vincere) scala adattiva,
+appunti e audio disattivati, copia/incolla di file non consentito, cursore remoto
+visibile. Valgono per i peer senza file in `peers/` e per i campi mancanti di uno
+esistente; un `.toml` già completo non cambia. Precedenza in `UserDefaultConfig`:
+valore salvato dall'utente in `_default` > predefinito Clanto > predefinito upstream.
+
+**Trappola:** `is_custom_client()` vale `false` per ClantoDesk, quindi upstream userebbe
+`''` come «spento»: scrivere `''` in `_default` *cancella* la scelta e farebbe tornare il
+predefinito `Y`. `defaultOptionYes`/`defaultOptionNo` in `flutter/lib/common.dart` valgono
+perciò sempre `'Y'`/`'N'`. Chi aggiunge un predefinito nuovo non deve reintrodurre `''`. Chi
+aveva già tolto la spunta (valore `''`) vede il nuovo predefinito.
+
 ## Due varianti Android: client e host
 
 `CONN_TYPE`, iniettata al build, decide il **ruolo** della build. È letta due

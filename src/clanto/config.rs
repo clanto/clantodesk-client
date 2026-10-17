@@ -3,6 +3,7 @@
 
 //! Branding e configurazione obbligatoria dell'infrastruttura ClantoDesk.
 
+use base::config::keys;
 use hbb_common::{
     config::{self, Config},
     log,
@@ -19,10 +20,29 @@ pub fn public_stun_allowed() -> bool {
     false
 }
 
+/// Predefiniti dei dispositivi nuovi (chiavi di `KEYS_DISPLAY_SETTINGS`).
+/// Finiscono in `DEFAULT_DISPLAY_SETTINGS`, non in OVERWRITE: la preferenza
+/// salvata dall'utente in `_default` vince, i peer gia' salvati non cambiano.
+const NEW_PEER_DEFAULTS: [(&str, &str); 5] = [
+    (keys::OPTION_VIEW_STYLE, "adaptive"),
+    (keys::OPTION_DISABLE_CLIPBOARD, "Y"),
+    (keys::OPTION_ENABLE_FILE_COPY_PASTE, "N"),
+    (keys::OPTION_SHOW_REMOTE_CURSOR, "Y"),
+    (keys::OPTION_DISABLE_AUDIO, "Y"),
+];
+
+fn apply_new_peer_defaults() {
+    let mut defaults = config::DEFAULT_DISPLAY_SETTINGS.write().unwrap();
+    for (k, v) in NEW_PEER_DEFAULTS {
+        defaults.insert(k.to_owned(), v.to_owned());
+    }
+}
+
 /// Applica branding e valori server iniettati al build prima che `Config`
 /// venga usata per calcolare percorsi o impostazioni predefinite.
 pub fn apply_build_config() {
     *config::APP_NAME.write().unwrap() = "ClantoDesk".to_owned();
+    apply_new_peer_defaults();
 
     // ClantoDesk usa un'infrastruttura gestita: l'account cloud non e' ancora
     // disponibile e i parametri dei server non devono essere modificabili
@@ -174,7 +194,9 @@ fn check_own_server_configured() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::servers_fixed;
+    use super::{apply_new_peer_defaults, servers_fixed};
+    use base::config::keys;
+    use hbb_common::config::UserDefaultConfig;
 
     #[test]
     fn fixed_only_when_server_and_key_are_set() {
@@ -189,5 +211,25 @@ mod tests {
         assert!(!servers_fixed(Some(""), Some("pubkey")));
         assert!(!servers_fixed(Some("rs.example.org"), Some("")));
         assert!(!servers_fixed(Some(""), Some("")));
+    }
+
+    #[test]
+    fn new_peer_defaults_apply_when_user_has_no_preference() {
+        apply_new_peer_defaults();
+        let cfg = UserDefaultConfig::default();
+        assert_eq!(cfg.get(keys::OPTION_VIEW_STYLE), "adaptive");
+        assert_eq!(cfg.get(keys::OPTION_DISABLE_CLIPBOARD), "Y");
+        assert_eq!(cfg.get(keys::OPTION_ENABLE_FILE_COPY_PASTE), "N");
+        assert_eq!(cfg.get(keys::OPTION_SHOW_REMOTE_CURSOR), "Y");
+        assert_eq!(cfg.get(keys::OPTION_DISABLE_AUDIO), "Y");
+    }
+
+    #[test]
+    fn new_peer_defaults_are_not_locked() {
+        apply_new_peer_defaults();
+        let overwrite = hbb_common::config::OVERWRITE_DISPLAY_SETTINGS.read().unwrap();
+        assert!(super::NEW_PEER_DEFAULTS
+            .iter()
+            .all(|(k, _)| !overwrite.contains_key(*k)));
     }
 }
