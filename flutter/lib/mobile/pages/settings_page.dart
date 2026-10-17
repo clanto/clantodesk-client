@@ -11,6 +11,7 @@ import 'package:settings_ui/settings_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import '../../clanto/privacy_prompt.dart';
 import '../../clanto/settings_password.dart';
 import '../../common.dart';
 import '../../common/widgets/dialog.dart';
@@ -1303,8 +1304,10 @@ class __DisplayPageState extends State<_DisplayPage> {
         ),
         SettingsSection(
           title: Text(translate('Other Default Options')),
-          tiles:
-              otherDefaultSettings().map((e) => otherRow(e.$1, e.$2)).toList(),
+          tiles: [
+            ...otherDefaultSettings().map((e) => otherRow(e.$1, e.$2)),
+            clantoPrivacyPromptTile(() => setState(() {})),
+          ],
         ),
       ]),
     );

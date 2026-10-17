@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_hbb/clanto/chat_notification.dart';
+import 'package:flutter_hbb/clanto/privacy_prompt.dart';
 import 'package:flutter_hbb/common/widgets/peers_view.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/ab_model.dart';
@@ -4330,6 +4331,7 @@ class FFI {
         for (final cb in imageModel.callbacksOnFirstImage) {
           cb(id);
         }
+        ClantoPrivacyPrompt.onFirstImage(this);
       } finally {
         _applyPendingMonitorRestore();
       }

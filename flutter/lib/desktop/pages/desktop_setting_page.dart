@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/clanto/about_links.dart';
 import 'package:flutter_hbb/clanto/audit_settings.dart';
+import 'package:flutter_hbb/clanto/privacy_prompt.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -2211,6 +2212,7 @@ class _DisplayState extends State<_Display> {
   Widget other(BuildContext context) {
     final children =
         otherDefaultSettings().map((e) => otherRow(e.$1, e.$2)).toList();
+    children.add(const ClantoPrivacyPromptSetting());
     return _Card(title: 'Other Default Options', children: children);
   }
 }

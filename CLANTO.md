@@ -178,6 +178,23 @@ predefinito `Y`. `defaultOptionYes`/`defaultOptionNo` in `flutter/lib/common.dar
 perciò sempre `'Y'`/`'N'`. Chi aggiunge un predefinito nuovo non deve reintrodurre `''`. Chi
 aveva già tolto la spunta (valore `''`) vede il nuovo predefinito.
 
+## Popup modalità privacy all'ingresso
+
+`flutter/lib/clanto/privacy_prompt.dart`, agganciato da una riga in `FFI.onEvent2UIRgba`
+(`model.dart`, primo frame: a quel punto peer info, permessi e `platform_additions` sono
+arrivati). Solo sessioni di controllo remoto, non in sola visualizzazione, non per il ruolo
+solo-entrante, una volta per `PeerInfo` (le riconnessioni automatiche non lo ripropongono).
+«Attiva» riusa `toolbarPrivacyMode()`: stessa lista e stesso click della toolbar (prima
+implementazione se ce n'è più di una). Se la lista è vuota il popup è solo informativo.
+
+- Per dispositivo: casella «Non chiedere più», opzione flutter del peer `clanto-skip-privacy-prompt=Y`.
+- Globale: opzione di `Config` `clanto-privacy-prompt`, `N` = mai il popup (assente o `Y` = attivo).
+  Si cambia dalle impostazioni (desktop e mobile, «Other Default Options») o da riga di comando
+  (installato, da amministratore): `clantodesk --option clanto-privacy-prompt N`. Su file:
+  `ClantoDesk2.toml`, sezione `[options]`, `clanto-privacy-prompt = "N"`. È `Config` e non
+  `LocalConfig` perché `--option` scrive solo `Config`, e la GUI la legge con `mainGetOptionSync`.
+- I testi italiani sono compilati in `it.rs` (in questo fork l'italiano è la lingua principale).
+
 ## Due varianti Android: client e host
 
 `CONN_TYPE`, iniettata al build, decide il **ruolo** della build. È letta due
