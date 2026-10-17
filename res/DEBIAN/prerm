@@ -11,7 +11,7 @@ case $1 in
 
 			systemctl stop clantodesk || true
 			systemctl disable clantodesk || true
-			rm /etc/systemd/system/clantodesk.service /usr/lib/systemd/system/clantodesk.service || true
+			rm -f /etc/systemd/system/clantodesk.service /usr/lib/systemd/system/clantodesk.service
 			
 			# workaround temp dev build between 1.1.9 and 1.2.0
 			serverUser=$(ps -ef | grep -E 'clantodesk +--server' | grep -v 'sudo ' | awk '{print $1}' | head -1)
