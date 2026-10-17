@@ -195,6 +195,14 @@ implementazione se ce n'è più di una). Se la lista è vuota il popup è solo i
   `LocalConfig` perché `--option` scrive solo `Config`, e la GUI la legge con `mainGetOptionSync`.
 - I testi italiani sono compilati in `it.rs` (in questo fork l'italiano è la lingua principale).
 
+## Predefiniti del PC controllato
+
+`apply_host_defaults()` in `src/clanto/config.rs` mette in `DEFAULT_SETTINGS` (modificabili
+dalle impostazioni, un valore già salvato vince): disconnessione per inattività attiva con
+timeout 10 **minuti** (`get_auto_disconenct_timer`, `connection.rs`), scoperta LAN, tunnel TCP,
+riavvio remoto e terminale spenti. Per le chiavi `enable-*` la UI scrive `'Y'` per «acceso» solo
+perché `defaultOptionYes` è esplicito (vedi sopra): con `''` non si potrebbero riaccendere.
+
 ## Due varianti Android: client e host
 
 `CONN_TYPE`, iniettata al build, decide il **ruolo** della build. È letta due

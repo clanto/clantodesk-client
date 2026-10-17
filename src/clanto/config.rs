@@ -38,11 +38,30 @@ fn apply_new_peer_defaults() {
     }
 }
 
+/// Predefiniti lato PC controllato (chiavi di `KEYS_SETTINGS`), in
+/// `DEFAULT_SETTINGS`: un valore salvato dall'utente vince. Il timeout e' in minuti.
+const HOST_DEFAULTS: [(&str, &str); 6] = [
+    (keys::OPTION_ALLOW_AUTO_DISCONNECT, "Y"),
+    (keys::OPTION_AUTO_DISCONNECT_TIMEOUT, "10"),
+    (keys::OPTION_ENABLE_LAN_DISCOVERY, "N"),
+    (keys::OPTION_ENABLE_TUNNEL, "N"),
+    (keys::OPTION_ENABLE_REMOTE_RESTART, "N"),
+    (keys::OPTION_ENABLE_TERMINAL, "N"),
+];
+
+fn apply_host_defaults() {
+    let mut defaults = config::DEFAULT_SETTINGS.write().unwrap();
+    for (k, v) in HOST_DEFAULTS {
+        defaults.insert(k.to_owned(), v.to_owned());
+    }
+}
+
 /// Applica branding e valori server iniettati al build prima che `Config`
 /// venga usata per calcolare percorsi o impostazioni predefinite.
 pub fn apply_build_config() {
     *config::APP_NAME.write().unwrap() = "ClantoDesk".to_owned();
     apply_new_peer_defaults();
+    apply_host_defaults();
 
     // ClantoDesk usa un'infrastruttura gestita: l'account cloud non e' ancora
     // disponibile e i parametri dei server non devono essere modificabili
@@ -194,7 +213,7 @@ fn check_own_server_configured() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_new_peer_defaults, servers_fixed};
+    use super::{apply_host_defaults, apply_new_peer_defaults, servers_fixed};
     use base::config::keys;
     use hbb_common::config::UserDefaultConfig;
 
@@ -231,5 +250,15 @@ mod tests {
         assert!(super::NEW_PEER_DEFAULTS
             .iter()
             .all(|(k, _)| !overwrite.contains_key(*k)));
+    }
+
+    #[test]
+    fn host_defaults_are_defaults_not_overwrites() {
+        apply_host_defaults();
+        let defaults = hbb_common::config::DEFAULT_SETTINGS.read().unwrap();
+        assert_eq!(defaults.get(keys::OPTION_AUTO_DISCONNECT_TIMEOUT).map(String::as_str), Some("10"));
+        assert_eq!(defaults.get(keys::OPTION_ENABLE_TUNNEL).map(String::as_str), Some("N"));
+        let overwrite = hbb_common::config::OVERWRITE_SETTINGS.read().unwrap();
+        assert!(super::HOST_DEFAULTS.iter().all(|(k, _)| !overwrite.contains_key(*k)));
     }
 }
