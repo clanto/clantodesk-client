@@ -235,6 +235,10 @@ universale e l'AAB sono la variante del Play Store.
 | `clantodesk-X.Y.Z-universal.aab` | client, quello che va su Play |
 | `clantodesk-X.Y.Z-host-<arch>.apk` | host, nessun AAB |
 
+I link `clantodesk://` li apre solo il client: lo schema del filtro di deep link nel manifest
+principale è il segnaposto `${deepLinkScheme}`, che `build.gradle` imposta a `clantodesk-host` per
+la variante host. Con entrambe le app installate Android non chiede più quale usare.
+
 **I due `applicationId` devono restare distinti.** Con lo stesso package e la
 stessa chiave di firma, Play prende in carico anche le installazioni fatte a
 mano: un monitor interattivo verrebbe aggiornato alla variante client e non

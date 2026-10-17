@@ -136,6 +136,8 @@ android {
         manifestPlaceholders = [
             appLabel  : clantoIsHost ? "ClantoDesk Host" : "ClantoDesk",
             inputLabel: clantoIsHost ? "ClantoDesk Host Input" : "ClantoDesk Input",
+            // L'host non controlla altri PC: i link clantodesk:// devono aprire solo il client.
+            deepLinkScheme: clantoIsHost ? "clantodesk-host" : "clantodesk",
         ]
         minSdkVersion 22
         targetSdkVersion 36
