@@ -2863,7 +2863,7 @@ impl Connection {
             .get("ok")
             .and_then(Value::as_bool)
             .ok_or_else(|| "verifica non disponibile".to_owned())?;
-        let failed = serde_json::from_value(
+        let failed: Vec<crate::clanto::posture::FailedRule> = serde_json::from_value(
             response
                 .get("failed")
                 .cloned()

@@ -36,7 +36,7 @@
     <application
         android:name=".MainApplication"
         android:icon="@mipmap/ic_launcher"
-        android:label="ClantoDesk"
+        android:label="${appLabel}"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true">
 

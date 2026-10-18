@@ -116,8 +116,8 @@ pub fn prewarm() {
 
 /// Riempie la cache fuori dall'executor; `collect()` poi non blocca.
 pub async fn warm() {
-    if let Err(err) = tokio::task::spawn_blocking(collect).await {
-        log::warn!("posture collection failed: {err}");
+    if let Err(err) = hbb_common::tokio::task::spawn_blocking(collect).await {
+        hbb_common::log::warn!("posture collection failed: {err}");
     }
 }
 
@@ -141,7 +141,7 @@ fn gather() -> HashMap<String, String> {
     let deadline = Instant::now() + COLLECT_TIMEOUT;
     let mut posture = POSTURE_KEYS
         .iter()
-        .map(|key| (key.to_owned(), UNKNOWN.to_owned()))
+        .map(|key| ((*key).to_owned(), UNKNOWN.to_owned()))
         .collect::<HashMap<_, _>>();
     posture.insert("platform".to_owned(), platform_name());
     posture.insert("client_version".to_owned(), crate::VERSION.to_owned());
