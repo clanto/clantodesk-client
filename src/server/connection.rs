@@ -427,6 +427,7 @@ pub struct Connection {
     #[cfg(not(any(target_os = "ios")))]
     pressed_modifiers: HashSet<rdev::Key>,
     closed: bool,
+    close_reason: Option<String>,
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     start_cm_ipc_para: Option<StartCmIpcPara>,
     auto_disconnect_timer: Option<(Instant, u64)>,
@@ -635,6 +636,7 @@ impl Connection {
             #[cfg(not(any(target_os = "ios")))]
             pressed_modifiers: Default::default(),
             closed: false,
+            close_reason: None,
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             start_cm_ipc_para: Some(StartCmIpcPara {
                 rx_to_cm,
@@ -764,6 +766,7 @@ impl Connection {
                         ipc::Data::Close => {
                             conn.chat_unanswered = false; // seen
                             conn.file_transferred = false; //seen
+                            conn.remember_close_reason("Closed manually by connection manager");
                             conn.send_close_reason_no_retry("").await;
                             conn.on_close("connection manager", true).await;
                             break;
@@ -1103,6 +1106,7 @@ impl Connection {
                         Some(message::Union::Misc(m)) => {
                             match &m.union {
                                 Some(misc::Union::StopService(_)) => {
+                                    conn.remember_close_reason("Stop service");
                                     conn.send_close_reason_no_retry("").await;
                                     conn.on_close("stop service", false).await;
                                     break;
@@ -1227,9 +1231,10 @@ impl Connection {
             raii::AuthedConnID::check_remove_session(conn.inner.id(), conn.session_key());
         }
 
+        let close_reason = conn.close_reason.as_deref().unwrap_or("End").to_owned();
         let mut close_audit = json!({
             "action": "close",
-            "reason": "End",
+            "reason": &close_reason,
         });
         if let Some(t) = conn.authed_time {
             close_audit["duration_secs"] = json!(t.elapsed().as_secs());
@@ -1241,7 +1246,7 @@ impl Connection {
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             try_stop_record_cursor_pos();
         }
-        conn.on_close("End", true).await;
+        conn.on_close(&close_reason, true).await;
         log::info!("#{} connection loop exited", id);
     }
 
@@ -1409,6 +1414,7 @@ impl Connection {
         if privacy_mode::is_in_privacy_mode() {
             self.send_login_error("Someone turns on privacy mode, exit")
                 .await;
+            self.remember_close_reason("Someone turns on privacy mode, exit");
             false
         } else {
             true
@@ -1459,6 +1465,7 @@ impl Connection {
         self.decay_id_whitelist_failures();
         let (failure, res) = self.check_failure(FAILURE_IDX_ID_WHITELIST).await;
         if !res {
+            self.remember_close_reason("ID whitelist rejected by failure policy");
             return false;
         }
         if id_whitelist_allows(&id_whitelist, &self.lr.my_id) {
@@ -1467,6 +1474,7 @@ impl Connection {
         self.update_failure(failure, false, FAILURE_IDX_ID_WHITELIST);
         self.send_login_error("Your ID is blocked by the peer")
             .await;
+        self.remember_close_reason("Your ID is blocked by the peer");
         self.post_alarm_audit(
             AlarmAuditType::IdWhitelist,
             json!({ "id": self.lr.my_id.clone(), "ip": self.ip.clone(), "name": self.lr.my_name.clone() }),
@@ -1835,11 +1843,12 @@ impl Connection {
                 if is_rdp {
                     addr = "RDP".to_owned();
                 }
-                self.send_login_error(format!(
+                let reason = format!(
                     "Failed to access remote {}. Please make sure it is reachable/open.",
                     addr
-                ))
-                .await;
+                );
+                self.send_login_error(&reason).await;
+                self.remember_close_reason(&reason);
                 false
             }
             Err(e) => {
@@ -1847,11 +1856,12 @@ impl Connection {
                 if is_rdp {
                     addr = "RDP".to_owned();
                 }
-                self.send_login_error(format!(
+                let reason = format!(
                     "Failed to access remote {}. Please make sure it is reachable/open.",
                     addr
-                ))
-                .await;
+                );
+                self.send_login_error(&reason).await;
+                self.remember_close_reason(&reason);
                 false
             }
         }
@@ -2800,6 +2810,7 @@ impl Connection {
                     Self::login_scope_kind(lr),
                 );
                 self.send_login_error("Connection not allowed").await;
+                self.remember_close_reason("Connection not allowed");
                 false
             }
             Some(_) => true,
@@ -2959,8 +2970,9 @@ impl Connection {
                         AlarmAuditType::PostureRejected,
                         json!({"id": &lr.my_id, "name": &lr.my_name, "ip": &self.ip, "reason": &reason}),
                     );
-                    self.send_login_error(&format!("Dispositivo non protetto: {reason}"))
-                        .await;
+                    let reason = format!("Dispositivo non protetto: {reason}");
+                    self.send_login_error(&reason).await;
+                    self.remember_close_reason(&reason);
                     return false;
                 }
             }
@@ -2972,6 +2984,7 @@ impl Connection {
                     ) {
                         self.send_login_error("No permission of file transfer")
                             .await;
+                        self.remember_close_reason("No permission of file transfer");
                         sleep(1.).await;
                         return false;
                     }
@@ -2981,6 +2994,7 @@ impl Connection {
                     if !Self::permission(keys::OPTION_ENABLE_CAMERA, &self.control_permissions) {
                         self.send_login_error("No permission of viewing camera")
                             .await;
+                        self.remember_close_reason("No permission of viewing camera");
                         sleep(1.).await;
                         return false;
                     }
@@ -2989,6 +3003,7 @@ impl Connection {
                 Some(login_request::Union::Terminal(terminal)) => {
                     if !Self::permission(keys::OPTION_ENABLE_TERMINAL, &self.control_permissions) {
                         self.send_login_error("No permission of terminal").await;
+                        self.remember_close_reason("No permission of terminal");
                         sleep(1.).await;
                         return false;
                     }
@@ -2996,6 +3011,7 @@ impl Connection {
                     if !lr.os_login.username.is_empty() && !crate::platform::is_installed() {
                         self.send_login_error("Supported only in the installed version.")
                             .await;
+                        self.remember_close_reason("Supported only in the installed version.");
                         sleep(1.).await;
                         return false;
                     }
@@ -3010,6 +3026,7 @@ impl Connection {
                 Some(login_request::Union::PortForward(mut pf)) => {
                     if !Self::permission(keys::OPTION_ENABLE_TUNNEL, &self.control_permissions) {
                         self.send_login_error("No permission of IP tunneling").await;
+                        self.remember_close_reason("No permission of IP tunneling");
                         sleep(1.).await;
                         return false;
                     }
@@ -3038,6 +3055,7 @@ impl Connection {
             {
                 self.send_login_error(crate::client::LOGIN_MSG_OFFLINE)
                     .await;
+                self.remember_close_reason(crate::client::LOGIN_MSG_OFFLINE);
                 return false;
             }
 
@@ -3050,6 +3068,9 @@ impl Connection {
                     "No active console user logged on, please connect and logon first.",
                 )
                 .await;
+                self.remember_close_reason(
+                    "No active console user logged on, please connect and logon first.",
+                );
                 sleep(1.).await;
                 return false;
             }
@@ -3216,6 +3237,7 @@ impl Connection {
                                     "Rejected switch sides response for non-remote-desktop session; closing connection"
                                 );
                                 self.send_login_error("Connection not allowed").await;
+                                self.remember_close_reason("Connection not allowed");
                                 return false;
                             }
                             self.reset_session_scope_for_login();
@@ -4317,6 +4339,7 @@ impl Connection {
                 );
                 // Terminal OS login is sensitive. Close this connection instead of keeping it
                 // alive for retries on the same socket after a rate-limit block.
+                self.remember_close_reason("OS credential login blocked by failure policy");
                 return Some(false);
             }
             TerminalAuthorizationMode::OsLogin {
@@ -4349,6 +4372,7 @@ impl Connection {
                             failure_scope
                         );
                         self.send_login_error("Please try 1 minute later").await;
+                        self.remember_close_reason("Please try 1 minute later");
                         sleep(1.).await;
                         self.post_alarm_audit(
                             AlarmAuditType::TerminalOsLoginConcurrency,
@@ -4389,6 +4413,7 @@ impl Connection {
                 msg
             );
             self.send_login_error(msg).await;
+            self.remember_close_reason(msg);
             sleep(1.).await;
             return Some(false);
         }
@@ -4412,6 +4437,7 @@ impl Connection {
                     // No need to translate the following message, because it is in an abnormal case.
                     self.send_login_error("Terminal service user mismatch detected.")
                         .await;
+                    self.remember_close_reason("Terminal service user mismatch detected.");
                     sleep(1.).await;
                     return Some(false);
                 }
@@ -5354,7 +5380,14 @@ impl Connection {
         }
     }
 
+    fn remember_close_reason(&mut self, reason: &str) {
+        if self.close_reason.is_none() {
+            self.close_reason = Some(reason.to_owned());
+        }
+    }
+
     async fn on_close(&mut self, reason: &str, lock: bool) {
+        self.remember_close_reason(reason);
         if self.closed {
             return;
         }
@@ -5396,11 +5429,13 @@ impl Connection {
     // The `reason` should be consistent with `check_if_retry` if not empty
     async fn send_close_reason_no_retry(&mut self, reason: &str) {
         let mut misc = Misc::new();
-        if reason.is_empty() {
-            misc.set_close_reason("Closed manually by the peer".to_string());
+        let reason = if reason.is_empty() {
+            "Closed manually by the peer"
         } else {
-            misc.set_close_reason(reason.to_string());
-        }
+            reason
+        };
+        self.remember_close_reason(reason);
+        misc.set_close_reason(reason.to_owned());
         let mut msg_out = Message::new();
         msg_out.set_misc(misc);
         self.send(msg_out).await;

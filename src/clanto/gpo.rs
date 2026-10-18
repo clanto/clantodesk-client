@@ -29,6 +29,8 @@ pub const GPO_KEYS: &[&str] = &[
     "clanto-syslog-port",
     "clanto-syslog-protocol",
     "clanto-syslog-facility",
+    "clanto-syslog-tls-ca",
+    "clanto-syslog-format",
     "clanto-session-log-days",
     "clanto-privacy-prompt",
     "clanto-outgoing-file-transfer",

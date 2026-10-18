@@ -7182,6 +7182,7 @@ dependencies = [
  "termios 0.3.3",
  "tiny-skia",
  "tokio",
+ "tokio-rustls",
  "totp-rs",
  "tray-icon",
  "ttf-parser",

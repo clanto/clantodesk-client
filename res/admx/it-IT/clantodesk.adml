@@ -42,10 +42,13 @@
       <string id="EventLogEnabled">Scrivi eventi audit nel registro eventi di Windows</string><string id="EventLogEnabled_Help">Stabilisce se gli eventi audit di ClantoDesk sono scritti nel registro eventi di Windows. Valore predefinito: disabilitata. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
       <string id="SyslogEnabled">Invia eventi audit a syslog</string><string id="SyslogEnabled_Help">Stabilisce se gli eventi audit di ClantoDesk sono inviati a syslog. Valore predefinito: disabilitata. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
       <string id="SyslogHost">Host syslog</string><string id="SyslogHost_Help">Imposta il nome o l'indirizzo dell'host del collettore syslog. Valore predefinito: vuoto. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
-      <string id="SyslogPort">Porta syslog</string><string id="SyslogPort_Help">Imposta la porta del collettore syslog. Valore predefinito: 514. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
-      <string id="SyslogProtocol">Protocollo syslog</string><string id="SyslogProtocol_Help">Seleziona il trasporto usato per gli eventi audit syslog. Valore predefinito: UDP. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
-      <string id="SyslogUdp">UDP</string><string id="SyslogTcp">TCP</string>
+      <string id="SyslogPort">Porta syslog</string><string id="SyslogPort_Help">Imposta la porta del collettore syslog. Se non è configurata una porta locale, il valore predefinito è 514 per UDP e TCP oppure 6514 per TLS. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
+      <string id="SyslogProtocol">Protocollo syslog</string><string id="SyslogProtocol_Help">Seleziona UDP, TCP o TLS per gli eventi audit syslog. Valore predefinito: UDP. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
+      <string id="SyslogUdp">UDP</string><string id="SyslogTcp">TCP</string><string id="SyslogTls">TLS</string>
       <string id="SyslogFacility">Facility syslog</string><string id="SyslogFacility_Help">Imposta la facility syslog RFC 5424 da 0 a 23. Valore predefinito: 16 (local0). Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
+      <string id="SyslogTlsCa">File CA del collettore syslog TLS</string><string id="SyslogTlsCa_Help">Imposta il percorso del file PEM contenente la CA usata esclusivamente per verificare il collettore TLS. La consegna TLS è disabilitata se il percorso è vuoto, il file è illeggibile o non contiene certificati validi. Le CA di sistema non vengono usate. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
+      <string id="SyslogFormat">Formato audit syslog</string><string id="SyslogFormat_Help">Seleziona il formato RFC 5424 o CEF per gli eventi audit syslog. Valore predefinito: RFC 5424. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
+      <string id="SyslogRfc5424">RFC 5424</string><string id="SyslogCef">CEF</string>
       <string id="SessionLogDays">Conservazione report sessioni</string><string id="SessionLogDays_Help">Imposta per quanti giorni conservare i report delle sessioni in entrata. Impostare 0 per disabilitare il report locale delle sessioni ed eliminare i file di report esistenti. I valori validi vanno da 0 a 3650. Valore predefinito: 180. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
       <string id="PrivacyPrompt">Chiedi di abilitare la modalità privacy</string><string id="PrivacyPrompt_Help">Stabilisce se ClantoDesk chiede di abilitare la modalità privacy all'inizio di ogni sessione di controllo remoto. Valore predefinito: abilitata. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
     </stringTable>
@@ -61,6 +64,8 @@
       <presentation id="SyslogPort"><decimalTextBox refId="SyslogPortValue"><label>$(string.Value)</label></decimalTextBox></presentation>
       <presentation id="SyslogProtocol"><dropdownList refId="SyslogProtocolValue"><label>$(string.Value)</label></dropdownList></presentation>
       <presentation id="SyslogFacility"><decimalTextBox refId="SyslogFacilityValue"><label>$(string.Value)</label></decimalTextBox></presentation>
+      <presentation id="SyslogTlsCa"><textBox refId="SyslogTlsCaValue"><label>$(string.Value)</label></textBox></presentation>
+      <presentation id="SyslogFormat"><dropdownList refId="SyslogFormatValue"><label>$(string.Value)</label></dropdownList></presentation>
       <presentation id="SessionLogDays"><decimalTextBox refId="SessionLogDaysValue"><label>$(string.Value)</label></decimalTextBox></presentation>
     </presentationTable>
   </resources>

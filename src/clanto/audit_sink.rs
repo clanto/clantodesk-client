@@ -3,135 +3,919 @@
 
 //! Destinazioni aggiuntive per gli eventi di audit.
 //!
-//! Gli eventi nascono in `src/server/connection.rs` (`post_conn_audit`,
-//! `post_file_audit`) sulla macchina controllata. Upstream li manda solo a
-//! `{api_server}/api/audit/*`. Qui li duplichiamo verso destinazioni che
-//! l'amministratore configura nelle impostazioni:
+//! Gli eventi nascono sulla macchina controllata e vengono duplicati verso le
+//! destinazioni configurate dall'amministratore:
 //!
-//!   - syslog RFC 5424, UDP o TCP
+//!   - syslog RFC 5424 o CEF, su UDP, TCP o TLS
 //!   - Windows Event Log, canale Application
 //!
-//! Entrambe sono disattivate per default e completamente indipendenti
-//! dall'API server: funzionano anche se `/api/audit` non esiste.
-//!
-//! Vincolo: non deve mai rallentare o interrompere una sessione. Ogni errore
-//! viene solo loggato, l'I/O TCP gira in un task separato.
+//! Entrambe sono disattivate per default e indipendenti dall'API server. La
+//! consegna syslog usa un solo worker e non rallenta la sessione.
 
-// tokio non e' dipendenza diretta del crate: si usa quello riesportato da hbb_common.
-use hbb_common::{config::Config, log, tokio};
+#[cfg(target_os = "windows")]
+use hbb_common::log;
+use hbb_common::{config::Config, tokio};
 use serde_json::Value;
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, MutexGuard, OnceLock,
+    },
+    time::Duration,
+};
 
 // Chiavi non registrate in KEYS_SETTINGS (submodule upstream): Config le salva
-// e le legge comunque, e si possono imporre via config firmata.
+// e le legge comunque, e si possono imporre via config firmata o GPO.
 pub const OPT_SYSLOG_ENABLED: &str = "clanto-syslog-enabled";
 pub const OPT_SYSLOG_HOST: &str = "clanto-syslog-host";
 pub const OPT_SYSLOG_PORT: &str = "clanto-syslog-port";
-pub const OPT_SYSLOG_PROTOCOL: &str = "clanto-syslog-protocol"; // "udp" | "tcp"
-pub const OPT_SYSLOG_FACILITY: &str = "clanto-syslog-facility"; // 0-23, default 16 (local0)
+pub const OPT_SYSLOG_PROTOCOL: &str = "clanto-syslog-protocol";
+pub const OPT_SYSLOG_FACILITY: &str = "clanto-syslog-facility";
+pub const OPT_SYSLOG_TLS_CA: &str = "clanto-syslog-tls-ca";
+pub const OPT_SYSLOG_FORMAT: &str = "clanto-syslog-format";
 pub const OPT_EVENTLOG_ENABLED: &str = "clanto-eventlog-enabled";
+pub const KIND_TEMP_PASSWORD_ROTATION: &str = "temp_password_rotation";
 
 const DEFAULT_PORT: u16 = 514;
-const DEFAULT_FACILITY: u8 = 16; // local0
-const SEVERITY_INFO: u8 = 6;
+const DEFAULT_TLS_PORT: u16 = 6514;
+const DEFAULT_FACILITY: u8 = 16;
+const QUEUE_CAPACITY: usize = 1000;
+const IO_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_BACKOFF: Duration = Duration::from_secs(60);
 const EVENT_SOURCE: &str = "ClantoDesk";
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum EventKey {
+    ConnectionOpened,
+    SessionOpened,
+    ConnectionClosed,
+    SessionCompleted,
+    FileRemoteSend,
+    FileRemoteReceive,
+    AlarmIpWhitelist,
+    AlarmExceedThirtyAttempts,
+    AlarmSixAttemptsWithinOneMinute,
+    AlarmExceedIpv6PrefixAttempts,
+    AlarmTerminalOsLoginBackoff,
+    AlarmTerminalOsLoginConcurrency,
+    AlarmSessionScopeViolation,
+    AlarmIdWhitelist,
+    AlarmPostureRejected,
+    AlarmPasswordWrong,
+    AlarmTwoFactorWrong,
+    PosturePassed,
+    PostureBypass,
+    TemporaryPasswordRotated,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct EventDefinition {
+    key: EventKey,
+    id: u32,
+    name: &'static str,
+    syslog_severity: u8,
+    cef_severity: u8,
+}
+
+const EVENTS: &[EventDefinition] = &[
+    EventDefinition {
+        key: EventKey::ConnectionOpened,
+        id: 61100,
+        name: "Connection opened",
+        syslog_severity: 6,
+        cef_severity: 3,
+    },
+    EventDefinition {
+        key: EventKey::SessionOpened,
+        id: 61101,
+        name: "Session opened",
+        syslog_severity: 6,
+        cef_severity: 3,
+    },
+    EventDefinition {
+        key: EventKey::ConnectionClosed,
+        id: 61102,
+        name: "Connection closed",
+        syslog_severity: 6,
+        cef_severity: 3,
+    },
+    EventDefinition {
+        key: EventKey::SessionCompleted,
+        id: 61103,
+        name: "Session completed",
+        syslog_severity: 6,
+        cef_severity: 3,
+    },
+    EventDefinition {
+        key: EventKey::FileRemoteSend,
+        id: 61110,
+        name: "File sent to peer",
+        syslog_severity: 5,
+        cef_severity: 5,
+    },
+    EventDefinition {
+        key: EventKey::FileRemoteReceive,
+        id: 61111,
+        name: "File received from peer",
+        syslog_severity: 5,
+        cef_severity: 5,
+    },
+    EventDefinition {
+        key: EventKey::AlarmIpWhitelist,
+        id: 61120,
+        name: "IP whitelist rejected",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmExceedThirtyAttempts,
+        id: 61121,
+        name: "Login attempt limit exceeded",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmSixAttemptsWithinOneMinute,
+        id: 61122,
+        name: "Login rate limit exceeded",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmExceedIpv6PrefixAttempts,
+        id: 61123,
+        name: "IPv6 prefix attempt limit exceeded",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmTerminalOsLoginBackoff,
+        id: 61124,
+        name: "Terminal OS login backoff",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmTerminalOsLoginConcurrency,
+        id: 61125,
+        name: "Terminal OS login concurrency rejected",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmSessionScopeViolation,
+        id: 61126,
+        name: "Session scope violation",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmIdWhitelist,
+        id: 61127,
+        name: "ID whitelist rejected",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmPostureRejected,
+        id: 61128,
+        name: "Device posture rejected",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmPasswordWrong,
+        id: 61129,
+        name: "Password authentication failed",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::AlarmTwoFactorWrong,
+        id: 61130,
+        name: "Two-factor authentication failed",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::PosturePassed,
+        id: 61140,
+        name: "Device posture passed",
+        syslog_severity: 6,
+        cef_severity: 3,
+    },
+    EventDefinition {
+        key: EventKey::PostureBypass,
+        id: 61141,
+        name: "Device posture bypassed",
+        syslog_severity: 5,
+        cef_severity: 5,
+    },
+    EventDefinition {
+        key: EventKey::TemporaryPasswordRotated,
+        id: 61150,
+        name: "Temporary password rotated",
+        syslog_severity: 5,
+        cef_severity: 5,
+    },
+    EventDefinition {
+        key: EventKey::Unknown,
+        id: 61999,
+        name: "Unknown audit event",
+        syslog_severity: 5,
+        cef_severity: 5,
+    },
+];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Protocol {
+    Udp,
+    Tcp,
+    Tls,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OutputFormat {
+    Rfc5424,
+    Cef,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeliveryConfig {
+    host: String,
+    port: u16,
+    protocol: Protocol,
+    format: OutputFormat,
+    facility: u8,
+    tls_ca: String,
+}
+
+#[derive(Clone)]
+struct PendingRecord {
+    sequence: u64,
+    event: &'static EventDefinition,
+    value: Value,
+}
+
+struct AuditQueue {
+    records: VecDeque<PendingRecord>,
+    capacity: usize,
+    next_sequence: u64,
+    lost: u64,
+}
+
+impl AuditQueue {
+    fn new(capacity: usize) -> Self {
+        Self {
+            records: VecDeque::with_capacity(capacity),
+            capacity: capacity.max(1),
+            next_sequence: 0,
+            lost: 0,
+        }
+    }
+
+    fn push(&mut self, event: &'static EventDefinition, value: Value) {
+        if self.records.len() == self.capacity {
+            self.records.pop_front();
+            self.lost = self.lost.saturating_add(1);
+        }
+        let sequence = self.next_sequence;
+        self.next_sequence = self.next_sequence.wrapping_add(1);
+        self.records.push_back(PendingRecord {
+            sequence,
+            event,
+            value,
+        });
+    }
+
+    fn front(&self) -> Option<(PendingRecord, u64)> {
+        self.records
+            .front()
+            .cloned()
+            .map(|record| (record, self.lost))
+    }
+
+    fn finish(&mut self, sequence: u64, reported_lost: u64, delivered: bool) {
+        let still_front = self.records.front().map(|record| record.sequence) == Some(sequence);
+        if still_front {
+            self.records.pop_front();
+        }
+        if delivered {
+            let delivered_after_overflow = u64::from(!still_front);
+            self.lost = self
+                .lost
+                .saturating_sub(reported_lost.saturating_add(delivered_after_overflow));
+        }
+    }
+
+    fn is_front(&self, sequence: u64) -> bool {
+        self.records.front().map(|record| record.sequence) == Some(sequence)
+    }
+}
+
+struct SinkState {
+    queue: Mutex<AuditQueue>,
+    notify: tokio::sync::Notify,
+    worker_started: AtomicBool,
+}
+
+impl SinkState {
+    fn new() -> Self {
+        Self {
+            queue: Mutex::new(AuditQueue::new(QUEUE_CAPACITY)),
+            notify: tokio::sync::Notify::new(),
+            worker_started: AtomicBool::new(false),
+        }
+    }
+}
+
+static SINK: OnceLock<SinkState> = OnceLock::new();
 
 /// Non usare `option2bool`: per queste chiavi ritorna true se mai impostate.
 fn is_on(key: &str) -> bool {
     Config::get_option(key) == "Y"
 }
 
-/// Punto di ingresso unico, chiamato da `post_conn_audit`/`post_file_audit`.
-/// `kind` finisce nel MSGID del syslog ("conn", "file", "alarm").
-pub fn emit(kind: &str, v: &Value) {
-    crate::clanto::session_log::on_audit(kind, v);
-    let syslog = is_on(OPT_SYSLOG_ENABLED);
-    let eventlog = is_on(OPT_EVENTLOG_ENABLED);
-    if !syslog && !eventlog {
+/// Punto di ingresso unico per session log, syslog ed Event Log.
+pub fn emit(kind: &str, value: &Value) {
+    crate::clanto::session_log::on_audit(kind, value);
+    let event = event_definition(kind, value);
+    if is_on(OPT_EVENTLOG_ENABLED) {
+        write_event_log(event, &value.to_string());
+    }
+    if active_delivery_config(is_on(OPT_SYSLOG_ENABLED), delivery_config()).is_none() {
         return;
     }
-    let payload = v.to_string();
-    if syslog {
-        send_syslog(kind, &payload);
-    }
-    if eventlog {
-        write_event_log(kind, &payload);
-    }
+    let sink = SINK.get_or_init(SinkState::new);
+    lock_queue(sink).push(event, value.clone());
+    start_worker(sink);
+    sink.notify.notify_one();
 }
 
-fn facility() -> u8 {
-    Config::get_option(OPT_SYSLOG_FACILITY)
-        .parse::<u8>()
-        .ok()
-        .filter(|f| *f <= 23)
-        .unwrap_or(DEFAULT_FACILITY)
-}
-
-/// RFC 5424: <PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
-/// Il MSG e' il JSON dell'evento: i SIEM lo estraggono senza parser dedicati.
-fn format_rfc5424(kind: &str, payload: &str) -> String {
-    let pri = facility() as u16 * 8 + SEVERITY_INFO as u16;
-    let ts = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    let host = crate::common::hostname();
-    let host = if host.is_empty() { "-".to_owned() } else { host };
-    format!(
-        "<{}>1 {} {} {} {} {} - {}",
-        pri,
-        ts,
-        host,
-        EVENT_SOURCE,
-        std::process::id(),
-        kind,
-        payload
-    )
-}
-
-fn send_syslog(kind: &str, payload: &str) {
-    let host = Config::get_option(OPT_SYSLOG_HOST);
-    if host.is_empty() {
-        return;
-    }
-    let port = Config::get_option(OPT_SYSLOG_PORT)
-        .parse::<u16>()
-        .unwrap_or(DEFAULT_PORT);
-    let target = if host.contains(':') && !host.starts_with('[') {
-        format!("[{}]:{}", host, port) // IPv6 nudo
-    } else {
-        format!("{}:{}", host, port)
+fn event_definition(kind: &str, value: &Value) -> &'static EventDefinition {
+    let key = match kind {
+        "conn" if value.get("action").and_then(Value::as_str) == Some("new") => {
+            EventKey::ConnectionOpened
+        }
+        "conn" if value.get("action").and_then(Value::as_str) == Some("close") => {
+            EventKey::ConnectionClosed
+        }
+        "conn" if value.get("type").and_then(Value::as_str) == Some("clanto_posture") => {
+            EventKey::PosturePassed
+        }
+        "conn" if value.get("type").and_then(Value::as_str) == Some("clanto_posture_bypass") => {
+            EventKey::PostureBypass
+        }
+        "conn" if value.get("peer").is_some() => EventKey::SessionOpened,
+        "session" => EventKey::SessionCompleted,
+        "file" => match value.get("type").and_then(Value::as_i64) {
+            Some(0) => EventKey::FileRemoteSend,
+            Some(1) => EventKey::FileRemoteReceive,
+            _ => EventKey::Unknown,
+        },
+        "alarm" => match value.get("typ").and_then(Value::as_i64) {
+            Some(0) => EventKey::AlarmIpWhitelist,
+            Some(1) => EventKey::AlarmExceedThirtyAttempts,
+            Some(2) => EventKey::AlarmSixAttemptsWithinOneMinute,
+            Some(6) => EventKey::AlarmExceedIpv6PrefixAttempts,
+            Some(7) => EventKey::AlarmTerminalOsLoginBackoff,
+            Some(8) => EventKey::AlarmTerminalOsLoginConcurrency,
+            Some(9) => EventKey::AlarmSessionScopeViolation,
+            Some(10) => EventKey::AlarmIdWhitelist,
+            Some(11) => EventKey::AlarmPostureRejected,
+            Some(12) => EventKey::AlarmPasswordWrong,
+            Some(13) => EventKey::AlarmTwoFactorWrong,
+            _ => EventKey::Unknown,
+        },
+        KIND_TEMP_PASSWORD_ROTATION => EventKey::TemporaryPasswordRotated,
+        _ => EventKey::Unknown,
     };
-    let msg = format_rfc5424(kind, payload);
+    EVENTS
+        .iter()
+        .find(|definition| definition.key == key)
+        .unwrap_or(&EVENTS[EVENTS.len() - 1])
+}
 
-    if Config::get_option(OPT_SYSLOG_PROTOCOL).eq_ignore_ascii_case("tcp") {
-        // TCP: connect e write possono bloccare, quindi task separato con timeout.
-        // RFC 6587 octet-stuffing: messaggio terminato da newline.
-        tokio::spawn(async move {
-            use tokio::io::AsyncWriteExt;
-            let fut = async {
-                let mut stream = tokio::net::TcpStream::connect(&target).await?;
-                stream.write_all(msg.as_bytes()).await?;
-                stream.write_all(b"\n").await?;
-                stream.flush().await
-            };
-            match tokio::time::timeout(std::time::Duration::from_secs(5), fut).await {
-                Ok(Ok(())) => {}
-                Ok(Err(e)) => log::debug!("syslog tcp: {}", e),
-                Err(_) => log::debug!("syslog tcp: timeout"),
-            }
-        });
+fn delivery_config() -> DeliveryConfig {
+    let protocol = match Config::get_option(OPT_SYSLOG_PROTOCOL)
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "tcp" => Protocol::Tcp,
+        "tls" => Protocol::Tls,
+        _ => Protocol::Udp,
+    };
+    let configured_port = Config::get_option(OPT_SYSLOG_PORT);
+    let default_port = if protocol == Protocol::Tls {
+        DEFAULT_TLS_PORT
     } else {
-        // UDP: fire-and-forget, nessun handshake, si puo' fare inline.
-        match std::net::UdpSocket::bind("0.0.0.0:0") {
-            Ok(sock) => {
-                if let Err(e) = sock.send_to(msg.as_bytes(), &target) {
-                    log::debug!("syslog udp: {}", e);
-                }
-            }
-            Err(e) => log::debug!("syslog udp bind: {}", e),
+        DEFAULT_PORT
+    };
+    DeliveryConfig {
+        host: Config::get_option(OPT_SYSLOG_HOST),
+        port: configured_port.parse::<u16>().unwrap_or(default_port),
+        protocol,
+        format: if Config::get_option(OPT_SYSLOG_FORMAT).eq_ignore_ascii_case("cef") {
+            OutputFormat::Cef
+        } else {
+            OutputFormat::Rfc5424
+        },
+        facility: Config::get_option(OPT_SYSLOG_FACILITY)
+            .parse::<u8>()
+            .ok()
+            .filter(|facility| *facility <= 23)
+            .unwrap_or(DEFAULT_FACILITY),
+        tls_ca: Config::get_option(OPT_SYSLOG_TLS_CA),
+    }
+}
+
+fn active_delivery_config(enabled: bool, config: DeliveryConfig) -> Option<DeliveryConfig> {
+    (enabled && !config.host.is_empty()).then_some(config)
+}
+
+fn lock_queue(sink: &SinkState) -> MutexGuard<'_, AuditQueue> {
+    sink.queue.lock().unwrap_or_else(|error| error.into_inner())
+}
+
+fn start_worker(sink: &'static SinkState) {
+    if sink.worker_started.load(Ordering::Acquire) {
+        return;
+    }
+    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+        hbb_common::throttled_log!(
+            Duration::from_secs(30),
+            error,
+            "syslog audit worker: Tokio runtime non disponibile"
+        );
+        return;
+    };
+    if sink
+        .worker_started
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        runtime.spawn(worker(sink));
+    }
+}
+
+async fn next_record(sink: &'static SinkState) -> (PendingRecord, u64) {
+    loop {
+        let notified = sink.notify.notified();
+        if let Some(snapshot) = {
+            let queue = lock_queue(sink);
+            queue.front()
+        } {
+            return snapshot;
+        }
+        notified.await;
+    }
+}
+
+fn finish_record(sink: &SinkState, sequence: u64, reported_lost: u64, delivered: bool) {
+    lock_queue(sink).finish(sequence, reported_lost, delivered);
+}
+
+fn is_front(sink: &SinkState, sequence: u64) -> bool {
+    lock_queue(sink).is_front(sequence)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TransportKey {
+    host: String,
+    port: u16,
+    protocol: Protocol,
+    tls_ca: String,
+}
+
+impl From<&DeliveryConfig> for TransportKey {
+    fn from(config: &DeliveryConfig) -> Self {
+        Self {
+            host: config.host.clone(),
+            port: config.port,
+            protocol: config.protocol,
+            tls_ca: config.tls_ca.clone(),
         }
     }
 }
 
+enum ConnectedStream {
+    Tcp(tokio::net::TcpStream),
+    Tls(tokio_rustls::client::TlsStream<tokio::net::TcpStream>),
+}
+
+enum DeliveryError {
+    Permanent(String),
+    Retryable(String),
+}
+
+impl DeliveryError {
+    fn message(&self) -> &str {
+        match self {
+            Self::Permanent(message) | Self::Retryable(message) => message,
+        }
+    }
+}
+
+struct ActiveConnection {
+    key: TransportKey,
+    stream: ConnectedStream,
+}
+
+async fn worker(sink: &'static SinkState) {
+    let mut connection: Option<ActiveConnection> = None;
+    let mut backoff = Duration::from_secs(1);
+    loop {
+        let (record, lost) = next_record(sink).await;
+        let Some(config) = active_delivery_config(is_on(OPT_SYSLOG_ENABLED), delivery_config())
+        else {
+            finish_record(sink, record.sequence, lost, false);
+            connection = None;
+            backoff = Duration::from_secs(1);
+            continue;
+        };
+        let message = format_record(record.event, &record.value, &config, lost);
+        if config.protocol == Protocol::Udp {
+            let result = tokio::time::timeout(IO_TIMEOUT, send_udp(&config, &message)).await;
+            let sent = matches!(result, Ok(Ok(())));
+            if !sent {
+                log_delivery_error("udp", timeout_result(result));
+            }
+            finish_record(sink, record.sequence, lost, sent);
+            connection = None;
+            backoff = Duration::from_secs(1);
+            continue;
+        }
+
+        let result =
+            tokio::time::timeout(IO_TIMEOUT, send_stream(&config, &message, &mut connection)).await;
+        match result {
+            Ok(Ok(())) => {
+                finish_record(sink, record.sequence, lost, true);
+                backoff = Duration::from_secs(1);
+            }
+            Ok(Err(error)) => {
+                connection = None;
+                log_delivery_error(
+                    if config.protocol == Protocol::Tls {
+                        "tls"
+                    } else {
+                        "tcp"
+                    },
+                    error.message().to_owned(),
+                );
+                match error {
+                    DeliveryError::Permanent(_) => {
+                        finish_record(sink, record.sequence, lost, false);
+                        backoff = Duration::from_secs(1);
+                    }
+                    DeliveryError::Retryable(_) => {
+                        if is_front(sink, record.sequence) {
+                            tokio::time::sleep(backoff).await;
+                            backoff = backoff.saturating_mul(2).min(MAX_BACKOFF);
+                        } else {
+                            backoff = Duration::from_secs(1);
+                        }
+                    }
+                }
+            }
+            Err(_) => {
+                connection = None;
+                log_delivery_error(
+                    if config.protocol == Protocol::Tls {
+                        "tls"
+                    } else {
+                        "tcp"
+                    },
+                    "timeout".to_owned(),
+                );
+                if is_front(sink, record.sequence) {
+                    tokio::time::sleep(backoff).await;
+                    backoff = backoff.saturating_mul(2).min(MAX_BACKOFF);
+                } else {
+                    backoff = Duration::from_secs(1);
+                }
+            }
+        }
+    }
+}
+
+fn timeout_result(result: Result<Result<(), String>, tokio::time::error::Elapsed>) -> String {
+    match result {
+        Ok(Ok(())) => String::new(),
+        Ok(Err(error)) => error,
+        Err(_) => "timeout".to_owned(),
+    }
+}
+
+fn log_delivery_error(protocol: &str, error: String) {
+    hbb_common::throttled_log!(
+        Duration::from_secs(30),
+        error,
+        "syslog {}: {}",
+        protocol,
+        error
+    );
+}
+
+async fn send_udp(config: &DeliveryConfig, message: &str) -> Result<(), String> {
+    let bind = if config.host.contains(':') {
+        "[::]:0"
+    } else {
+        "0.0.0.0:0"
+    };
+    let socket = tokio::net::UdpSocket::bind(bind)
+        .await
+        .map_err(|error| format!("bind: {error}"))?;
+    socket
+        .send_to(message.as_bytes(), target(config))
+        .await
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+async fn send_stream(
+    config: &DeliveryConfig,
+    message: &str,
+    connection: &mut Option<ActiveConnection>,
+) -> Result<(), DeliveryError> {
+    let key = TransportKey::from(config);
+    if connection.as_ref().is_some_and(|active| active.key != key) {
+        *connection = None;
+    }
+    if connection.is_none() {
+        *connection = Some(connect_stream(config, key).await?);
+    }
+    let frame = octet_counting_frame(message);
+    let result = match &mut connection
+        .as_mut()
+        .ok_or_else(|| DeliveryError::Retryable("connessione non disponibile".to_owned()))?
+        .stream
+    {
+        ConnectedStream::Tcp(stream) => write_frame(stream, &frame).await,
+        ConnectedStream::Tls(stream) => write_frame(stream, &frame).await,
+    };
+    result.map_err(|error| DeliveryError::Retryable(error.to_string()))
+}
+
+async fn write_frame<W>(stream: &mut W, frame: &[u8]) -> std::io::Result<()>
+where
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    use tokio::io::AsyncWriteExt;
+
+    stream.write_all(frame).await?;
+    stream.flush().await
+}
+
+async fn connect_stream(
+    config: &DeliveryConfig,
+    key: TransportKey,
+) -> Result<ActiveConnection, DeliveryError> {
+    if config.protocol == Protocol::Tls {
+        return connect_tls(config, key).await;
+    }
+    let stream = tokio::net::TcpStream::connect(target(config))
+        .await
+        .map_err(|error| DeliveryError::Retryable(error.to_string()))?;
+    Ok(ActiveConnection {
+        key,
+        stream: ConnectedStream::Tcp(stream),
+    })
+}
+
+async fn connect_tls(
+    config: &DeliveryConfig,
+    key: TransportKey,
+) -> Result<ActiveConnection, DeliveryError> {
+    use tokio_rustls::rustls::pki_types::ServerName;
+
+    if config.tls_ca.is_empty() {
+        return Err(DeliveryError::Permanent(
+            "CA TLS non configurata".to_owned(),
+        ));
+    }
+    let pem = tokio::fs::read(&config.tls_ca).await.map_err(|error| {
+        DeliveryError::Permanent(format!("CA TLS '{}': {error}", config.tls_ca))
+    })?;
+    let tls_config = tls_config_from_pem(&pem).map_err(DeliveryError::Permanent)?;
+    let server_name =
+        ServerName::try_from(tls_server_name(&config.host).to_owned()).map_err(|error| {
+            DeliveryError::Permanent(format!("nome server TLS '{}': {error}", config.host))
+        })?;
+    let stream = tokio::net::TcpStream::connect(target(config))
+        .await
+        .map_err(|error| DeliveryError::Retryable(error.to_string()))?;
+    let stream = tokio_rustls::TlsConnector::from(Arc::new(tls_config))
+        .connect(server_name, stream)
+        .await
+        .map_err(|error| DeliveryError::Retryable(error.to_string()))?;
+    Ok(ActiveConnection {
+        key,
+        stream: ConnectedStream::Tls(stream),
+    })
+}
+
+fn tls_config_from_pem(pem: &[u8]) -> Result<tokio_rustls::rustls::ClientConfig, String> {
+    use tokio_rustls::rustls::{
+        crypto::ring,
+        pki_types::{pem::PemObject, CertificateDer},
+        ClientConfig, RootCertStore,
+    };
+
+    let certificates = CertificateDer::pem_slice_iter(pem)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("lettura PEM della CA TLS: {error}"))?;
+    let mut roots = RootCertStore::empty();
+    let (valid, invalid) = roots.add_parsable_certificates(certificates);
+    if valid == 0 {
+        return Err("il file CA TLS non contiene certificati validi".to_owned());
+    }
+    if invalid > 0 {
+        hbb_common::throttled_log!(
+            Duration::from_secs(30),
+            warn,
+            "file CA TLS: {} certificati non validi ignorati",
+            invalid
+        );
+    }
+    ClientConfig::builder_with_provider(Arc::new(ring::default_provider()))
+        .with_safe_default_protocol_versions()
+        .map_err(|error| format!("configurazione versioni TLS: {error}"))
+        .map(|builder| builder.with_root_certificates(roots).with_no_client_auth())
+}
+
+fn target(config: &DeliveryConfig) -> String {
+    if config.host.contains(':') && !config.host.starts_with('[') {
+        format!("[{}]:{}", config.host, config.port)
+    } else {
+        format!("{}:{}", config.host, config.port)
+    }
+}
+
+fn tls_server_name(host: &str) -> &str {
+    let Some(unbracketed) = host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+    else {
+        return host;
+    };
+    if unbracketed.parse::<std::net::IpAddr>().is_ok() {
+        unbracketed
+    } else {
+        host
+    }
+}
+
+fn octet_counting_frame(message: &str) -> Vec<u8> {
+    format!("{} {}", message.as_bytes().len(), message).into_bytes()
+}
+
+fn format_record(
+    event: &EventDefinition,
+    value: &Value,
+    config: &DeliveryConfig,
+    lost: u64,
+) -> String {
+    let value = value_with_lost(value, lost);
+    match config.format {
+        OutputFormat::Rfc5424 => format_rfc5424(event, &value, config.facility, lost),
+        OutputFormat::Cef => format_cef(event, &value),
+    }
+}
+
+fn value_with_lost(value: &Value, lost: u64) -> Value {
+    let mut value = value.clone();
+    if lost > 0 {
+        if let Some(object) = value.as_object_mut() {
+            object.insert("lost_records".to_owned(), Value::from(lost));
+        }
+    }
+    value
+}
+
+fn format_rfc5424(event: &EventDefinition, value: &Value, facility: u8, lost: u64) -> String {
+    let pri = facility as u16 * 8 + event.syslog_severity as u16;
+    let timestamp = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let hostname = crate::common::hostname();
+    let hostname = if hostname.is_empty() { "-" } else { &hostname };
+    let structured_data = format!(
+        "[clanto@32473 eventId=\"{}\" eventName=\"{}\" severity=\"{}\" lostRecords=\"{}\"]",
+        event.id,
+        escape_structured_data(event.name),
+        event.syslog_severity,
+        lost
+    );
+    format!(
+        "<{}>1 {} {} {} {} {} {} {}",
+        pri,
+        timestamp,
+        hostname,
+        EVENT_SOURCE,
+        std::process::id(),
+        event.id,
+        structured_data,
+        value
+    )
+}
+
+fn escape_structured_data(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace(']', "\\]")
+}
+
+fn format_cef(event: &EventDefinition, value: &Value) -> String {
+    let extensions = cef_extensions(value)
+        .into_iter()
+        .map(|(key, value)| format!("{}={}", key, escape_cef_extension(&value)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!(
+        "CEF:0|{}|{}|{}|{}|{}|{}|{}",
+        escape_cef_header("Clanto Services"),
+        escape_cef_header(EVENT_SOURCE),
+        escape_cef_header(env!("CARGO_PKG_VERSION")),
+        event.id,
+        escape_cef_header(event.name),
+        event.cef_severity,
+        extensions
+    )
+}
+
+fn cef_extensions(value: &Value) -> BTreeMap<String, String> {
+    let mut extensions = BTreeMap::new();
+    if let Some(object) = value.as_object() {
+        for (key, value) in object {
+            let key = if key == "ip" { "src" } else { key };
+            extensions.insert(cef_extension_key(key), json_value_text(value));
+        }
+        if let Some(peer_id) = object.get("peer_id") {
+            extensions
+                .entry("peer".to_owned())
+                .or_insert_with(|| json_value_text(peer_id));
+        }
+        if let Some(info) = object
+            .get("info")
+            .and_then(Value::as_str)
+            .and_then(|info| serde_json::from_str::<Value>(info).ok())
+            .and_then(|info| info.as_object().cloned())
+        {
+            if let Some(ip) = info.get("ip") {
+                extensions
+                    .entry("src".to_owned())
+                    .or_insert_with(|| json_value_text(ip));
+            }
+            if let Some(id) = info.get("id") {
+                extensions
+                    .entry("peer".to_owned())
+                    .or_insert_with(|| json_value_text(id));
+            }
+            if let Some(reason) = info.get("reason") {
+                extensions
+                    .entry("reason".to_owned())
+                    .or_insert_with(|| json_value_text(reason));
+            }
+        }
+    }
+    extensions
+}
+
+fn cef_extension_key(key: &str) -> String {
+    key.chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || character == '_' {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn json_value_text(value: &Value) -> String {
+    value
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| value.to_string())
+}
+
+fn escape_cef_header(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('|', "\\|")
+}
+
+fn escape_cef_extension(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('=', "\\=")
+        .replace('\r', "\\r")
+        .replace('\n', "\\n")
+}
+
 #[cfg(not(target_os = "windows"))]
-fn write_event_log(_kind: &str, _payload: &str) {}
+fn write_event_log(_event: &EventDefinition, _payload: &str) {}
 
 /// `EventLogMessages.dll` del .NET definisce gli ID 1-65535 come "%1", quindi
 /// rende qualsiasi Event ID. Elenco separato da ";": vince il primo che esiste.
@@ -199,10 +983,12 @@ fn ensure_event_source_registered() {
 
 /// Scrive nel canale Application dell'Event Log.
 #[cfg(target_os = "windows")]
-fn write_event_log(kind: &str, payload: &str) {
+fn write_event_log(event: &EventDefinition, payload: &str) {
     use std::os::windows::ffi::OsStrExt;
-    use winapi::um::winbase::{DeregisterEventSource, RegisterEventSourceW, ReportEventW};
-    use winapi::um::winnt::EVENTLOG_INFORMATION_TYPE;
+    use winapi::um::{
+        winbase::{DeregisterEventSource, RegisterEventSourceW, ReportEventW},
+        winnt::{EVENTLOG_ERROR_TYPE, EVENTLOG_INFORMATION_TYPE, EVENTLOG_WARNING_TYPE},
+    };
 
     ensure_event_source_registered();
 
@@ -213,29 +999,28 @@ fn write_event_log(kind: &str, payload: &str) {
             .collect()
     }
 
-    // 61xxx: fuori dai codici errore Win32. Con ID bassi, se il message file
-    // manca, il Visualizzatore mostra un errore di sistema fuorviante.
-    let event_id: u32 = match kind {
-        "conn" => 61000,
-        "file" => 61001,
-        "alarm" => 61002,
-        _ => 61099,
+    let event_type = match event.syslog_severity {
+        0..=3 => EVENTLOG_ERROR_TYPE,
+        4 => EVENTLOG_WARNING_TYPE,
+        _ => EVENTLOG_INFORMATION_TYPE,
     };
-
     unsafe {
         let source = wide(EVENT_SOURCE);
         let handle = RegisterEventSourceW(std::ptr::null(), source.as_ptr());
         if handle.is_null() {
-            log::debug!("RegisterEventSourceW fallita: {}", std::io::Error::last_os_error());
+            log::debug!(
+                "RegisterEventSourceW fallita: {}",
+                std::io::Error::last_os_error()
+            );
             return;
         }
         let msg = wide(payload);
         let mut strings = [msg.as_ptr()];
         let ok = ReportEventW(
             handle,
-            EVENTLOG_INFORMATION_TYPE,
+            event_type,
             0,
-            event_id,
+            event.id,
             std::ptr::null_mut(),
             strings.len() as u16,
             0,
@@ -246,5 +1031,188 @@ fn write_event_log(kind: &str, payload: &str) {
             log::debug!("ReportEventW fallita: {}", std::io::Error::last_os_error());
         }
         DeregisterEventSource(handle);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::collections::HashSet;
+
+    fn test_config() -> DeliveryConfig {
+        DeliveryConfig {
+            host: "collector.example".to_owned(),
+            port: DEFAULT_PORT,
+            protocol: Protocol::Tcp,
+            format: OutputFormat::Rfc5424,
+            facility: DEFAULT_FACILITY,
+            tls_ca: String::new(),
+        }
+    }
+
+    #[test]
+    fn octet_counting_uses_message_byte_length() {
+        assert_eq!(octet_counting_frame("hello"), b"5 hello");
+        assert_eq!(octet_counting_frame("è"), "2 è".as_bytes());
+    }
+
+    #[test]
+    fn tls_server_name_removes_only_ipv6_brackets() {
+        assert_eq!(tls_server_name("[2001:db8::1]"), "2001:db8::1");
+        assert_eq!(tls_server_name("2001:db8::1"), "2001:db8::1");
+        assert_eq!(
+            tls_server_name("[collector.example]"),
+            "[collector.example]"
+        );
+
+        let mut config = test_config();
+        config.host = "[2001:db8::1]".to_owned();
+        config.port = DEFAULT_TLS_PORT;
+        assert_eq!(target(&config), "[2001:db8::1]:6514");
+    }
+
+    #[test]
+    fn disabled_or_empty_syslog_config_is_inactive() {
+        assert!(active_delivery_config(false, test_config()).is_none());
+        let mut config = test_config();
+        config.host.clear();
+        assert!(active_delivery_config(true, config).is_none());
+        assert!(active_delivery_config(true, test_config()).is_some());
+    }
+
+    #[test]
+    fn pending_record_uses_the_config_of_each_attempt() {
+        let event = event_definition("conn", &json!({"action": "new"}));
+        let mut queue = AuditQueue::new(1);
+        queue.push(event, json!({"action": "new"}));
+        let (record, lost) = queue.front().unwrap();
+
+        let rfc5424 = format_record(record.event, &record.value, &test_config(), lost);
+        let mut updated = test_config();
+        updated.format = OutputFormat::Cef;
+        let cef = format_record(record.event, &record.value, &updated, lost);
+        assert!(rfc5424.starts_with('<'));
+        assert!(cef.starts_with("CEF:0|"));
+    }
+
+    #[test]
+    fn cef_escapes_header_and_extension_delimiters() {
+        let event = EventDefinition {
+            key: EventKey::Unknown,
+            id: 61998,
+            name: r"Name|part\tail",
+            syslog_severity: 5,
+            cef_severity: 5,
+        };
+        let record = format_cef(&event, &json!({"reason": "left=right\nnext"}));
+        assert!(record.starts_with("CEF:0|Clanto Services|ClantoDesk|"));
+        assert!(record.contains(r"|Name\|part\\tail|5|"));
+        assert!(record.contains(r"reason=left\=right\nnext"));
+    }
+
+    #[test]
+    fn rfc5424_and_cef_use_the_same_stable_event_id() {
+        let event = event_definition("alarm", &json!({"typ": 11}));
+        let value = json!({"reason": "posture"});
+        let rfc5424 = format_rfc5424(event, &value, DEFAULT_FACILITY, 0);
+        let cef = format_cef(event, &value);
+        assert!(rfc5424.contains(" 61128 [clanto@32473 eventId=\"61128\""));
+        assert!(cef.contains("|61128|Device posture rejected|"));
+    }
+
+    #[test]
+    fn event_table_is_unique_and_covers_all_current_variants() {
+        let ids = EVENTS.iter().map(|event| event.id).collect::<HashSet<_>>();
+        let keys = EVENTS.iter().map(|event| event.key).collect::<HashSet<_>>();
+        assert_eq!(ids.len(), EVENTS.len());
+        assert_eq!(keys.len(), EVENTS.len());
+        for legacy_id in [61000, 61001, 61002, 61099] {
+            assert!(!ids.contains(&legacy_id));
+        }
+        for alarm_type in [0, 1, 2, 6, 7, 8, 9, 10, 11, 12, 13] {
+            let event = event_definition("alarm", &json!({"typ": alarm_type}));
+            assert_ne!(event.key, EventKey::Unknown);
+            assert_ne!(event.syslog_severity, 6);
+        }
+        for file_type in [0, 1] {
+            assert_ne!(
+                event_definition("file", &json!({"type": file_type})).key,
+                EventKey::Unknown
+            );
+        }
+        assert_eq!(
+            event_definition("alarm", &json!({"typ": 11})).key,
+            EventKey::AlarmPostureRejected
+        );
+        assert_eq!(
+            event_definition("conn", &json!({"type": "clanto_posture_bypass"})).key,
+            EventKey::PostureBypass
+        );
+        assert_eq!(
+            event_definition(KIND_TEMP_PASSWORD_ROTATION, &json!({})).key,
+            EventKey::TemporaryPasswordRotated
+        );
+        assert_eq!(
+            event_definition("conn", &json!({"action": "close"})).key,
+            EventKey::ConnectionClosed
+        );
+        assert_eq!(
+            event_definition("conn", &json!({"action": "new"})).key,
+            EventKey::ConnectionOpened
+        );
+        assert_eq!(
+            event_definition("conn", &json!({"peer": ["id", "name"], "type": 0})).key,
+            EventKey::SessionOpened
+        );
+        assert_eq!(
+            event_definition("session", &json!({})).key,
+            EventKey::SessionCompleted
+        );
+        assert_eq!(
+            event_definition("conn", &json!({"type": "clanto_posture"})).key,
+            EventKey::PosturePassed
+        );
+    }
+
+    #[test]
+    fn queue_overflow_drops_oldest_and_counts_loss() {
+        let event = event_definition("conn", &json!({"action": "new"}));
+        let mut queue = AuditQueue::new(2);
+        queue.push(event, json!({"record": 1}));
+        queue.push(event, json!({"record": 2}));
+        queue.push(event, json!({"record": 3}));
+        assert_eq!(queue.records.len(), 2);
+        assert_eq!(queue.records.front().map(|record| record.sequence), Some(1));
+        assert_eq!(queue.lost, 1);
+    }
+
+    #[test]
+    fn successful_in_flight_record_is_not_counted_lost_after_overflow() {
+        let event = event_definition("conn", &json!({"action": "new"}));
+        let mut queue = AuditQueue::new(2);
+        queue.push(event, json!({"record": 1}));
+        queue.push(event, json!({"record": 2}));
+
+        let (in_flight, reported_lost) = queue.front().unwrap();
+        queue.push(event, json!({"record": 3}));
+        assert_eq!(queue.lost, 1);
+
+        queue.finish(in_flight.sequence, reported_lost, true);
+        assert_eq!(queue.lost, 0);
+        assert_eq!(queue.records.front().map(|record| record.sequence), Some(1));
+    }
+
+    #[test]
+    fn failed_in_flight_record_remains_counted_lost_after_overflow() {
+        let event = event_definition("conn", &json!({"action": "new"}));
+        let mut queue = AuditQueue::new(2);
+        queue.push(event, json!({"record": 1}));
+        queue.push(event, json!({"record": 2}));
+
+        let (in_flight, _) = queue.front().unwrap();
+        queue.push(event, json!({"record": 3}));
+        assert!(!queue.is_front(in_flight.sequence));
+        assert_eq!(queue.lost, 1);
     }
 }

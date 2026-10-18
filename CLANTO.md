@@ -219,6 +219,63 @@ il registro ed elimina i file esistenti. Il report è consultabile ed esportabil
 di ClantoDesk e rispetta il relativo blocco amministrativo. I record contengono metadati personali
 dei peer: limitare la conservazione allo stretto necessario e proteggere l'accesso alle impostazioni.
 
+## Integrazione SIEM dell'audit host
+
+L'host può duplicare gli eventi di audit nel registro eventi Application di Windows e verso un
+collettore syslog. Entrambe le destinazioni sono disabilitate per impostazione predefinita e si
+configurano con queste opzioni:
+
+- `clanto-eventlog-enabled`: `Y` abilita il Windows Event Log.
+- `clanto-syslog-enabled`: `Y` abilita l'invio al collettore.
+- `clanto-syslog-host`: nome DNS o indirizzo del collettore; è anche il nome server verificato da
+  TLS.
+- `clanto-syslog-port`: porta del collettore. Se vuota, usa `514` per UDP/TCP e `6514` per TLS.
+- `clanto-syslog-protocol`: `udp` (predefinito), `tcp` oppure `tls`.
+- `clanto-syslog-facility`: facility RFC 5424 da 0 a 23; il valore predefinito è 16 (`local0`).
+- `clanto-syslog-tls-ca`: percorso del file PEM contenente la CA del collettore. Il trust store TLS
+  contiene esclusivamente i certificati validi letti da questo file: non usa le radici di sistema.
+  Con percorso assente, file illeggibile o nessun certificato valido, l'invio TLS è fail-closed e
+  non apre la connessione.
+- `clanto-syslog-format`: `rfc5424` (predefinito) oppure `cef`.
+
+TCP e TLS usano l'octet-counting (`<lunghezza> <messaggio>`) previsto da RFC 6587/RFC 5425. Un
+singolo worker asincrono serve una coda limitata a 1000 record: se si riempie elimina il record più
+vecchio e aggiunge il totale perso al primo record consegnato successivamente (`lost_records` in
+CEF e nel payload JSON, `lostRecords` negli structured data RFC 5424). Dopo un errore TCP/TLS il
+record in testa resta in coda e la connessione viene ritentata con backoff esponenziale da 1 a 60
+secondi; UDP non ritenta. Gli errori di consegna sono riportati nel log con limitazione di frequenza.
+
+Gli ID seguenti sono il contratto stabile con il SIEM. Lo stesso numero viene emesso come MSGID e
+`eventId` negli structured data RFC 5424, Signature ID CEF ed Event ID del Windows Event Log. Non
+riassegnare mai un ID, neppure dopo la rimozione di un evento.
+
+| ID | Evento | Severità syslog | Severità CEF |
+|---:|---|---:|---:|
+| 61100 | Connection opened | 6 (informational) | 3 |
+| 61101 | Session opened | 6 (informational) | 3 |
+| 61102 | Connection closed | 6 (informational) | 3 |
+| 61103 | Session completed | 6 (informational) | 3 |
+| 61110 | `FileAuditType::RemoteSend` — File sent to peer | 5 (notice) | 5 |
+| 61111 | `FileAuditType::RemoteReceive` — File received from peer | 5 (notice) | 5 |
+| 61120 | `AlarmAuditType::IpWhitelist` — IP whitelist rejected | 4 (warning) | 7 |
+| 61121 | `AlarmAuditType::ExceedThirtyAttempts` — Login attempt limit exceeded | 4 (warning) | 7 |
+| 61122 | `AlarmAuditType::SixAttemptsWithinOneMinute` — Login rate limit exceeded | 4 (warning) | 7 |
+| 61123 | `AlarmAuditType::ExceedIPv6PrefixAttempts` — IPv6 prefix attempt limit exceeded | 4 (warning) | 7 |
+| 61124 | `AlarmAuditType::TerminalOsLoginBackoff` — Terminal OS login backoff | 4 (warning) | 7 |
+| 61125 | `AlarmAuditType::TerminalOsLoginConcurrency` — Terminal OS login concurrency rejected | 4 (warning) | 7 |
+| 61126 | `AlarmAuditType::SessionScopeViolation` — Session scope violation | 4 (warning) | 7 |
+| 61127 | `AlarmAuditType::IdWhitelist` — ID whitelist rejected | 4 (warning) | 7 |
+| 61128 | `AlarmAuditType::PostureRejected` — Device posture rejected | 4 (warning) | 7 |
+| 61129 | `AlarmAuditType::PasswordWrong` — Password authentication failed | 4 (warning) | 7 |
+| 61130 | `AlarmAuditType::TwoFactorWrong` — Two-factor authentication failed | 4 (warning) | 7 |
+| 61140 | Postura superata (`clanto_posture`) — Device posture passed | 6 (informational) | 3 |
+| 61141 | Postura con bypass (`clanto_posture_bypass`) — Device posture bypassed | 5 (notice) | 5 |
+| 61150 | Temporary password rotated | 5 (notice) | 5 |
+| 61999 | Unknown audit event | 5 (notice) | 5 |
+
+Gli ID legacy 61000, 61001, 61002 e 61099 sono riservati permanentemente e non devono essere
+riutilizzati.
+
 ## Criteri di gruppo (ADMX)
 
 I template sono in `res/admx/clantodesk.admx`, con le risorse `en-US` e `it-IT`.

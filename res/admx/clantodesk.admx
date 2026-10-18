@@ -107,10 +107,16 @@
       <supportedOn ref="ClantoDesk150" /><elements><decimal id="SyslogPortValue" valueName="clanto-syslog-port" minValue="1" maxValue="65535" /></elements></policy>
     <policy name="SyslogProtocol" class="Machine" displayName="$(string.SyslogProtocol)" explainText="$(string.SyslogProtocol_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SyslogProtocol)">
       <parentCategory ref="AuditSiem" />
-      <supportedOn ref="ClantoDesk150" /><elements><enum id="SyslogProtocolValue" valueName="clanto-syslog-protocol"><item displayName="$(string.SyslogUdp)"><value><string>udp</string></value></item><item displayName="$(string.SyslogTcp)"><value><string>tcp</string></value></item></enum></elements></policy>
+      <supportedOn ref="ClantoDesk150" /><elements><enum id="SyslogProtocolValue" valueName="clanto-syslog-protocol"><item displayName="$(string.SyslogUdp)"><value><string>udp</string></value></item><item displayName="$(string.SyslogTcp)"><value><string>tcp</string></value></item><item displayName="$(string.SyslogTls)"><value><string>tls</string></value></item></enum></elements></policy>
     <policy name="SyslogFacility" class="Machine" displayName="$(string.SyslogFacility)" explainText="$(string.SyslogFacility_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SyslogFacility)">
       <parentCategory ref="AuditSiem" />
       <supportedOn ref="ClantoDesk150" /><elements><decimal id="SyslogFacilityValue" valueName="clanto-syslog-facility" minValue="0" maxValue="23" /></elements></policy>
+    <policy name="SyslogTlsCa" class="Machine" displayName="$(string.SyslogTlsCa)" explainText="$(string.SyslogTlsCa_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SyslogTlsCa)">
+      <parentCategory ref="AuditSiem" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="SyslogTlsCaValue" valueName="clanto-syslog-tls-ca" /></elements></policy>
+    <policy name="SyslogFormat" class="Machine" displayName="$(string.SyslogFormat)" explainText="$(string.SyslogFormat_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SyslogFormat)">
+      <parentCategory ref="AuditSiem" />
+      <supportedOn ref="ClantoDesk150" /><elements><enum id="SyslogFormatValue" valueName="clanto-syslog-format"><item displayName="$(string.SyslogRfc5424)"><value><string>rfc5424</string></value></item><item displayName="$(string.SyslogCef)"><value><string>cef</string></value></item></enum></elements></policy>
     <policy name="SessionLogDays" class="Machine" displayName="$(string.SessionLogDays)" explainText="$(string.SessionLogDays_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SessionLogDays)">
       <parentCategory ref="AuditSiem" />
       <supportedOn ref="ClantoDesk150" /><elements><decimal id="SessionLogDaysValue" valueName="clanto-session-log-days" minValue="0" maxValue="3650" /></elements></policy>

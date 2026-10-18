@@ -125,10 +125,16 @@ fn refresh() {
         return;
     }
 
-    let mut state = STATE.lock().unwrap();
-    state.password = updated_password;
-    state.changed_at = Some(Instant::now());
-    state.next_rotation = SystemTime::now().checked_add(Duration::from_secs(minutes * 60));
+    {
+        let mut state = STATE.lock().unwrap();
+        state.password = updated_password;
+        state.changed_at = Some(Instant::now());
+        state.next_rotation = SystemTime::now().checked_add(Duration::from_secs(minutes * 60));
+    }
+    crate::clanto::audit_sink::emit(
+        crate::clanto::audit_sink::KIND_TEMP_PASSWORD_ROTATION,
+        &serde_json::json!({ "action": "rotate" }),
+    );
 }
 
 #[cfg(test)]
