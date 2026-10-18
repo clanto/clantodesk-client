@@ -43,6 +43,7 @@ fn is_on(key: &str) -> bool {
 /// Punto di ingresso unico, chiamato da `post_conn_audit`/`post_file_audit`.
 /// `kind` finisce nel MSGID del syslog ("conn", "file", "alarm").
 pub fn emit(kind: &str, v: &Value) {
+    crate::clanto::session_log::on_audit(kind, v);
     let syslog = is_on(OPT_SYSLOG_ENABLED);
     let eventlog = is_on(OPT_EVENTLOG_ENABLED);
     if !syslog && !eventlog {

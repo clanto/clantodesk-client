@@ -12,6 +12,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../clanto/privacy_prompt.dart';
+import '../../clanto/inbound_security.dart';
+import '../../clanto/outgoing_security.dart';
+import '../../clanto/session_report.dart';
 import '../../clanto/settings_password.dart';
 import '../../common.dart';
 import '../../common/widgets/dialog.dart';
@@ -83,7 +86,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
   var _enableAbr = false;
   var _denyLANDiscovery = false;
   var _onlyWhiteList = false;
-  var _onlyIdWhiteList = false;
   var _enableDirectIPAccess = false;
   var _enableRecordSession = false;
   var _enableHardwareCodec = false;
@@ -118,7 +120,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
     _denyLANDiscovery = !option2bool(kOptionEnableLanDiscovery,
         bind.mainGetOptionSync(key: kOptionEnableLanDiscovery));
     _onlyWhiteList = whitelistNotEmpty();
-    _onlyIdWhiteList = idWhitelistNotEmpty();
     _enableDirectIPAccess = option2bool(
         kOptionDirectServer, bind.mainGetOptionSync(key: kOptionDirectServer));
     _enableRecordSession = option2bool(kOptionEnableRecordSession,
@@ -416,29 +417,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
           }
 
           changeWhiteList(callback: update);
-        },
-      ),
-      SettingsTile.switchTile(
-        title: Row(children: [
-          Expanded(child: Text(translate('Use ID whitelisting'))),
-          Offstage(
-                  offstage: !_onlyIdWhiteList,
-                  child: const Icon(Icons.warning_amber_rounded,
-                      color: Color.fromARGB(255, 255, 204, 0)))
-              .marginOnly(left: 5)
-        ]),
-        initialValue: _onlyIdWhiteList,
-        onToggle: (_) async {
-          update() async {
-            final onlyIdWhiteList = idWhitelistNotEmpty();
-            if (onlyIdWhiteList != _onlyIdWhiteList) {
-              setState(() {
-                _onlyIdWhiteList = onlyIdWhiteList;
-              });
-            }
-          }
-
-          changeIdWhiteList(callback: update);
         },
       ),
       SettingsTile.switchTile(
@@ -757,6 +735,18 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
           // e opzione per coprire anche la schermata host.
           if (isAndroid)
             ...clantoLocalPasswordTiles(refresh: () => setState(() {})),
+          if (isAndroid &&
+              !outgoingOnly &&
+              !disabledSettings &&
+              !hideSecuritySettings)
+            clantoInboundSecurityTile(),
+          if (isMobile &&
+              !outgoingOnly &&
+              !disabledSettings &&
+              !hideSecuritySettings)
+            clantoSessionReportTile(),
+          if (!incomingOnly && !disabledSettings && !hideSecuritySettings)
+            clantoOutgoingSecurityTile(),
           if (!disabledSettings && !_hideNetwork && !_hideServer)
             SettingsTile(
                 title: Text(translate('ID/Relay Server')),

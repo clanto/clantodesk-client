@@ -1808,6 +1808,10 @@ pub fn main_get_temporary_password() -> String {
     ui_interface::temporary_password()
 }
 
+pub fn main_get_temporary_password_rotation_next() -> u64 {
+    ui_interface::temporary_password_rotation_next()
+}
+
 pub fn main_set_permanent_password_with_result(password: String) -> bool {
     ui_interface::set_permanent_password_with_result(password)
 }
@@ -2302,6 +2306,21 @@ pub fn cm_get_config(name: String) -> String {
     #[cfg(target_os = "ios")]
     {
         "".to_string()
+    }
+}
+
+pub fn main_get_session_report(from_ms: i64, to_ms: i64) -> String {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        return crate::clanto::session_log::report_json(from_ms, to_ms);
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let name = format!("clanto-session-report:{}:{}", from_ms, to_ms);
+        return crate::ipc::get_config(&name)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "[]".to_owned());
     }
 }
 

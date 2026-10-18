@@ -1229,6 +1229,7 @@ impl Connection {
 
         let mut close_audit = json!({
             "action": "close",
+            "reason": "End",
         });
         if let Some(t) = conn.authed_time {
             close_audit["duration_secs"] = json!(t.elapsed().as_secs());
@@ -1566,6 +1567,11 @@ impl Connection {
         // per questo stanno prima del gate su server_audit_conn. Un solo emit per
         // record: i retry riguardano solo l'invio HTTP.
         crate::clanto::audit_sink::emit("conn", &v);
+        if v.get("action").and_then(Value::as_str) == Some("close") {
+            if let Some(session) = crate::clanto::session_log::completed_session(self.inner.id()) {
+                crate::clanto::audit_sink::emit("session", &session);
+            }
+        }
         if self.server_audit_conn.is_empty() {
             return;
         }
@@ -1628,14 +1634,6 @@ impl Connection {
     }
 
     fn post_alarm_audit(&self, typ: AlarmAuditType, info: Value) {
-        let url = crate::get_audit_server(
-            Config::get_option("api-server"),
-            Config::get_option("custom-rendezvous-server"),
-            "alarm".to_owned(),
-        );
-        if url.is_empty() {
-            return;
-        }
         let mut v = Value::default();
         v["id"] = json!(Config::get_id());
         v["uuid"] = json!(crate::encode64(hbb_common::get_uuid()));
@@ -1647,6 +1645,15 @@ impl Connection {
             if let Some(audit_ref) = self.conn_audit_ref() {
                 v["conn_audit_ref"] = json!(audit_ref);
             }
+        }
+        crate::clanto::audit_sink::emit("alarm", &v);
+        let url = crate::get_audit_server(
+            Config::get_option("api-server"),
+            Config::get_option("custom-rendezvous-server"),
+            "alarm".to_owned(),
+        );
+        if url.is_empty() {
+            return;
         }
         tokio::spawn(async move {
             allow_err!(Self::post_audit_async(url, v).await);
@@ -2826,6 +2833,67 @@ impl Connection {
         self.video_ack_required = lr.video_ack_required;
     }
 
+    async fn verify_clanto_posture(&self, lr: &LoginRequest) -> Result<(), String> {
+        if lr.clanto_posture.is_empty() || lr.clanto_posture_mac.is_empty() {
+            return Err("requisiti di sicurezza mancanti".to_owned());
+        }
+        let body = json!({
+            "posture": &lr.clanto_posture,
+            "mac": crate::encode64(&lr.clanto_posture_mac),
+            "challenge": &self.hash.challenge,
+            "host_id": Config::get_id(),
+            "peer_platform": &lr.my_platform,
+            "peer_version": &lr.version,
+        })
+        .to_string();
+        let response = timeout(
+            5000,
+            crate::post_request(
+                crate::clanto::posture::POSTURE_API_URL.to_owned(),
+                body,
+                "Content-Type: application/json",
+            ),
+        )
+        .await
+        .map_err(|_| "verifica non disponibile".to_owned())?
+        .map_err(|_| "verifica non disponibile".to_owned())?;
+        let response: Value =
+            serde_json::from_str(&response).map_err(|_| "verifica non disponibile".to_owned())?;
+        let ok = response
+            .get("ok")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| "verifica non disponibile".to_owned())?;
+        let failed = serde_json::from_value(
+            response
+                .get("failed")
+                .cloned()
+                .ok_or_else(|| "verifica non disponibile".to_owned())?,
+        )
+        .map_err(|_| "verifica non disponibile".to_owned())?;
+        let bypass = Config::get_option(crate::clanto::posture::OPT_POSTURE_BYPASS)
+            .split(',')
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let bypassed = crate::clanto::posture::decide(ok, &failed, &bypass)?;
+        if bypassed.is_empty() {
+            self.post_conn_audit(json!({
+                "peer": ((&lr.my_id, &lr.my_name)),
+                "type": "clanto_posture",
+                "posture_result": "passed",
+            }));
+        } else {
+            self.post_conn_audit(json!({
+                "peer": ((&lr.my_id, &lr.my_name)),
+                "type": "clanto_posture_bypass",
+                "posture_result": "bypassed",
+                "posture_bypasses": bypassed,
+            }));
+        }
+        Ok(())
+    }
+
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn try_start_cm_ipc(&mut self) {
         if let Some(p) = self.start_cm_ipc_para.take() {
@@ -2884,6 +2952,17 @@ impl Connection {
             self.reset_session_scope_for_login();
             if !self.check_id_whitelist().await {
                 return false;
+            }
+            if Config::get_option(crate::clanto::posture::OPT_REQUIRE_PROTECTED_DEVICE) == "Y" {
+                if let Err(reason) = self.verify_clanto_posture(&lr).await {
+                    self.post_alarm_audit(
+                        AlarmAuditType::PostureRejected,
+                        json!({"id": &lr.my_id, "name": &lr.my_name, "ip": &self.ip, "reason": &reason}),
+                    );
+                    self.send_login_error(&format!("Dispositivo non protetto: {reason}"))
+                        .await;
+                    return false;
+                }
             }
             match lr.union {
                 Some(login_request::Union::FileTransfer(ft)) => {
@@ -3044,6 +3123,10 @@ impl Connection {
                 if !self.validate_password(allow_logon_screen_password) {
                     self.update_failure_with_scope(failure, false, 0, FailureScope::Default);
                     self.check_update_temporary_password(false);
+                    self.post_alarm_audit(
+                        AlarmAuditType::PasswordWrong,
+                        json!({"id": &lr.my_id, "name": &lr.my_name, "ip": &self.ip}),
+                    );
                     self.send_login_error(crate::client::LOGIN_MSG_PASSWORD_WRONG)
                         .await;
                     self.try_start_cm(lr.my_id, lr.my_name, false);
@@ -3091,6 +3174,10 @@ impl Connection {
                         }
                     } else {
                         self.update_failure(failure, false, 1);
+                        self.post_alarm_audit(
+                            AlarmAuditType::TwoFactorWrong,
+                            json!({"id": &self.lr.my_id, "name": &self.lr.my_name, "ip": &self.ip}),
+                        );
                         self.send_login_error(crate::client::LOGIN_MSG_2FA_WRONG)
                             .await;
                     }
@@ -3164,6 +3251,7 @@ impl Connection {
                     if self.is_authed_view_camera_conn() {
                         return true;
                     }
+                    crate::clanto::session_log::mark_permission(self.inner.id(), "keyboard_mouse");
                     #[cfg(any(target_os = "android", target_os = "ios"))]
                     if let Err(e) = call_main_service_pointer_input("mouse", me.mask, me.x, me.y) {
                         log::debug!("call_main_service_pointer_input fail:{}", e);
@@ -3203,6 +3291,7 @@ impl Connection {
                     if self.is_authed_view_camera_conn() {
                         return true;
                     }
+                    crate::clanto::session_log::mark_permission(self.inner.id(), "keyboard_mouse");
                     #[cfg(any(target_os = "android", target_os = "ios"))]
                     if let Err(e) = match pde.union {
                         Some(pointer_device_event::Union::TouchEvent(touch)) => match touch.union {
@@ -3245,6 +3334,7 @@ impl Connection {
                     if self.is_authed_view_camera_conn() {
                         return true;
                     }
+                    crate::clanto::session_log::mark_permission(self.inner.id(), "keyboard_mouse");
                     let key = match me.mode.enum_value() {
                         Ok(KeyboardMode::Map) => {
                             Some(crate::keyboard::keycode_to_rdev_key(me.chr()))
@@ -3300,6 +3390,7 @@ impl Connection {
                     if self.is_authed_view_camera_conn() {
                         return true;
                     }
+                    crate::clanto::session_log::mark_permission(self.inner.id(), "keyboard_mouse");
                     if self.peer_keyboard_enabled() {
                         if is_enter(&me) {
                             CLICK_TIME.store(get_time(), Ordering::SeqCst);
@@ -3358,6 +3449,7 @@ impl Connection {
                 }
                 Some(message::Union::Clipboard(cb)) => {
                     if self.should_handle_text_clipboard_message() && self.clipboard_enabled() {
+                        crate::clanto::session_log::mark_permission(self.inner.id(), "clipboard");
                         #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         update_clipboard(vec![cb], ClipboardSide::Host);
                         // ios as the controlled side is actually not supported for now.
@@ -3386,6 +3478,7 @@ impl Connection {
                 }
                 Some(message::Union::MultiClipboards(_mcb)) => {
                     if self.should_handle_text_clipboard_message() && self.clipboard_enabled() {
+                        crate::clanto::session_log::mark_permission(self.inner.id(), "clipboard");
                         #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         update_clipboard(_mcb.clipboards, ClipboardSide::Host);
                         #[cfg(target_os = "android")]
@@ -3899,6 +3992,10 @@ impl Connection {
                     Some(misc::Union::RestartRemoteDevice(_)) => {
                         #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         if self.restart {
+                            crate::clanto::session_log::mark_permission(
+                                self.inner.id(),
+                                "remote_restart",
+                            );
                             // force_reboot, not work on linux vm and macos 14
                             #[cfg(any(target_os = "linux", target_os = "windows"))]
                             match system_shutdown::force_reboot() {
@@ -3972,10 +4069,18 @@ impl Connection {
                         .lock()
                         .unwrap()
                         .user_auto_adjust_fps(self.inner.id(), fps),
-                    Some(misc::Union::ClientRecordStatus(status)) => video_service::VIDEO_QOS
-                        .lock()
-                        .unwrap()
-                        .user_record(self.inner.id(), status),
+                    Some(misc::Union::ClientRecordStatus(status)) => {
+                        if status {
+                            crate::clanto::session_log::mark_permission(
+                                self.inner.id(),
+                                "recording",
+                            );
+                        }
+                        video_service::VIDEO_QOS
+                            .lock()
+                            .unwrap()
+                            .user_record(self.inner.id(), status)
+                    }
                     #[cfg(windows)]
                     Some(misc::Union::SelectedSid(sid)) => {
                         if let Some(current_process_sid) =
@@ -4029,6 +4134,7 @@ impl Connection {
                 },
                 Some(message::Union::AudioFrame(frame)) => {
                     if !self.disable_audio {
+                        crate::clanto::session_log::mark_permission(self.inner.id(), "audio");
                         if let Some(sender) = &self.audio_sender {
                             allow_err!(sender.send(MediaData::AudioFrame(Box::new(frame))));
                         } else {
@@ -4064,8 +4170,12 @@ impl Connection {
                         self.refresh_video_display(Some(request.display as usize));
                     }
                 }
-                Some(message::Union::PortForwardChannel(ch)) => self.handle_port_forward_channel(ch),
+                Some(message::Union::PortForwardChannel(ch)) => {
+                    crate::clanto::session_log::mark_permission(self.inner.id(), "tunnel");
+                    self.handle_port_forward_channel(ch)
+                }
                 Some(message::Union::TerminalAction(action)) => {
+                    crate::clanto::session_log::mark_permission(self.inner.id(), "terminal");
                     #[cfg(not(any(target_os = "android", target_os = "ios")))]
                     allow_err!(self.handle_terminal_action(action).await);
                     #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -6467,6 +6577,9 @@ pub enum AlarmAuditType {
     TerminalOsLoginConcurrency = 8,
     SessionScopeViolation = 9,
     IdWhitelist = 10,
+    PostureRejected = 11,
+    PasswordWrong = 12,
+    TwoFactorWrong = 13,
 }
 
 pub enum FileAuditType {

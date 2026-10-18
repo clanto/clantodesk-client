@@ -49,10 +49,11 @@ class _ClantoPrivacyPromptSettingState
 
   @override
   Widget build(BuildContext context) {
+    final enabled = !isOptionFixed(kOptClantoPrivacyPrompt);
     return GestureDetector(
-      onTap: _toggle,
+      onTap: enabled ? _toggle : null,
       child: Row(children: [
-        Checkbox(value: _on, onChanged: (_) => _toggle()),
+        Checkbox(value: _on, onChanged: enabled ? (_) => _toggle() : null),
         Expanded(
             child: Text(translate(
                 'Ask to enable privacy mode at the start of every session'))),
@@ -67,7 +68,9 @@ SettingsTile clantoPrivacyPromptTile(VoidCallback refresh) {
     initialValue: clantoPrivacyPromptEnabled(),
     title: Text(translate(
         'Ask to enable privacy mode at the start of every session')),
-    onToggle: (v) async {
+    onToggle: isOptionFixed(kOptClantoPrivacyPrompt)
+        ? null
+        : (v) async {
       await _setPrivacyPromptEnabled(v);
       refresh();
     },

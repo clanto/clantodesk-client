@@ -88,6 +88,7 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
   Widget _field(String label, TextEditingController controller,
       {double width = 220,
       bool numeric = false,
+      required String optionKey,
       required ValueChanged<String> onDone}) {
     return Row(children: [
       SizedBox(width: 90, child: Text(translate(label))),
@@ -95,7 +96,7 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
         width: width,
         child: TextField(
           controller: controller,
-          enabled: widget.enabled && _syslogOn,
+          enabled: widget.enabled && _syslogOn && !isOptionFixed(optionKey),
           keyboardType: numeric ? TextInputType.number : TextInputType.text,
           inputFormatters:
               numeric ? [FilteringTextInputFormatter.digitsOnly] : null,
@@ -114,7 +115,7 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
       _checkbox(
         'Send audit events to syslog',
         _syslogOn,
-        canEdit
+        canEdit && !isOptionFixed(kOptClantoSyslogEnabled)
             ? (v) async {
                 await _setOn(kOptClantoSyslogEnabled, v == true);
                 setState(() => _syslogOn = v == true);
@@ -123,9 +124,14 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
       ),
       if (_syslogOn) ...[
         _field('Host', _host,
+            optionKey: kOptClantoSyslogHost,
             onDone: (v) =>
                 bind.mainSetOption(key: kOptClantoSyslogHost, value: v.trim())),
-        _field('Port', _port, width: 100, numeric: true, onDone: (v) {
+        _field('Port', _port,
+            width: 100,
+            numeric: true,
+            optionKey: kOptClantoSyslogPort,
+            onDone: (v) {
           final p = int.tryParse(v.trim());
           bind.mainSetOption(
               key: kOptClantoSyslogPort,
@@ -135,7 +141,7 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
           SizedBox(width: 90, child: Text(translate('Protocol'))),
           DropdownButton<String>(
             value: _protocol,
-            onChanged: canEdit
+            onChanged: canEdit && !isOptionFixed(kOptClantoSyslogProtocol)
                 ? (v) async {
                     if (v == null) return;
                     await bind.mainSetOption(
@@ -149,7 +155,11 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
             ],
           ),
         ]).marginOnly(left: 25, top: 8),
-        _field('Facility', _facility, width: 100, numeric: true, onDone: (v) {
+        _field('Facility', _facility,
+            width: 100,
+            numeric: true,
+            optionKey: kOptClantoSyslogFacility,
+            onDone: (v) {
           final f = int.tryParse(v.trim());
           bind.mainSetOption(
               key: kOptClantoSyslogFacility,
@@ -167,7 +177,7 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
         _checkbox(
           'Write audit events to Windows Event Log',
           _eventLogOn,
-          canEdit
+          canEdit && !isOptionFixed(kOptClantoEventLogEnabled)
               ? (v) async {
                   await _setOn(kOptClantoEventLogEnabled, v == true);
                   setState(() => _eventLogOn = v == true);

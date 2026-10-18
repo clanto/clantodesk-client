@@ -3,6 +3,11 @@
 
 //! Branding e configurazione obbligatoria dell'infrastruttura ClantoDesk.
 
+use super::{
+    outgoing::{self, OPT_CLIPBOARD, OPT_FILE_TRANSFER},
+    posture::{OPT_POSTURE_BYPASS, OPT_REQUIRE_PROTECTED_DEVICE},
+    session_log::OPT_SESSION_LOG_DAYS,
+};
 use base::config::keys;
 use hbb_common::{
     config::{self, Config},
@@ -40,13 +45,16 @@ fn apply_new_peer_defaults() {
 
 /// Predefiniti lato PC controllato (chiavi di `KEYS_SETTINGS`), in
 /// `DEFAULT_SETTINGS`: un valore salvato dall'utente vince. Il timeout e' in minuti.
-const HOST_DEFAULTS: [(&str, &str); 6] = [
+const HOST_DEFAULTS: [(&str, &str); 9] = [
     (keys::OPTION_ALLOW_AUTO_DISCONNECT, "Y"),
     (keys::OPTION_AUTO_DISCONNECT_TIMEOUT, "10"),
     (keys::OPTION_ENABLE_LAN_DISCOVERY, "N"),
     (keys::OPTION_ENABLE_TUNNEL, "N"),
     (keys::OPTION_ENABLE_REMOTE_RESTART, "N"),
     (keys::OPTION_ENABLE_TERMINAL, "N"),
+    (OPT_REQUIRE_PROTECTED_DEVICE, "N"),
+    (OPT_POSTURE_BYPASS, ""),
+    (OPT_SESSION_LOG_DAYS, "180"),
 ];
 
 fn apply_host_defaults() {
@@ -117,6 +125,8 @@ pub fn apply_build_config() {
         "relay-server".to_owned(),
         option_env!("RELAY_SERVER").unwrap_or("").to_owned(),
     );
+    super::gpo::apply();
+    apply_outgoing_restrictions();
 
     // Ruolo della build, fissato alla compilazione e non modificabile a runtime.
     // "outgoing" toglie il lato controllato: `RendezvousMediator::start_all` non
@@ -145,6 +155,19 @@ pub fn apply_build_config() {
                 );
             }
         }
+    }
+}
+
+fn apply_outgoing_restrictions() {
+    let mut overwrite = config::OVERWRITE_DISPLAY_SETTINGS.write().unwrap();
+    if !outgoing::allowed(OPT_CLIPBOARD) {
+        overwrite.insert(keys::OPTION_DISABLE_CLIPBOARD.to_owned(), "Y".to_owned());
+    }
+    if !outgoing::allowed(OPT_FILE_TRANSFER) {
+        overwrite.insert(
+            keys::OPTION_ENABLE_FILE_COPY_PASTE.to_owned(),
+            "N".to_owned(),
+        );
     }
 }
 

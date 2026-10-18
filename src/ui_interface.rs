@@ -70,6 +70,7 @@ lazy_static::lazy_static! {
     static ref ASYNC_JOB_STATUS : Arc<Mutex<String>> = Default::default();
     static ref ASYNC_HTTP_STATUS : Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
     static ref TEMPORARY_PASSWD : Arc<Mutex<String>> = Arc::new(Mutex::new("".to_owned()));
+    static ref TEMPORARY_PASSWD_ROTATION_NEXT: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
     static ref IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS : Arc<Mutex<Option<bool>>> = Arc::new(Mutex::new(None));
 }
 
@@ -599,6 +600,14 @@ pub fn temporary_password() -> String {
     return password_security::temporary_password();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     return TEMPORARY_PASSWD.lock().unwrap().clone();
+}
+
+#[inline]
+pub fn temporary_password_rotation_next() -> u64 {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    return crate::clanto::temp_password::next_rotation_epoch().unwrap_or_default();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    return *TEMPORARY_PASSWD_ROTATION_NEXT.lock().unwrap();
 }
 
 #[inline]
@@ -1385,6 +1394,9 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                                     }
                                 } else if name == "temporary-password" {
                                     *TEMPORARY_PASSWD.lock().unwrap() = value;
+                                } else if name == "temporary-password-rotate-next" {
+                                    *TEMPORARY_PASSWD_ROTATION_NEXT.lock().unwrap() =
+                                        value.parse().unwrap_or_default();
                                 }
                             }
                             #[cfg(feature = "flutter")]
@@ -1435,6 +1447,7 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                         c.send(&ipc::Data::Options(None)).await.ok();
                         c.send(&ipc::Data::Config(("id".to_owned(), None))).await.ok();
                         c.send(&ipc::Data::Config(("temporary-password".to_owned(), None))).await.ok();
+                        c.send(&ipc::Data::Config(("temporary-password-rotate-next".to_owned(), None))).await.ok();
                         #[cfg(feature = "flutter")]
                         c.send(&ipc::Data::VideoConnCount(None)).await.ok();
                         c.send(&ipc::Data::ControlPermissionsRemoteModify(None)).await.ok();

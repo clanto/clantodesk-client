@@ -1220,6 +1220,15 @@ class RustdeskImpl {
     return Future.value('');
   }
 
+  Future<int> mainGetTemporaryPasswordRotationNext({dynamic hint}) {
+    return Future.value(0);
+  }
+
+  Future<String> mainGetSessionReport(
+      {required int fromMs, required int toMs, dynamic hint}) {
+    return Future.value('[]');
+  }
+
   Future<String> mainGetFingerprint({dynamic hint}) {
     return Future.value('');
   }

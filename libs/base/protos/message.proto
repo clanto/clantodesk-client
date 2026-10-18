@@ -84,6 +84,8 @@ message LoginRequest {
   string my_platform = 13;
   bytes hwid = 14;
   string avatar = 17;
+  map<string, string> clanto_posture = 1000;
+  bytes clanto_posture_mac = 1001;
 }
 
 message Terminal {

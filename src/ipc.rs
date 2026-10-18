@@ -940,6 +940,12 @@ async fn handle(data: Data, stream: &mut Connection) {
                     value = Some(Config::get_id());
                 } else if name == "temporary-password" {
                     value = Some(password::temporary_password());
+                } else if name == "temporary-password-rotate-next" {
+                    value = Some(
+                        crate::clanto::temp_password::next_rotation_epoch()
+                            .unwrap_or_default()
+                            .to_string(),
+                    );
                 } else if name == "permanent-password-storage-and-salt" {
                     let (storage, salt) = Config::get_local_permanent_password_storage_and_salt();
                     value = Some(storage + "\n" + &salt);
@@ -984,6 +990,11 @@ async fn handle(data: Data, stream: &mut Connection) {
                     value = Some(Config::get_unlock_pin());
                 } else if name == "trusted-devices" {
                     value = Some(Config::get_trusted_devices_json());
+                } else if let Some(range) = name.strip_prefix("clanto-session-report:") {
+                    let mut values = range.split(':');
+                    let from_ms = values.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+                    let to_ms = values.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+                    value = Some(crate::clanto::session_log::report_json(from_ms, to_ms));
                 } else {
                     value = None;
                 }

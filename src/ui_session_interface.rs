@@ -467,6 +467,9 @@ impl<T: InvokeUiSession> Session<T> {
     }
 
     pub fn record_screen(&self, start: bool) {
+        if start && !crate::clanto::outgoing::allowed(crate::clanto::outgoing::OPT_RECORD) {
+            return;
+        }
         self.send(Data::RecordScreen(start));
     }
 

@@ -1300,6 +1300,16 @@ pub fn session_add(
         ConnType::DEFAULT_CONN
     };
 
+    let outgoing_key = match conn_type {
+        ConnType::FILE_TRANSFER => Some(crate::clanto::outgoing::OPT_FILE_TRANSFER),
+        ConnType::PORT_FORWARD | ConnType::RDP => Some(crate::clanto::outgoing::OPT_TUNNEL),
+        ConnType::TERMINAL => Some(crate::clanto::outgoing::OPT_TERMINAL),
+        _ => None,
+    };
+    if outgoing_key.is_some_and(|key| !crate::clanto::outgoing::allowed(key)) {
+        bail!("Blocked by this PC's outgoing restrictions");
+    }
+
     // to-do: check the same id session.
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         if session.lc.read().unwrap().conn_type != conn_type {

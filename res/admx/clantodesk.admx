@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitions revision="1.0" schemaVersion="1.0" xmlns="http://www.microsoft.com/GroupPolicy/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="clantodesk" namespace="Clanto.Policies.ClantoDesk" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <supportedOn>
+    <definitions>
+      <definition name="ClantoDesk150" displayName="$(string.ClantoDesk150)">
+      </definition>
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="SessionPermissions" displayName="$(string.SessionPermissions)" />
+    <category name="InboundSecurity" displayName="$(string.InboundSecurity)" />
+    <category name="OutgoingSessions" displayName="$(string.OutgoingSessions)" />
+    <category name="AuditSiem" displayName="$(string.AuditSiem)" />
+    <category name="Interface" displayName="$(string.Interface)" />
+  </categories>
+  <policies>
+    <policy name="EnableRemotePrinter" class="Machine" displayName="$(string.EnableRemotePrinter)" explainText="$(string.EnableRemotePrinter_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-remote-printer" presentation="$(presentation.EnableRemotePrinter)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableClipboard" class="Machine" displayName="$(string.EnableClipboard)" explainText="$(string.EnableClipboard_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-clipboard" presentation="$(presentation.EnableClipboard)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableFileTransfer" class="Machine" displayName="$(string.EnableFileTransfer)" explainText="$(string.EnableFileTransfer_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-file-transfer" presentation="$(presentation.EnableFileTransfer)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableCamera" class="Machine" displayName="$(string.EnableCamera)" explainText="$(string.EnableCamera_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-camera" presentation="$(presentation.EnableCamera)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableTerminal" class="Machine" displayName="$(string.EnableTerminal)" explainText="$(string.EnableTerminal_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-terminal" presentation="$(presentation.EnableTerminal)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableTunnel" class="Machine" displayName="$(string.EnableTunnel)" explainText="$(string.EnableTunnel_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-tunnel" presentation="$(presentation.EnableTunnel)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableRemoteRestart" class="Machine" displayName="$(string.EnableRemoteRestart)" explainText="$(string.EnableRemoteRestart_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-remote-restart" presentation="$(presentation.EnableRemoteRestart)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableRecordSession" class="Machine" displayName="$(string.EnableRecordSession)" explainText="$(string.EnableRecordSession_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-record-session" presentation="$(presentation.EnableRecordSession)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableKeyboard" class="Machine" displayName="$(string.EnableKeyboard)" explainText="$(string.EnableKeyboard_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-keyboard" presentation="$(presentation.EnableKeyboard)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableAudio" class="Machine" displayName="$(string.EnableAudio)" explainText="$(string.EnableAudio_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-audio" presentation="$(presentation.EnableAudio)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EnableLanDiscovery" class="Machine" displayName="$(string.EnableLanDiscovery)" explainText="$(string.EnableLanDiscovery_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-lan-discovery" presentation="$(presentation.EnableLanDiscovery)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="AllowAutoDisconnect" class="Machine" displayName="$(string.AllowAutoDisconnect)" explainText="$(string.AllowAutoDisconnect_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="allow-auto-disconnect" presentation="$(presentation.AllowAutoDisconnect)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="AutoDisconnectTimeout" class="Machine" displayName="$(string.AutoDisconnectTimeout)" explainText="$(string.AutoDisconnectTimeout_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.AutoDisconnectTimeout)">
+      <parentCategory ref="SessionPermissions" />
+      <supportedOn ref="ClantoDesk150" /><elements><decimal id="AutoDisconnectTimeoutValue" valueName="auto-disconnect-timeout" minValue="1" maxValue="65535" /></elements></policy>
+    <policy name="VerificationMethod" class="Machine" displayName="$(string.VerificationMethod)" explainText="$(string.VerificationMethod_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.VerificationMethod)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><enum id="VerificationMethodValue" valueName="verification-method"><item displayName="$(string.VerificationTemporary)"><value><string>use-temporary-password</string></value></item><item displayName="$(string.VerificationPermanent)"><value><string>use-permanent-password</string></value></item><item displayName="$(string.VerificationBoth)"><value><string>use-both-passwords</string></value></item></enum></elements></policy>
+    <policy name="ApproveMode" class="Machine" displayName="$(string.ApproveMode)" explainText="$(string.ApproveMode_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ApproveMode)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><enum id="ApproveModeValue" valueName="approve-mode"><item displayName="$(string.ApprovePassword)"><value><string>password</string></value></item><item displayName="$(string.ApproveClick)"><value><string>click</string></value></item><item displayName="$(string.ApproveBoth)"><value><string>both</string></value></item></enum></elements></policy>
+    <policy name="IdWhitelist" class="Machine" displayName="$(string.IdWhitelist)" explainText="$(string.IdWhitelist_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.IdWhitelist)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="IdWhitelistValue" valueName="id-whitelist" /></elements></policy>
+    <policy name="TemporaryPasswordRotation" class="Machine" displayName="$(string.TemporaryPasswordRotation)" explainText="$(string.TemporaryPasswordRotation_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.TemporaryPasswordRotation)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><decimal id="TemporaryPasswordRotationValue" valueName="clanto-temp-password-rotate-minutes" minValue="0" maxValue="1440" /></elements></policy>
+    <policy name="RequireProtectedDevice" class="Machine" displayName="$(string.RequireProtectedDevice)" explainText="$(string.RequireProtectedDevice_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-require-protected-device" presentation="$(presentation.RequireProtectedDevice)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="PostureBypass" class="Machine" displayName="$(string.PostureBypass)" explainText="$(string.PostureBypass_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.PostureBypass)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="PostureBypassValue" valueName="clanto-posture-bypass" /></elements></policy>
+    <policy name="OutgoingFileTransfer" class="Machine" displayName="$(string.OutgoingFileTransfer)" explainText="$(string.OutgoingFileTransfer_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-outgoing-file-transfer" presentation="$(presentation.OutgoingFileTransfer)">
+      <parentCategory ref="OutgoingSessions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="OutgoingClipboard" class="Machine" displayName="$(string.OutgoingClipboard)" explainText="$(string.OutgoingClipboard_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-outgoing-clipboard" presentation="$(presentation.OutgoingClipboard)">
+      <parentCategory ref="OutgoingSessions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="OutgoingTunnel" class="Machine" displayName="$(string.OutgoingTunnel)" explainText="$(string.OutgoingTunnel_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-outgoing-tunnel" presentation="$(presentation.OutgoingTunnel)">
+      <parentCategory ref="OutgoingSessions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="OutgoingTerminal" class="Machine" displayName="$(string.OutgoingTerminal)" explainText="$(string.OutgoingTerminal_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-outgoing-terminal" presentation="$(presentation.OutgoingTerminal)">
+      <parentCategory ref="OutgoingSessions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="OutgoingRemotePrinter" class="Machine" displayName="$(string.OutgoingRemotePrinter)" explainText="$(string.OutgoingRemotePrinter_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-outgoing-remote-printer" presentation="$(presentation.OutgoingRemotePrinter)">
+      <parentCategory ref="OutgoingSessions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="OutgoingRecord" class="Machine" displayName="$(string.OutgoingRecord)" explainText="$(string.OutgoingRecord_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-outgoing-record" presentation="$(presentation.OutgoingRecord)">
+      <parentCategory ref="OutgoingSessions" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="EventLogEnabled" class="Machine" displayName="$(string.EventLogEnabled)" explainText="$(string.EventLogEnabled_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-eventlog-enabled" presentation="$(presentation.EventLogEnabled)">
+      <parentCategory ref="AuditSiem" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="SyslogEnabled" class="Machine" displayName="$(string.SyslogEnabled)" explainText="$(string.SyslogEnabled_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-syslog-enabled" presentation="$(presentation.SyslogEnabled)">
+      <parentCategory ref="AuditSiem" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="SyslogHost" class="Machine" displayName="$(string.SyslogHost)" explainText="$(string.SyslogHost_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SyslogHost)">
+      <parentCategory ref="AuditSiem" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="SyslogHostValue" valueName="clanto-syslog-host" /></elements></policy>
+    <policy name="SyslogPort" class="Machine" displayName="$(string.SyslogPort)" explainText="$(string.SyslogPort_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SyslogPort)">
+      <parentCategory ref="AuditSiem" />
+      <supportedOn ref="ClantoDesk150" /><elements><decimal id="SyslogPortValue" valueName="clanto-syslog-port" minValue="1" maxValue="65535" /></elements></policy>
+    <policy name="SyslogProtocol" class="Machine" displayName="$(string.SyslogProtocol)" explainText="$(string.SyslogProtocol_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SyslogProtocol)">
+      <parentCategory ref="AuditSiem" />
+      <supportedOn ref="ClantoDesk150" /><elements><enum id="SyslogProtocolValue" valueName="clanto-syslog-protocol"><item displayName="$(string.SyslogUdp)"><value><string>udp</string></value></item><item displayName="$(string.SyslogTcp)"><value><string>tcp</string></value></item></enum></elements></policy>
+    <policy name="SyslogFacility" class="Machine" displayName="$(string.SyslogFacility)" explainText="$(string.SyslogFacility_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SyslogFacility)">
+      <parentCategory ref="AuditSiem" />
+      <supportedOn ref="ClantoDesk150" /><elements><decimal id="SyslogFacilityValue" valueName="clanto-syslog-facility" minValue="0" maxValue="23" /></elements></policy>
+    <policy name="SessionLogDays" class="Machine" displayName="$(string.SessionLogDays)" explainText="$(string.SessionLogDays_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.SessionLogDays)">
+      <parentCategory ref="AuditSiem" />
+      <supportedOn ref="ClantoDesk150" /><elements><decimal id="SessionLogDaysValue" valueName="clanto-session-log-days" minValue="0" maxValue="3650" /></elements></policy>
+    <policy name="PrivacyPrompt" class="Machine" displayName="$(string.PrivacyPrompt)" explainText="$(string.PrivacyPrompt_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-privacy-prompt" presentation="$(presentation.PrivacyPrompt)">
+      <parentCategory ref="Interface" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+  </policies>
+</policyDefinitions>

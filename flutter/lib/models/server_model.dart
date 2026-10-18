@@ -36,6 +36,7 @@ class ServerModel with ChangeNotifier {
   int _connectStatus = 0; // Rendezvous Server status
   String _verificationMethod = "";
   String _temporaryPasswordLength = "";
+  String _temporaryPasswordRotationCountdown = "";
   bool _allowNumericOneTimePassword = false;
   String _approveMode = "";
   int _zeroClientLengthCounter = 0;
@@ -100,6 +101,9 @@ class ServerModel with ChangeNotifier {
     }
     return _temporaryPasswordLength;
   }
+
+  String get temporaryPasswordRotationCountdown =>
+      _temporaryPasswordRotationCountdown;
 
   setTemporaryPasswordLength(String length) async {
     await bind.mainSetOption(key: "temporary-password-length", value: length);
@@ -226,6 +230,8 @@ class ServerModel with ChangeNotifier {
   updatePasswordModel() async {
     var update = false;
     final temporaryPassword = await bind.mainGetTemporaryPassword();
+    final temporaryPasswordRotationNext =
+        await bind.mainGetTemporaryPasswordRotationNext();
     final verificationMethod =
         await bind.mainGetOption(key: kOptionVerificationMethod);
     final temporaryPasswordLength =
@@ -258,6 +264,20 @@ class ServerModel with ChangeNotifier {
       }
     }
     if (oldPwdText != _serverPasswd.text) {
+      update = true;
+    }
+    final remainingSeconds = temporaryPasswordRotationNext == 0
+        ? -1
+        : temporaryPasswordRotationNext -
+            DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final rotationCountdown = remainingSeconds < 0
+        ? ''
+        : translate('Changes in {}').replaceFirst(
+            '{}',
+            '${remainingSeconds ~/ 60}:${(remainingSeconds % 60).toString().padLeft(2, '0')}',
+          );
+    if (_temporaryPasswordRotationCountdown != rotationCountdown) {
+      _temporaryPasswordRotationCountdown = rotationCountdown;
       update = true;
     }
     if (_verificationMethod != verificationMethod) {

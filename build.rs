@@ -1,3 +1,53 @@
+use sha2::{Digest, Sha256};
+
+fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
+    const BLOCK_SIZE: usize = 64;
+    let mut key_block = [0_u8; BLOCK_SIZE];
+    if key.len() > BLOCK_SIZE {
+        key_block[..32].copy_from_slice(&Sha256::digest(key));
+    } else {
+        key_block[..key.len()].copy_from_slice(key);
+    }
+    let mut inner = Sha256::new();
+    inner.update(key_block.map(|b| b ^ 0x36));
+    inner.update(message);
+    let inner = inner.finalize();
+    let mut outer = Sha256::new();
+    outer.update(key_block.map(|b| b ^ 0x5c));
+    outer.update(inner);
+    outer.finalize().into()
+}
+
+fn emit_clanto_posture_key() {
+    println!("cargo:rerun-if-env-changed=CLANTO_POSTURE_MASTER");
+    let Ok(master) = std::env::var("CLANTO_POSTURE_MASTER") else {
+        return;
+    };
+    if master.is_empty() {
+        return;
+    }
+    let version = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
+    let message = format!("clanto-posture-key\n{version}");
+    let key = hmac_sha256(master.as_bytes(), message.as_bytes());
+    let mut mask = [0_u8; 32];
+    if getrandom::getrandom(&mut mask).is_err() {
+        panic!("impossibile generare la maschera della chiave postura");
+    }
+    let masked: Vec<u8> = key
+        .iter()
+        .zip(mask)
+        .map(|(key, mask)| *key ^ mask)
+        .collect();
+    println!(
+        "cargo:rustc-env=CLANTO_POSTURE_KEY_MASKED={}",
+        hex::encode(masked)
+    );
+    println!(
+        "cargo:rustc-env=CLANTO_POSTURE_KEY_MASK={}",
+        hex::encode(mask)
+    );
+}
+
 #[cfg(windows)]
 fn build_windows() {
     let file = "src/platform/windows.cc";
@@ -87,6 +137,7 @@ fn install_android_deps() {
 
 fn main() {
     hbb_common::gen_version();
+    emit_clanto_posture_key();
     install_android_deps();
     #[cfg(all(windows, feature = "inline"))]
     build_manifest();

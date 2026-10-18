@@ -273,10 +273,14 @@ winapi = { version = "0.3", features = [ "winnt", "pdh", "synchapi" ] }
 
 [build-dependencies]
 cc = "1.0"
+getrandom = "0.2"
 hbb_common = { path = "libs/hbb_common" }
+hex = "0.4"
 os-version = "0.2"
+sha2 = "0.10"
 
 [dev-dependencies]
+hmac = "0.12"
 hound = "3.5"
 docopt = "1.1"
 tokio = { version = "1.44", features = ["test-util"] }

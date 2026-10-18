@@ -1,0 +1,569 @@
+// SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
+// SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
+
+//! Registro locale, non bloccante, delle sessioni in entrata.
+
+use chrono::{DateTime, Local, Utc};
+use hbb_common::{config::Config, log};
+use serde_derive::Serialize;
+use serde_json::{json, Value};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::{self, OpenOptions},
+    io::Write,
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Mutex, Once, OnceLock,
+    },
+    time::{Duration, SystemTime},
+};
+
+pub const OPT_SESSION_LOG_DAYS: &str = "clanto-session-log-days";
+const MAX_FILES: usize = 50;
+const CLEANUP_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+
+#[derive(Clone, Default, Serialize)]
+struct SessionRecord {
+    record_type: String,
+    session_key: String,
+    conn_id: i32,
+    started_at: String,
+    ended_at: String,
+    duration_secs: Option<u64>,
+    peer_id: String,
+    peer_name: String,
+    ip: String,
+    connection_type: String,
+    primary_auth: Option<i64>,
+    two_factor: Option<i64>,
+    posture_result: String,
+    posture_bypasses: Vec<String>,
+    permissions_used: HashSet<String>,
+    files: Vec<FileRecord>,
+    close_reason: String,
+    closed: bool,
+}
+
+#[derive(Clone, Serialize)]
+struct FileRecord {
+    direction: String,
+    name: String,
+    size: i64,
+}
+
+#[derive(Default)]
+struct Registry {
+    sessions: HashMap<String, SessionRecord>,
+    active_by_conn: HashMap<i32, String>,
+}
+
+#[derive(Debug)]
+enum WriterMessage {
+    Append(Value),
+    Clear,
+}
+
+static REGISTRY: OnceLock<Mutex<Registry>> = OnceLock::new();
+static LAST_CLEANUP: OnceLock<Mutex<Option<SystemTime>>> = OnceLock::new();
+static DISABLED_CLEARED: AtomicBool = AtomicBool::new(false);
+static WRITER: OnceLock<mpsc::Sender<WriterMessage>> = OnceLock::new();
+static MAINTENANCE: Once = Once::new();
+
+fn registry() -> &'static Mutex<Registry> {
+    REGISTRY.get_or_init(|| Mutex::new(Registry::default()))
+}
+
+fn retention_days() -> u64 {
+    Config::get_option(OPT_SESSION_LOG_DAYS)
+        .parse::<u64>()
+        .ok()
+        .map(|days| days.min(3650))
+        .unwrap_or(180)
+}
+
+fn enabled() -> bool {
+    logging_enabled_for(retention_days())
+}
+
+fn logging_enabled_for(days: u64) -> bool {
+    days != 0
+}
+
+fn now() -> DateTime<Utc> {
+    Utc::now()
+}
+
+fn key(conn_id: i32, started_at: &str) -> String {
+    format!("{}:{}", conn_id, started_at)
+}
+
+fn value_str(value: &Value, key: &str) -> String {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn value_i64(value: &Value, key: &str) -> Option<i64> {
+    value.get(key).and_then(Value::as_i64)
+}
+
+fn connection_type(value: &Value) -> String {
+    match value.get("type").and_then(Value::as_i64) {
+        Some(1) => "file".to_owned(),
+        Some(2) => "tunnel".to_owned(),
+        Some(3) => "camera".to_owned(),
+        Some(4) => "terminal".to_owned(),
+        _ => "control".to_owned(),
+    }
+}
+
+fn session_for<'a>(registry: &'a mut Registry, conn_id: i32) -> Option<&'a mut SessionRecord> {
+    let key = registry.active_by_conn.get(&conn_id)?.clone();
+    registry.sessions.get_mut(&key)
+}
+
+fn start(value: &Value) -> Option<SessionRecord> {
+    let conn_id = value.get("conn_id")?.as_i64()? as i32;
+    let started_at = now().to_rfc3339();
+    Some(SessionRecord {
+        record_type: "session".to_owned(),
+        session_key: key(conn_id, &started_at),
+        conn_id,
+        started_at,
+        ip: value_str(value, "ip"),
+        posture_result: "not_checked".to_owned(),
+        ..Default::default()
+    })
+}
+
+/// Riceve gli eventi già emessi dall'audit upstream. Non esegue I/O nel thread
+/// della sessione: l'apertura e la chiusura vengono scritte da un thread breve.
+pub fn on_audit(kind: &str, value: &Value) {
+    if !enabled() {
+        clear_if_disabled();
+        return;
+    }
+    DISABLED_CLEARED.store(false, Ordering::Release);
+    cleanup_if_due();
+    match kind {
+        "conn" => on_connection(value),
+        "file" => on_file(value),
+        "alarm" => on_alarm(value),
+        _ => {}
+    }
+}
+
+/// Avvia la manutenzione una volta che i default e le policy sono stati caricati.
+pub fn initialize() {
+    if enabled() {
+        cleanup_if_due();
+    } else {
+        clear_if_disabled();
+    }
+    MAINTENANCE.call_once(|| {
+        if let Err(err) = std::thread::Builder::new()
+            .name("clanto-session-log-maintenance".to_owned())
+            .spawn(|| loop {
+                std::thread::sleep(CLEANUP_INTERVAL);
+                if enabled() {
+                    DISABLED_CLEARED.store(false, Ordering::Release);
+                    cleanup_old_files(&log_dir(), retention_days());
+                } else {
+                    clear_if_disabled();
+                }
+            })
+        {
+            log::debug!("session log maintenance: {}", err);
+        }
+    });
+}
+
+fn on_connection(value: &Value) {
+    let mut registry = registry().lock().unwrap_or_else(|e| e.into_inner());
+    let to_write = apply_connection(&mut registry, value);
+    drop(registry);
+    if let Some(record) = to_write {
+        write_async(record);
+    }
+}
+
+fn apply_connection(registry: &mut Registry, value: &Value) -> Option<SessionRecord> {
+    if value.get("action").and_then(Value::as_str) == Some("new") {
+        let record = start(value)?;
+        let opening = record.clone();
+        registry
+            .active_by_conn
+            .insert(record.conn_id, record.session_key.clone());
+        registry.sessions.insert(record.session_key.clone(), record);
+        return Some(opening);
+    }
+    let conn_id = value
+        .get("conn_id")
+        .and_then(Value::as_i64)
+        .map(|id| id as i32)?;
+    let mut to_write = None;
+    if let Some(record) = session_for(registry, conn_id) {
+        if value.get("action").and_then(Value::as_str) == Some("close") {
+            record.ended_at = now().to_rfc3339();
+            record.duration_secs = value.get("duration_secs").and_then(Value::as_u64);
+            record.closed = true;
+            record.close_reason = value_str(value, "reason");
+            if record.close_reason.is_empty() {
+                record.close_reason = "end".to_owned();
+            }
+            to_write = Some(record.clone());
+        } else if let Some(peer) = value.get("peer").and_then(Value::as_array) {
+            record.peer_id = peer
+                .first()
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            record.peer_name = peer
+                .get(1)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            record.connection_type = connection_type(value);
+            record.primary_auth = value_i64(value, "primary_auth");
+            record.two_factor = value_i64(value, "two_factor");
+            if let Some(result) = value.get("posture_result").and_then(Value::as_str) {
+                record.posture_result = result.to_owned();
+            }
+        }
+        if let Some(bypasses) = value.get("posture_bypasses").and_then(Value::as_array) {
+            record.posture_result = "bypassed".to_owned();
+            record.posture_bypasses = bypasses
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect();
+        }
+    }
+    if to_write.is_some() {
+        registry.active_by_conn.remove(&conn_id);
+    }
+    to_write
+}
+
+fn on_file(value: &Value) {
+    let Some(conn_id) = value
+        .get("conn_id")
+        .and_then(Value::as_i64)
+        .map(|id| id as i32)
+    else {
+        return;
+    };
+    let direction = match value.get("type").and_then(Value::as_i64) {
+        Some(0) => "to_peer",
+        _ => "from_peer",
+    }
+    .to_owned();
+    let info = value
+        .get("info")
+        .and_then(Value::as_str)
+        .and_then(|info| serde_json::from_str::<Value>(info).ok());
+    let mut registry = registry().lock().unwrap_or_else(|e| e.into_inner());
+    let Some(record) = session_for(&mut registry, conn_id) else {
+        return;
+    };
+    record.permissions_used.insert("file_transfer".to_owned());
+    if let Some(files) = info
+        .and_then(|info| info.get("files").cloned())
+        .and_then(|files| files.as_array().cloned())
+    {
+        for file in files {
+            if record.files.len() == MAX_FILES {
+                break;
+            }
+            if let Some(values) = file.as_array() {
+                record.files.push(FileRecord {
+                    direction: direction.clone(),
+                    name: values
+                        .first()
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    size: values.get(1).and_then(Value::as_i64).unwrap_or_default(),
+                });
+            }
+        }
+    }
+}
+
+fn on_alarm(value: &Value) {
+    let mut record = json!({
+        "record_type": "rejected_attempt",
+        "occurred_at": now().to_rfc3339(),
+        "conn_id": value.get("conn_id").cloned().unwrap_or(Value::Null),
+        "alarm_type": value.get("typ").cloned().unwrap_or(Value::Null),
+        "details": value.get("info").cloned().unwrap_or(Value::Null),
+    });
+    if let Some(info) = value
+        .get("info")
+        .and_then(Value::as_str)
+        .and_then(|v| serde_json::from_str::<Value>(v).ok())
+    {
+        record["ip"] = info.get("ip").cloned().unwrap_or(Value::Null);
+        record["peer_id"] = info.get("id").cloned().unwrap_or(Value::Null);
+        record["peer_name"] = info.get("name").cloned().unwrap_or(Value::Null);
+    }
+    write_value_async(record);
+}
+
+/// Segna il primo utilizzo del permesso, senza memorizzare contenuti sensibili.
+pub fn mark_permission(conn_id: i32, permission: &'static str) {
+    if !enabled() {
+        return;
+    }
+    if let Ok(mut registry) = registry().try_lock() {
+        mark_permission_in(&mut registry, conn_id, permission);
+    }
+}
+
+fn mark_permission_in(registry: &mut Registry, conn_id: i32, permission: &str) {
+    if let Some(record) = session_for(registry, conn_id) {
+        record.permissions_used.insert(permission.to_owned());
+    }
+}
+
+/// Restituisce il riepilogo completo da inoltrare a syslog/Event Log alla chiusura.
+pub fn completed_session(conn_id: i32) -> Option<Value> {
+    let mut registry = registry().lock().unwrap_or_else(|e| e.into_inner());
+    let key = registry
+        .sessions
+        .iter()
+        .find(|(_, record)| record.conn_id == conn_id && record.closed)
+        .map(|(key, _)| key.clone())?;
+    serde_json::to_value(registry.sessions.remove(&key)?).ok()
+}
+
+fn log_dir() -> PathBuf {
+    Config::path("session-reports")
+}
+
+fn write_async(record: SessionRecord) {
+    if let Ok(value) = serde_json::to_value(record) {
+        write_value_async(value);
+    }
+}
+
+fn write_value_async(value: Value) {
+    if let Err(err) = writer().send(WriterMessage::Append(value)) {
+        log::debug!("session log queue: {}", err);
+    }
+}
+
+fn writer() -> &'static mpsc::Sender<WriterMessage> {
+    WRITER.get_or_init(|| {
+        let (sender, receiver) = mpsc::channel();
+        if let Err(err) = std::thread::Builder::new()
+            .name("clanto-session-log".to_owned())
+            .spawn(move || {
+                for message in receiver {
+                    match message {
+                        WriterMessage::Append(value) if enabled() => {
+                            if let Err(err) = append_record(&log_dir(), &value) {
+                                log::debug!("session log: {}", err);
+                            }
+                        }
+                        WriterMessage::Append(_) => {}
+                        WriterMessage::Clear => clear_files(&log_dir()),
+                    }
+                }
+            })
+        {
+            log::debug!("session log writer: {}", err);
+        }
+        sender
+    })
+}
+
+fn append_record(dir: &Path, value: &Value) -> std::io::Result<()> {
+    fs::create_dir_all(dir)?;
+    let name = format!("sessions-{}.jsonl", Local::now().format("%Y-%m"));
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join(name))?;
+    serde_json::to_writer(&mut file, value)
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+    file.write_all(b"\n")
+}
+
+fn clear_if_disabled() {
+    if DISABLED_CLEARED
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return;
+    }
+    *registry().lock().unwrap_or_else(|e| e.into_inner()) = Registry::default();
+    if let Err(err) = writer().send(WriterMessage::Clear) {
+        log::debug!("session log cleanup queue: {}", err);
+    }
+}
+
+fn clear_files(dir: &Path) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if entry.file_name().to_string_lossy().starts_with("sessions-") {
+                if let Err(err) = fs::remove_file(entry.path()) {
+                    log::debug!("session log cleanup: {}", err);
+                }
+            }
+        }
+    }
+}
+
+fn cleanup_if_due() {
+    let lock = LAST_CLEANUP.get_or_init(|| Mutex::new(None));
+    let mut last = lock.lock().unwrap_or_else(|e| e.into_inner());
+    if last.is_some_and(|at| {
+        at.elapsed()
+            .map_or(false, |elapsed| elapsed < CLEANUP_INTERVAL)
+    }) {
+        return;
+    }
+    *last = Some(SystemTime::now());
+    let days = retention_days();
+    std::thread::spawn(move || cleanup_old_files(&log_dir(), days));
+}
+
+fn cleanup_old_files(dir: &Path, days: u64) {
+    let cutoff = SystemTime::now().checked_sub(Duration::from_secs(days.saturating_mul(86_400)));
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_name().to_string_lossy().starts_with("sessions-") {
+            continue;
+        }
+        let expired = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .zip(cutoff)
+            .is_some_and(|(modified, cutoff)| is_expired(modified, cutoff));
+        if expired {
+            if let Err(err) = fs::remove_file(entry.path()) {
+                log::debug!("session log cleanup: {}", err);
+            }
+        }
+    }
+}
+
+fn is_expired(modified: SystemTime, cutoff: SystemTime) -> bool {
+    modified < cutoff
+}
+
+/// Legge soltanto i metadati già persistiti, filtrati dall'intervallo UNIX in
+/// millisecondi. È chiamata dal processo di servizio attraverso IPC.
+pub fn report_json(from_ms: i64, to_ms: i64) -> String {
+    let mut sessions: HashMap<String, Value> = HashMap::new();
+    let mut records = Vec::new();
+    let Ok(entries) = fs::read_dir(log_dir()) else {
+        return "[]".to_owned();
+    };
+    for entry in entries.flatten() {
+        if !entry.file_name().to_string_lossy().starts_with("sessions-") {
+            continue;
+        }
+        let Ok(data) = fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        for line in data.lines() {
+            let Ok(record) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            let at = record
+                .get("started_at")
+                .or_else(|| record.get("occurred_at"))
+                .and_then(Value::as_str)
+                .and_then(|at| DateTime::parse_from_rfc3339(at).ok())
+                .map(|at| at.timestamp_millis());
+            if at.is_some_and(|at| (from_ms <= 0 || at >= from_ms) && (to_ms <= 0 || at <= to_ms)) {
+                if let Some(key) = record.get("session_key").and_then(Value::as_str) {
+                    let replace = sessions
+                        .get(key)
+                        .and_then(|old: &Value| old.get("closed").and_then(Value::as_bool))
+                        != Some(true)
+                        || record.get("closed").and_then(Value::as_bool) == Some(true);
+                    if replace {
+                        sessions.insert(key.to_owned(), record);
+                    }
+                } else {
+                    records.push(record);
+                }
+            }
+        }
+    }
+    records.extend(sessions.into_values());
+    records.sort_by(|left, right| {
+        right
+            .get("started_at")
+            .or_else(|| right.get("occurred_at"))
+            .and_then(Value::as_str)
+            .cmp(
+                &left
+                    .get("started_at")
+                    .or_else(|| left.get("occurred_at"))
+                    .and_then(Value::as_str),
+            )
+    });
+    serde_json::to_string(&records).unwrap_or_else(|_| "[]".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn aggregates_new_auth_and_close_with_duration() {
+        let mut registry = Registry::default();
+        let new = json!({"conn_id": 7, "ip": "192.0.2.1", "action": "new"});
+        apply_connection(&mut registry, &new);
+        apply_connection(
+            &mut registry,
+            &json!({"conn_id": 7, "peer": ["peer", "Peer"], "type": 0, "primary_auth": 2}),
+        );
+        let record = apply_connection(
+            &mut registry,
+            &json!({"conn_id": 7, "action": "close", "duration_secs": 42}),
+        )
+        .unwrap();
+        assert_eq!(record.peer_id, "peer");
+        assert_eq!(record.duration_secs, Some(42));
+        assert!(record.closed);
+    }
+
+    #[test]
+    fn permission_is_recorded_once() {
+        let mut registry = Registry::default();
+        apply_connection(&mut registry, &json!({"conn_id": 7, "action": "new"}));
+        mark_permission_in(&mut registry, 7, "clipboard");
+        mark_permission_in(&mut registry, 7, "clipboard");
+        assert_eq!(
+            session_for(&mut registry, 7)
+                .unwrap()
+                .permissions_used
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn excludes_files_beyond_retention() {
+        let now = SystemTime::now();
+        let cutoff = now.checked_sub(Duration::from_secs(180 * 86_400)).unwrap();
+        let older = now.checked_sub(Duration::from_secs(181 * 86_400)).unwrap();
+        assert!(is_expired(older, cutoff));
+    }
+
+    #[test]
+    fn zero_disables_the_log() {
+        assert!(!logging_enabled_for(0));
+    }
+}

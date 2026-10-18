@@ -377,6 +377,13 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                         ),
                     ],
                   ),
+                  if (showOneTime &&
+                      model.temporaryPasswordRotationCountdown.isNotEmpty)
+                    Text(
+                      model.temporaryPasswordRotationCountdown,
+                      style: TextStyle(
+                          fontSize: 12, color: textColor?.withOpacity(0.5)),
+                    ),
                 ],
               ),
             ),

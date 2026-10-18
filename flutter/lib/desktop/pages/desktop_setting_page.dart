@@ -9,6 +9,9 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/clanto/about_links.dart';
 import 'package:flutter_hbb/clanto/audit_settings.dart';
 import 'package:flutter_hbb/clanto/privacy_prompt.dart';
+import 'package:flutter_hbb/clanto/inbound_security.dart';
+import 'package:flutter_hbb/clanto/outgoing_security.dart';
+import 'package:flutter_hbb/clanto/session_report.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -54,6 +57,7 @@ class _TabInfo {
 enum SettingsTabKey {
   general,
   safety,
+  sessionReport,
   network,
   display,
   account,
@@ -71,6 +75,11 @@ class DesktopSettingPage extends StatefulWidget {
         !bind.isDisableSettings() &&
         bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) != 'Y')
       SettingsTabKey.safety,
+    if (!isWeb &&
+        !bind.isOutgoingOnly() &&
+        !bind.isDisableSettings() &&
+        bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) != 'Y')
+      SettingsTabKey.sessionReport,
     if (!bind.isDisableSettings() &&
         bind.mainGetBuildinOption(key: kOptionHideNetworkSetting) != 'Y')
       SettingsTabKey.network,
@@ -195,6 +204,10 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           settingTabs.add(_TabInfo(tab, 'Security',
               Icons.enhanced_encryption_outlined, Icons.enhanced_encryption));
           break;
+        case SettingsTabKey.sessionReport:
+          settingTabs.add(_TabInfo(tab, 'Report sessions',
+              Icons.assessment_outlined, Icons.assessment));
+          break;
         case SettingsTabKey.network:
           settingTabs
               .add(_TabInfo(tab, 'Network', Icons.link_outlined, Icons.link));
@@ -229,6 +242,9 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           break;
         case SettingsTabKey.safety:
           children.add(const _Safety());
+          break;
+        case SettingsTabKey.sessionReport:
+          children.add(const _SessionReport());
           break;
         case SettingsTabKey.network:
           children.add(const _Network());
@@ -1406,6 +1422,8 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
       whitelist(),
       idWhitelist(),
       ...autoDisconnect(context),
+      ClantoInboundSecuritySetting(enabled: enabled),
+      ClantoOutgoingSecuritySetting(enabled: enabled),
       _OptionCheckBox(context, 'keep-awake-during-incoming-sessions-label',
           kOptionKeepAwakeDuringIncomingSessions,
           reverse: false, enabled: enabled),
@@ -1740,6 +1758,44 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
             }
           : null,
     ).marginOnly(left: _kCheckBoxLeftMargin);
+  }
+}
+
+class _SessionReport extends StatefulWidget {
+  const _SessionReport();
+
+  @override
+  State<_SessionReport> createState() => _SessionReportState();
+}
+
+class _SessionReportState extends State<_SessionReport>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  bool locked = bind.mainIsInstalled();
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return SingleChildScrollView(
+      child: Column(children: [
+        _lock(locked, 'Unlock Security Settings', () {
+          setState(() => locked = false);
+        }),
+        preventMouseKeyBuilder(
+          block: locked,
+          child: _Card(
+            title: 'Report sessions',
+            children: [
+              ClantoSessionReport(
+                  enabled:
+                      !locked && !isOptionFixed(kOptClantoSessionLogDays))
+            ],
+          ),
+        ),
+      ]),
+    ).marginOnly(bottom: _kListViewBottomMargin);
   }
 }
 

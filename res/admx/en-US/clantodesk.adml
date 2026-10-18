@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources revision="1.0" schemaVersion="1.0" xmlns="http://www.microsoft.com/GroupPolicy/PolicyDefinitions">
+  <displayName>ClantoDesk</displayName>
+  <description>ClantoDesk group policy settings.</description>
+  <resources>
+    <stringTable>
+      <string id="ClantoDesk150">ClantoDesk 1.5.0 or later</string>
+      <string id="SessionPermissions">Incoming session permissions</string>
+      <string id="InboundSecurity">Inbound security</string>
+      <string id="OutgoingSessions">Outgoing sessions</string>
+      <string id="AuditSiem">Audit and SIEM</string>
+      <string id="Interface">Interface</string>
+      <string id="Configure">Select Enabled or Disabled.</string>
+      <string id="Value">Value:</string>
+      <string id="EnableRemotePrinter">Allow remote printer</string><string id="EnableRemotePrinter_Help">Controls whether incoming sessions may use the remote printer. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableClipboard">Allow clipboard</string><string id="EnableClipboard_Help">Controls clipboard sharing in incoming sessions. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableFileTransfer">Allow file transfer</string><string id="EnableFileTransfer_Help">Controls file transfer in incoming sessions. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableCamera">Allow camera</string><string id="EnableCamera_Help">Controls camera access in incoming sessions. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableTerminal">Allow terminal</string><string id="EnableTerminal_Help">Controls terminal access in incoming sessions. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableTunnel">Allow TCP tunneling</string><string id="EnableTunnel_Help">Controls TCP tunneling in incoming sessions. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableRemoteRestart">Allow remote restart</string><string id="EnableRemoteRestart_Help">Controls remote restart in incoming sessions. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableRecordSession">Allow session recording</string><string id="EnableRecordSession_Help">Controls recording for incoming sessions. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableKeyboard">Allow keyboard and mouse</string><string id="EnableKeyboard_Help">Controls keyboard and mouse input in incoming sessions. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableAudio">Allow audio</string><string id="EnableAudio_Help">Controls audio in incoming sessions. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EnableLanDiscovery">Allow LAN discovery</string><string id="EnableLanDiscovery_Help">Controls whether the device is discoverable on the local network. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="AllowAutoDisconnect">Enable automatic disconnection</string><string id="AllowAutoDisconnect_Help">Disconnects an inactive incoming session after the configured timeout. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="AutoDisconnectTimeout">Automatic disconnection timeout</string><string id="AutoDisconnectTimeout_Help">Sets the inactivity timeout in minutes for incoming sessions. Default: 10 minutes. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="VerificationMethod">Password verification method</string><string id="VerificationMethod_Help">Selects which passwords may verify an incoming session. Default: both temporary and permanent passwords. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="VerificationTemporary">Temporary password only</string><string id="VerificationPermanent">Permanent password only</string><string id="VerificationBoth">Temporary and permanent passwords</string>
+      <string id="ApproveMode">Incoming session approval method</string><string id="ApproveMode_Help">Selects whether incoming sessions are accepted by password, click, or both. Default: both. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="ApprovePassword">Password</string><string id="ApproveClick">Click</string><string id="ApproveBoth">Both</string>
+      <string id="IdWhitelist">Allowed connecting ID list</string><string id="IdWhitelist_Help">Sets comma-separated allowed connecting IDs. Wildcards * and ? are supported. Empty means no filter. The ID is declared by the connecting client, so use this as defense in depth, not as authentication. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="TemporaryPasswordRotation">Temporary password rotation interval</string><string id="TemporaryPasswordRotation_Help">Sets how often the temporary password changes, in minutes. Set 0 to disable rotation. Valid values are 0 to 1440. If not configured, rotation is disabled.</string>
+      <string id="RequireProtectedDevice">Require protected connecting devices</string><string id="RequireProtectedDevice_Help">Requires a connecting device to pass the Clanto security posture check. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="PostureBypass">Security posture bypass list</string><string id="PostureBypass_Help">Sets comma-separated posture rule IDs to ignore on this PC. Default: empty. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="OutgoingFileTransfer">Allow outgoing file transfer</string><string id="OutgoingFileTransfer_Help">Controls file transfer and file copy and paste initiated by this PC. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="OutgoingClipboard">Allow outgoing clipboard</string><string id="OutgoingClipboard_Help">Controls clipboard sharing in both directions for sessions opened by this PC. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="OutgoingTunnel">Allow outgoing port forwarding and RDP</string><string id="OutgoingTunnel_Help">Controls port forwarding and RDP sessions initiated by this PC. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="OutgoingTerminal">Allow outgoing terminal</string><string id="OutgoingTerminal_Help">Controls terminal sessions initiated by this PC. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="OutgoingRemotePrinter">Allow outgoing remote printer</string><string id="OutgoingRemotePrinter_Help">Controls print jobs sent by a remote host to this PC's printer. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="OutgoingRecord">Allow outgoing session recording</string><string id="OutgoingRecord_Help">Controls recordings saved on this PC for sessions it opens. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="EventLogEnabled">Write audit events to Windows Event Log</string><string id="EventLogEnabled_Help">Controls whether ClantoDesk audit events are written to Windows Event Log. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="SyslogEnabled">Send audit events to syslog</string><string id="SyslogEnabled_Help">Controls whether ClantoDesk audit events are sent to syslog. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="SyslogHost">Syslog host</string><string id="SyslogHost_Help">Sets the syslog collector host name or address. Default: empty. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="SyslogPort">Syslog port</string><string id="SyslogPort_Help">Sets the syslog collector port. Default: 514. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="SyslogProtocol">Syslog protocol</string><string id="SyslogProtocol_Help">Selects the transport used for syslog audit events. Default: UDP. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="SyslogUdp">UDP</string><string id="SyslogTcp">TCP</string>
+      <string id="SyslogFacility">Syslog facility</string><string id="SyslogFacility_Help">Sets the RFC 5424 syslog facility from 0 to 23. Default: 16 (local0). If not configured, the local ClantoDesk setting is used.</string>
+      <string id="SessionLogDays">Session report retention</string><string id="SessionLogDays_Help">Sets how many days incoming session reports are retained. Set 0 to disable the local session report and delete existing report files. Valid values are 0 to 3650. Default: 180. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="PrivacyPrompt">Ask to enable privacy mode</string><string id="PrivacyPrompt_Help">Controls whether ClantoDesk asks to enable privacy mode at the start of each remote-control session. Default: enabled. If not configured, the local ClantoDesk setting is used.</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="EnableRemotePrinter"><text>$(string.Configure)</text></presentation><presentation id="EnableClipboard"><text>$(string.Configure)</text></presentation><presentation id="EnableFileTransfer"><text>$(string.Configure)</text></presentation><presentation id="EnableCamera"><text>$(string.Configure)</text></presentation><presentation id="EnableTerminal"><text>$(string.Configure)</text></presentation><presentation id="EnableTunnel"><text>$(string.Configure)</text></presentation><presentation id="EnableRemoteRestart"><text>$(string.Configure)</text></presentation><presentation id="EnableRecordSession"><text>$(string.Configure)</text></presentation><presentation id="EnableKeyboard"><text>$(string.Configure)</text></presentation><presentation id="EnableAudio"><text>$(string.Configure)</text></presentation><presentation id="EnableLanDiscovery"><text>$(string.Configure)</text></presentation><presentation id="AllowAutoDisconnect"><text>$(string.Configure)</text></presentation><presentation id="RequireProtectedDevice"><text>$(string.Configure)</text></presentation><presentation id="OutgoingFileTransfer"><text>$(string.Configure)</text></presentation><presentation id="OutgoingClipboard"><text>$(string.Configure)</text></presentation><presentation id="OutgoingTunnel"><text>$(string.Configure)</text></presentation><presentation id="OutgoingTerminal"><text>$(string.Configure)</text></presentation><presentation id="OutgoingRemotePrinter"><text>$(string.Configure)</text></presentation><presentation id="OutgoingRecord"><text>$(string.Configure)</text></presentation><presentation id="EventLogEnabled"><text>$(string.Configure)</text></presentation><presentation id="SyslogEnabled"><text>$(string.Configure)</text></presentation><presentation id="PrivacyPrompt"><text>$(string.Configure)</text></presentation>
+      <presentation id="AutoDisconnectTimeout"><decimalTextBox refId="AutoDisconnectTimeoutValue"><label>$(string.Value)</label></decimalTextBox></presentation>
+      <presentation id="VerificationMethod"><dropdownList refId="VerificationMethodValue"><label>$(string.Value)</label></dropdownList></presentation>
+      <presentation id="ApproveMode"><dropdownList refId="ApproveModeValue"><label>$(string.Value)</label></dropdownList></presentation>
+      <presentation id="IdWhitelist"><textBox refId="IdWhitelistValue"><label>$(string.Value)</label></textBox></presentation>
+      <presentation id="TemporaryPasswordRotation"><decimalTextBox refId="TemporaryPasswordRotationValue"><label>$(string.Value)</label></decimalTextBox></presentation>
+      <presentation id="PostureBypass"><textBox refId="PostureBypassValue"><label>$(string.Value)</label></textBox></presentation>
+      <presentation id="SyslogHost"><textBox refId="SyslogHostValue"><label>$(string.Value)</label></textBox></presentation>
+      <presentation id="SyslogPort"><decimalTextBox refId="SyslogPortValue"><label>$(string.Value)</label></decimalTextBox></presentation>
+      <presentation id="SyslogProtocol"><dropdownList refId="SyslogProtocolValue"><label>$(string.Value)</label></dropdownList></presentation>
+      <presentation id="SyslogFacility"><decimalTextBox refId="SyslogFacilityValue"><label>$(string.Value)</label></decimalTextBox></presentation>
+      <presentation id="SessionLogDays"><decimalTextBox refId="SessionLogDaysValue"><label>$(string.Value)</label></decimalTextBox></presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

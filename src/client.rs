@@ -376,6 +376,7 @@ impl Client {
         (i32, String),
     )> {
         debug_assert!(peer == interface.get_id());
+        crate::clanto::posture::prewarm();
         interface.update_direct(None);
         interface.update_received(false);
         match Self::_start(peer, key, token, conn_type, interface.clone()).await {
@@ -3885,6 +3886,14 @@ impl LoginConfigHandler {
             avatar,
             ..Default::default()
         };
+        lr.clanto_posture = crate::clanto::posture::collect();
+        lr.clanto_posture_mac = crate::clanto::posture::sign(
+            &lr.clanto_posture,
+            &lr.username,
+            &self.hash.challenge,
+            &lr.version,
+        )
+        .into();
         match self.conn_type {
             ConnType::FILE_TRANSFER => lr.set_file_transfer(FileTransfer {
                 dir: self.get_remote_dir(),
@@ -4800,6 +4809,7 @@ async fn send_login(
     password: Vec<u8>,
     peer: &mut Stream,
 ) {
+    crate::clanto::posture::warm().await;
     let msg_out = lc
         .read()
         .unwrap()
@@ -4857,6 +4867,7 @@ async fn send_switch_login_request(
     peer: &mut Stream,
     uuid: Uuid,
 ) {
+    crate::clanto::posture::warm().await;
     let mut msg_out = Message::new();
     msg_out.set_switch_sides_response(SwitchSidesResponse {
         uuid: Bytes::from(uuid.as_bytes().to_vec()),

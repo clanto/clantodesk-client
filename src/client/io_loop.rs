@@ -738,6 +738,9 @@ impl<T: InvokeUiSession> Remote<T> {
             }
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             Data::InitialClipboard(generation, msg) => {
+                if !crate::clanto::outgoing::allowed(crate::clanto::outgoing::OPT_CLIPBOARD) {
+                    return true;
+                }
                 // A live update supersedes any initial snapshot still being prepared.
                 if !self.initial_clipboard_pending {
                     return true;
@@ -772,12 +775,28 @@ impl<T: InvokeUiSession> Remote<T> {
                     return true;
                 }
                 match &msg.union {
+                    Some(message::Union::Clipboard(_))
+                    | Some(message::Union::MultiClipboards(_))
+                        if !crate::clanto::outgoing::allowed(
+                            crate::clanto::outgoing::OPT_CLIPBOARD,
+                        ) =>
+                    {
+                        return true;
+                    }
+                    Some(message::Union::Cliprdr(_))
+                        if !crate::clanto::outgoing::allowed(
+                            crate::clanto::outgoing::OPT_FILE_TRANSFER,
+                        ) =>
+                    {
+                        return true;
+                    }
                     Some(message::Union::Cliprdr(_)) if !self.is_connected => {
                         log::debug!("Discarding outgoing file clipboard message before login");
                         return true;
                     }
                     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                    Some(message::Union::Clipboard(_)) | Some(message::Union::MultiClipboards(_)) => {
+                    Some(message::Union::Clipboard(_))
+                    | Some(message::Union::MultiClipboards(_)) => {
                         self.initial_clipboard_pending = false;
                     }
                     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -1683,7 +1702,9 @@ impl<T: InvokeUiSession> Remote<T> {
                 Some(message::Union::Clipboard(cb)) => {
                     let clipboard_allowed = {
                         let lc = self.handler.lc.read().unwrap();
-                        !lc.disable_clipboard.v && !lc.view_only.v
+                        crate::clanto::outgoing::allowed(crate::clanto::outgoing::OPT_CLIPBOARD)
+                            && !lc.disable_clipboard.v
+                            && !lc.view_only.v
                     };
                     if clipboard_allowed {
                         #[cfg(all(
@@ -1721,7 +1742,9 @@ impl<T: InvokeUiSession> Remote<T> {
                 Some(message::Union::MultiClipboards(_mcb)) => {
                     let clipboard_allowed = {
                         let lc = self.handler.lc.read().unwrap();
-                        !lc.disable_clipboard.v && !lc.view_only.v
+                        crate::clanto::outgoing::allowed(crate::clanto::outgoing::OPT_CLIPBOARD)
+                            && !lc.disable_clipboard.v
+                            && !lc.view_only.v
                     };
                     if clipboard_allowed {
                         #[cfg(all(
@@ -1764,6 +1787,10 @@ impl<T: InvokeUiSession> Remote<T> {
                 }
                 #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
                 Some(message::Union::Cliprdr(clip)) => {
+                    if !crate::clanto::outgoing::allowed(crate::clanto::outgoing::OPT_FILE_TRANSFER)
+                    {
+                        return true;
+                    }
                     self.handle_cliprdr_msg(clip, peer).await;
                 }
                 Some(message::Union::FileResponse(fr)) => {
@@ -2256,6 +2283,11 @@ impl<T: InvokeUiSession> Remote<T> {
                 Some(message::Union::FileAction(action)) => match action.union {
                     Some(file_action::Union::Send(_s)) => match _s.file_type.enum_value() {
                         #[cfg(target_os = "windows")]
+                        Ok(file_transfer_send_request::FileType::Printer)
+                            if !crate::clanto::outgoing::allowed(
+                                crate::clanto::outgoing::OPT_REMOTE_PRINTER,
+                            ) => {}
+                        #[cfg(target_os = "windows")]
                         Ok(file_transfer_send_request::FileType::Printer) => {
                             #[cfg(feature = "flutter")]
                             let action =
@@ -2703,7 +2735,9 @@ impl<T: InvokeUiSession> Remote<T> {
             self.handler.lc.write().unwrap().record_state = false;
         }
         let state = self.handler.lc.read().unwrap().record_state;
-        let start = state && permission;
+        let start = crate::clanto::outgoing::allowed(crate::clanto::outgoing::OPT_RECORD)
+            && state
+            && permission;
         if self.last_record_state == start {
             return;
         }

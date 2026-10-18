@@ -73,6 +73,7 @@ env:
   RS_PUB_KEY: "${{ secrets.RS_PUB_KEY }}"
   RENDEZVOUS_SERVER: "${{ secrets.RENDEZVOUS_SERVER }}"
   API_SERVER: "${{ secrets.API_SERVER }}"
+  CLANTO_POSTURE_MASTER: "${{ secrets.CLANTO_POSTURE_MASTER }}"
 
 jobs:
   # Preflight: blocca i build su secret mancanti, versione incoerente,
@@ -2064,6 +2065,7 @@ jobs:
             export RENDEZVOUS_SERVER="${{ env.RENDEZVOUS_SERVER }}"
             export RS_PUB_KEY="${{ env.RS_PUB_KEY }}"
             export API_SERVER="${{ env.API_SERVER }}"
+            export CLANTO_POSTURE_MASTER="${{ env.CLANTO_POSTURE_MASTER }}"
             if [[ "${{ matrix.job.arch }}" == "aarch64" ]]; then
               export JOBS="--jobs 3"
             else

@@ -559,6 +559,12 @@ class ServerInfo extends StatelessWidget {
                           })
                     ])
             ]).marginOnly(left: 40, bottom: 15),
+            if (showOneTime &&
+                serverModel.temporaryPasswordRotationCountdown.isNotEmpty)
+              Text(
+                serverModel.temporaryPasswordRotationCountdown,
+                style: const TextStyle(fontSize: 12, color: MyTheme.darkGray),
+              ).marginOnly(left: 40, bottom: 10),
             ConnectionStateNotification()
           ],
         ));

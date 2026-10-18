@@ -643,6 +643,8 @@ pub fn check_zombie() {
 #[cfg(any(target_os = "android", target_os = "ios"))]
 #[tokio::main]
 pub async fn start_server(_is_server: bool) {
+    crate::clanto::temp_password::start();
+    crate::clanto::session_log::initialize();
     crate::RendezvousMediator::start_all().await;
 }
 
@@ -670,6 +672,8 @@ pub async fn start_server(is_server: bool, no_server: bool) {
     });
 
     if is_server {
+        crate::clanto::temp_password::start();
+        crate::clanto::session_log::initialize();
         crate::common::set_server_running(true);
         std::thread::spawn(move || {
             if let Err(err) = crate::ipc::start("") {

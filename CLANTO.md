@@ -202,6 +202,68 @@ dalle impostazioni, un valore già salvato vince): disconnessione per inattivit�
 timeout 10 **minuti** (`get_auto_disconenct_timer`, `connection.rs`), scoperta LAN, tunnel TCP,
 riavvio remoto e terminale spenti. Per le chiavi `enable-*` la UI scrive `'Y'` per «acceso» solo
 perché `defaultOptionYes` è esplicito (vedi sopra): con `''` non si potrebbero riaccendere.
+L'opzione host `clanto-temp-password-rotate-minutes` ruota la password temporanea dopo 1-1440
+minuti; assente o `0` lascia invariato il comportamento senza rotazione.
+
+## Report sessioni
+
+L'host conserva uno storico locale delle sessioni in entrata nella sottocartella
+`session-reports` della cartella di configurazione ClantoDesk, in file JSON Lines mensili.
+Ogni record riporta metadati della sessione: orari e durata, ID e nome del peer, indirizzo IP,
+tipo e metodo di accesso, esito della postura, permessi effettivamente usati e metadati dei
+trasferimenti file. Sono registrati separatamente anche i tentativi rifiutati. Non vengono mai
+salvati il testo degli appunti, l'input da tastiera o altri contenuti della sessione.
+
+`clanto-session-log-days` stabilisce la conservazione, predefinita a 180 giorni; `0` disabilita
+il registro ed elimina i file esistenti. Il report è consultabile ed esportabile dalle impostazioni
+di ClantoDesk e rispetta il relativo blocco amministrativo. I record contengono metadati personali
+dei peer: limitare la conservazione allo stretto necessario e proteggere l'accesso alle impostazioni.
+
+## Criteri di gruppo (ADMX)
+
+I template sono in `res/admx/clantodesk.admx`, con le risorse `en-US` e `it-IT`.
+Copiarli nella cartella locale `PolicyDefinitions` oppure nel Central Store del dominio;
+in Intune si importa lo stesso ADMX. I criteri vengono letti da
+`HKLM\Software\Policies\Clanto\ClantoDesk` una sola volta all'avvio: dopo `gpupdate`,
+riavviare il servizio ClantoDesk. Il profilo `restrittivo` dello script RMM scrive le stesse
+chiavi in `HKLM\SOFTWARE\Policies\Clanto\ClantoDesk` e riavvia il servizio solo se cambiano,
+quindi blocca le impostazioni anche fuori dominio; su una chiave gestita dal dominio prevale il
+GPO, perciò usare un solo canale. L'elenco `id-whitelist` è gestibile sia da GPO sia dal profilo
+RMM. Le chiavi dei server
+(`custom-rendezvous-server`, `key`, `api-server`, `relay-server`) non sono mai gestibili via GPO.
+
+## Accesso solo da dispositivi protetti
+
+Opzione host `clanto-require-protected-device` (default `N`), nella sezione «Sicurezza in ingresso»
+delle impostazioni. Con `N` il login è identico a upstream: l'host non chiede nulla e non fa
+chiamate di rete. Con `Y`, dopo l'allowlist per ID e prima di qualunque verifica della password,
+l'host manda la postura
+dichiarata dal controller a `https://clanto.it/api/clantodesk-posture.php` e rifiuta se la risposta
+non è `ok`. **Fail-closed**: API irraggiungibile, timeout di 5 s, JSON non valido, postura o firma
+mancanti valgono rifiuto. Il PC host deve quindi raggiungere `clanto.it`.
+
+- **Controller.** `src/clanto/posture.rs`: `collect()` raccoglie le chiavi di `POSTURE_KEYS` (sistema,
+  patch, antivirus, firewall, firmware, rete...), `unknown` dove non arriva senza privilegi o entro il
+  tempo (8 s su Windows, 3 s altrove). Il risultato resta in cache per 10 minuti; `prewarm()` parte in
+  `Client::start`, così il login non aspetta le sonde. Mai SSID, hostname, utenti, IP o MAC.
+- **Firma.** HMAC-SHA256 sulla postura, legato a ID dell'host, `challenge` del messaggio `Hash` e
+  versione. Il formato canonico sta in `canonical_message()` e **deve coincidere byte per byte** con la
+  PHP: cambiarlo da una sola parte rifiuta tutti i login. La chiave è per release: `build.rs` la deriva
+  da `CLANTO_POSTURE_MASTER` (secret GitHub, lo stesso valore va nell'env del PHP) e la incorpora
+  mascherata; il master non entra mai nel binario. Senza secret la build riesce, ma i suoi controller
+  vengono rifiutati dagli host con l'opzione attiva. È una misura contro i dispositivi trascurati, non
+  contro chi ricompila il client.
+- **Campi proto.** `clanto_posture = 1000` e `clanto_posture_mac = 1001` in `LoginRequest`: numeri
+  alti per non collidere con i campi che upstream aggiungerà. Al porting vanno conservati.
+- **Bypass.** La PHP restituisce le regole fallite con `bypassable`. L'opzione host
+  `clanto-posture-bypass` (id separati da virgola) le ignora su quel PC; `decide()` non lascia mai
+  passare un id `core:` (firma, coerenza, versione revocata). Ogni accesso entrato con un bypass va
+  nell'audit. Lo script RMM, profilo `restrittivo`, svuota i bypass.
+- **Policy.** Vive solo sul server, in `posture-policy.json` accanto alla PHP: regole, tabella EOL per
+  edizione, gruppi di host, fasce orarie. Si cambia senza rilasciare il client. Una regola malformata
+  blocca tutti gli accessi (`core:policy:<id>`): provarla prima di pubblicarla.
+- **Limite noto.** Con l'accesso diretto via IP il controller firma con l'IP al posto dell'ID e la
+  verifica fallisce sempre: con l'opzione attiva l'accesso via IP è di fatto escluso.
 
 ## Due varianti Android: client e host
 
@@ -263,6 +325,19 @@ esiste quindi un conflitto che avvisi, e questi punti vanno verificati a mano.
 5. Lo step `Verify build role` di `flutter-build.yml` è l'unico controllo che
    non dipende dalla memoria di nessuno. Se lo si tocca, si tocca la sola rete
    di sicurezza che resta.
+
+## Restrizioni in uscita
+
+Le opzioni `clanto-outgoing-*` regolano ciò che **questo PC**, quando fa da
+controller, può fare: trasferimento file e copia/incolla file, appunti, port
+forwarding/RDP, terminale, stampa remota e registrazione locale. Il controllo è
+applicato prima della creazione della sessione e nei percorsi di clipboard,
+stampa e registrazione; l'interfaccia mostra inoltre le impostazioni bloccate
+quando arrivano da Criteri di gruppo.
+
+La restrizione vale solo per ClantoDesk in esecuzione su questo PC. Non
+impedisce allo stesso utente di usare un altro programma per svolgere la stessa
+operazione.
 
 ## Password locale delle impostazioni
 
