@@ -3597,6 +3597,17 @@ impl Connection {
                         }
                     }
                     if handle_fa {
+                        if let Some(rejection) =
+                            crate::clanto::file_scan::reject_file_action(&fa, self.inner.id())
+                        {
+                            self.send(fs::new_error(
+                                rejection.id,
+                                rejection.message,
+                                rejection.file_num,
+                            ))
+                            .await;
+                            return true;
+                        }
                         if self.delayed_read_dir.is_some() {
                             if let Some(file_action::Union::ReadDir(rd)) = fa.union {
                                 self.delayed_read_dir = Some((rd.path, rd.include_hidden));

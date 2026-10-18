@@ -67,6 +67,10 @@ enum EventKey {
     PosturePassed,
     PostureBypass,
     TemporaryPasswordRotated,
+    FileMalwareDetected,
+    FileUnscannable,
+    FileDirectionBlocked,
+    FileExtensionBlocked,
     Unknown,
 }
 
@@ -219,6 +223,34 @@ const EVENTS: &[EventDefinition] = &[
         name: "Temporary password rotated",
         syslog_severity: 5,
         cef_severity: 5,
+    },
+    EventDefinition {
+        key: EventKey::FileMalwareDetected,
+        id: 61160,
+        name: "File malware detected",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::FileUnscannable,
+        id: 61161,
+        name: "File could not be scanned",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::FileDirectionBlocked,
+        id: 61162,
+        name: "File transfer direction blocked",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::FileExtensionBlocked,
+        id: 61163,
+        name: "File extension blocked",
+        syslog_severity: 4,
+        cef_severity: 7,
     },
     EventDefinition {
         key: EventKey::Unknown,
@@ -390,6 +422,10 @@ fn event_definition(kind: &str, value: &Value) -> &'static EventDefinition {
             _ => EventKey::Unknown,
         },
         KIND_TEMP_PASSWORD_ROTATION => EventKey::TemporaryPasswordRotated,
+        "clanto_file_malware" => EventKey::FileMalwareDetected,
+        "clanto_file_unscannable" => EventKey::FileUnscannable,
+        "clanto_file_direction_blocked" => EventKey::FileDirectionBlocked,
+        "clanto_file_extension_blocked" => EventKey::FileExtensionBlocked,
         _ => EventKey::Unknown,
     };
     EVENTS
@@ -1173,6 +1209,25 @@ mod tests {
             event_definition("conn", &json!({"type": "clanto_posture"})).key,
             EventKey::PosturePassed
         );
+        for (kind, key, id) in [
+            ("clanto_file_malware", EventKey::FileMalwareDetected, 61160),
+            ("clanto_file_unscannable", EventKey::FileUnscannable, 61161),
+            (
+                "clanto_file_direction_blocked",
+                EventKey::FileDirectionBlocked,
+                61162,
+            ),
+            (
+                "clanto_file_extension_blocked",
+                EventKey::FileExtensionBlocked,
+                61163,
+            ),
+        ] {
+            let event = event_definition(kind, &json!({}));
+            assert_eq!(event.key, key);
+            assert_eq!(event.id, id);
+            assert_eq!(event.syslog_severity, 4);
+        }
     }
 
     #[test]

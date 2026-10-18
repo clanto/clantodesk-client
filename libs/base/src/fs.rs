@@ -419,6 +419,13 @@ pub struct TransferJob {
     digest: FileDigest,
 }
 
+#[derive(Clone)]
+pub struct CompletedDownload {
+    pub download_path: PathBuf,
+    pub final_path: PathBuf,
+    pub name: String,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct TransferJobMeta {
     #[serde(default)]
@@ -726,6 +733,56 @@ impl TransferJob {
                 .ok();
             }
         }
+    }
+
+    pub fn current_download(&self) -> ResultType<Option<CompletedDownload>> {
+        if self.r#type == JobType::Printer || self.data_stream.is_none() {
+            return Ok(None);
+        }
+        let DataSource::FilePath(base) = &self.data_source else {
+            return Ok(None);
+        };
+        let Some(entry) = self.files.get(self.file_num as usize) else {
+            return Ok(None);
+        };
+        let final_path = join_validated_path(base, &entry.name)?;
+        let download_path = PathBuf::from(format!("{}.download", get_string(&final_path)));
+        let name = if entry.name.is_empty() {
+            final_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .to_owned()
+        } else {
+            entry.name.clone()
+        };
+        Ok(Some(CompletedDownload {
+            download_path,
+            final_path,
+            name,
+        }))
+    }
+
+    pub fn download_paths(&self) -> ResultType<Vec<PathBuf>> {
+        let DataSource::FilePath(base) = &self.data_source else {
+            return Ok(Vec::new());
+        };
+        let mut paths = Vec::with_capacity(self.files.len().saturating_mul(2));
+        for entry in &self.files {
+            let path = join_validated_path(base, &entry.name)?;
+            paths.push(path.clone());
+            paths.push(PathBuf::from(format!("{}.download", get_string(&path))));
+        }
+        Ok(paths)
+    }
+
+    /// Dropping a tokio `File` can leave writes in flight: the scanner must read the whole file.
+    pub async fn drop_current_download_writer(&mut self) -> ResultType<()> {
+        if let Some(DataStream::FileStream(mut file)) = self.data_stream.take() {
+            file.flush().await?;
+            file.sync_all().await?;
+        }
+        Ok(())
     }
 
     pub fn remove_download_file(&self) {

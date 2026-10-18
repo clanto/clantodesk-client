@@ -205,6 +205,49 @@ perché `defaultOptionYes` è esplicito (vedi sopra): con `''` non si potrebbero
 L'opzione host `clanto-temp-password-rotate-minutes` ruota la password temporanea dopo 1-1440
 minuti; assente o `0` lascia invariato il comportamento senza rotazione.
 
+## Controllo dei file ricevuti dall'host
+
+Il controllo si applica sul lato host ai file ricevuti dal controller, compresi quelli contenuti
+nelle cartelle trasferite. Il controller che riceve file non esegue questa scansione. L'opzione
+`clanto-file-scan` accetta `off` (predefinito), `warn` e `block`: con `off` resta invariato il
+percorso di trasferimento esistente. Negli altri modi ClantoDesk completa il file con suffisso
+`.download`, calcola SHA-256 e lo sottopone al motore prima di rinominarlo al nome finale.
+
+- **Windows:** usa AMSI con nome applicazione `ClantoDesk`, leggendo il file a blocchi nella stessa
+  sessione AMSI. Funziona con qualunque prodotto antimalware registrato come provider AMSI, non solo
+  Microsoft Defender. Alla scadenza del timeout resta valida la decisione `warn`/`block`, ma Windows
+  non permette di interrompere forzatamente una chiamata del provider già in corso. Due limiti
+  indipendenti ammettono al massimo un worker di preparazione (sync, metadati e SHA-256) e un worker
+  del motore (AMSI o `clamd`). Un provider bloccato trattiene solo il permit del motore: i file
+  successivi calcolano comunque dimensione e SHA-256, poi scadono in attesa del motore.
+- **macOS e Linux:** usa il protocollo `INSTREAM` del demone ClamAV `clamd`. L'opzione
+  `clanto-file-scan-clamd` contiene il percorso di un socket Unix oppure un endpoint TCP
+  `host:porta`; il valore predefinito è vuoto.
+- **Android, iOS o motore non disponibile:** il file è non scansionabile. Lo stesso vale se AMSI non
+  può essere inizializzato o non ha un provider, `clamd` non è configurato o raggiungibile, la
+  scansione scade, oppure il file supera `clanto-file-scan-max-mb` (predefinito: 512 MiB).
+
+Un esito pulito consente la rinomina normale. In modalità `warn`, malware e file non scansionabili
+sono consegnati ma generano un evento di audit. In modalità `block` entrambi sono rifiutati
+**fail-closed**: il `.download` non assume mai il nome finale e viene spostato nella sottocartella
+`quarantine` della cartella di configurazione ClantoDesk, con permessi ristretti e nome composto da
+timestamp e SHA-256. Il controller riceve un errore leggibile. Log, audit e report sessioni possono
+contenere solo nome, dimensione, SHA-256, motore ed esito, mai il contenuto del file.
+
+`clanto-file-direction` restringe separatamente i trasferimenti visti dall'host: `both`
+(predefinito), `to-host` (solo controller → host), `from-host` (solo host → controller) oppure
+`none`. Il controllo viene eseguito prima di aprire il job e non può riabilitare un trasferimento
+negato da `enable-file-transfer`. `clanto-file-blocked-ext` è un elenco di estensioni separate da
+virgole, vuoto per impostazione predefinita. I file in ingresso con un'estensione elencata vengono
+rifiutati prima della creazione; il confronto non distingue maiuscole e minuscole, usa l'ultima
+estensione e rimuove prima punti e spazi finali, quindi `report.pdf.exe`, `A.EXE` e `a.exe.` vengono
+tutti riconosciuti quando è bloccata `exe`.
+
+La scansione non garantisce di riconoscere contenuti che il motore non può ispezionare, per esempio
+gli archivi protetti da password. Valgono inoltre i limiti configurati nel provider AMSI o in
+`clamd`; per una policy che non deve consegnare file non verificati usare `block`. I cinque valori
+sono gestibili anche tramite GPO/ADMX e vengono letti una volta all'avvio del servizio.
+
 ## Report sessioni
 
 L'host conserva uno storico locale delle sessioni in entrata nella sottocartella
@@ -213,6 +256,9 @@ Ogni record riporta metadati della sessione: orari e durata, ID e nome del peer,
 tipo e metodo di accesso, esito della postura, permessi effettivamente usati e metadati dei
 trasferimenti file. Sono registrati separatamente anche i tentativi rifiutati. Non vengono mai
 salvati il testo degli appunti, l'input da tastiera o altri contenuti della sessione.
+I quattro esiti di sicurezza dei file sono record autonomi con `record_type=file_security` e i soli
+campi `occurred_at`, `conn_id`, `event`, `name`, `size`, `sha256`, `engine` e `result`; non includono
+contenuto o percorso del file.
 
 `clanto-session-log-days` stabilisce la conservazione, predefinita a 180 giorni; `0` disabilita
 il registro ed elimina i file esistenti. Il report è consultabile ed esportabile dalle impostazioni
@@ -271,6 +317,10 @@ riassegnare mai un ID, neppure dopo la rimozione di un evento.
 | 61140 | Postura superata (`clanto_posture`) — Device posture passed | 6 (informational) | 3 |
 | 61141 | Postura con bypass (`clanto_posture_bypass`) — Device posture bypassed | 5 (notice) | 5 |
 | 61150 | Temporary password rotated | 5 (notice) | 5 |
+| 61160 | Malware detected in incoming file | 4 (warning) | 7 |
+| 61161 | Incoming file could not be scanned | 4 (warning) | 7 |
+| 61162 | File transfer blocked by direction policy | 4 (warning) | 7 |
+| 61163 | Incoming file blocked by extension | 4 (warning) | 7 |
 | 61999 | Unknown audit event | 5 (notice) | 5 |
 
 Gli ID legacy 61000, 61001, 61002 e 61099 sono riservati permanentemente e non devono essere
@@ -285,8 +335,9 @@ in Intune si importa lo stesso ADMX. I criteri vengono letti da
 riavviare il servizio ClantoDesk. Il profilo `restrittivo` dello script RMM scrive le stesse
 chiavi in `HKLM\SOFTWARE\Policies\Clanto\ClantoDesk` e riavvia il servizio solo se cambiano,
 quindi blocca le impostazioni anche fuori dominio; su una chiave gestita dal dominio prevale il
-GPO, perciò usare un solo canale. L'elenco `id-whitelist` è gestibile sia da GPO sia dal profilo
-RMM. Le chiavi dei server
+GPO, perciò usare un solo canale. L'elenco `id-whitelist` e le cinque opzioni del controllo file
+sono gestibili via GPO. Nel profilo RMM `restrittivo`, impostare `clanto-file-scan=block` e bloccare
+le estensioni eseguibili e di script indicate nella sezione precedente. Le chiavi dei server
 (`custom-rendezvous-server`, `key`, `api-server`, `relay-server`) non sono mai gestibili via GPO.
 
 ## Accesso solo da dispositivi protetti

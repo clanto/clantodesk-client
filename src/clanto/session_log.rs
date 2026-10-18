@@ -152,6 +152,7 @@ pub fn on_audit(kind: &str, value: &Value) {
         "conn" => on_connection(value),
         "file" => on_file(value),
         "alarm" => on_alarm(value),
+        _ if is_file_security_kind(kind) => on_file_security(kind, value),
         _ => {}
     }
 }
@@ -311,6 +312,39 @@ fn on_alarm(value: &Value) {
         record["peer_name"] = info.get("name").cloned().unwrap_or(Value::Null);
     }
     write_value_async(record);
+}
+
+fn is_file_security_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "clanto_file_malware"
+            | "clanto_file_unscannable"
+            | "clanto_file_direction_blocked"
+            | "clanto_file_extension_blocked"
+    )
+}
+
+fn on_file_security(kind: &str, value: &Value) {
+    write_value_async(file_security_record(kind, value));
+}
+
+fn file_security_record(kind: &str, value: &Value) -> Value {
+    let name = value_str(value, "name");
+    let name = name
+        .rsplit(|character| character == '/' || character == '\\')
+        .next()
+        .unwrap_or_default();
+    json!({
+        "record_type": "file_security",
+        "occurred_at": now().to_rfc3339(),
+        "conn_id": value.get("conn_id").and_then(Value::as_i64),
+        "event": kind,
+        "name": name,
+        "size": value.get("size").and_then(Value::as_u64),
+        "sha256": value_str(value, "sha256"),
+        "engine": value_str(value, "engine"),
+        "result": value_str(value, "result"),
+    })
 }
 
 /// Segna il primo utilizzo del permesso, senza memorizzare contenuti sensibili.
@@ -565,5 +599,51 @@ mod tests {
     #[test]
     fn zero_disables_the_log() {
         assert!(!logging_enabled_for(0));
+    }
+
+    #[test]
+    fn file_security_record_contains_only_allowed_metadata() {
+        let record = file_security_record(
+            "clanto_file_malware",
+            &json!({
+                "conn_id": 7,
+                "name": r"C:\incoming\bad.exe",
+                "size": 42,
+                "sha256": "abc123",
+                "engine": "AMSI",
+                "result": "malware",
+                "path": r"C:\incoming\bad.exe.download",
+                "content": "not allowed",
+            }),
+        );
+        let occurred_at = record.get("occurred_at").cloned().unwrap();
+        assert!(DateTime::parse_from_rfc3339(occurred_at.as_str().unwrap()).is_ok());
+        assert_eq!(
+            record,
+            json!({
+                "record_type": "file_security",
+                "occurred_at": occurred_at,
+                "conn_id": 7,
+                "event": "clanto_file_malware",
+                "name": "bad.exe",
+                "size": 42,
+                "sha256": "abc123",
+                "engine": "AMSI",
+                "result": "malware",
+            })
+        );
+    }
+
+    #[test]
+    fn recognizes_all_file_security_events() {
+        for kind in [
+            "clanto_file_malware",
+            "clanto_file_unscannable",
+            "clanto_file_direction_blocked",
+            "clanto_file_extension_blocked",
+        ] {
+            assert!(is_file_security_kind(kind));
+        }
+        assert!(!is_file_security_kind("file"));
     }
 }

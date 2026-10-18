@@ -810,6 +810,7 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                 }
             }
         }
+        crate::clanto::file_scan::release_scan_jobs(&write_jobs);
     }
 
     async fn ipc_task(stream: Connection, cm: ConnectionManager<T>) {
@@ -967,6 +968,7 @@ pub async fn start_listen<T: InvokeUiCM>(
             _ => {}
         }
     }
+    crate::clanto::file_scan::release_scan_jobs(&write_jobs);
     cm.remove_connection(current_id, true);
 }
 
@@ -1098,10 +1100,15 @@ async fn handle_fs(
             }
             job.total_size = total_size;
             job.conn_id = conn_id;
+            if let Err(error) = crate::clanto::file_scan::register_scan_job(&job) {
+                send_raw(fs::new_error(id, error, file_num), tx);
+                return;
+            }
             write_jobs.push(job);
         }
         ipc::FS::CancelWrite { id } => {
             if let Some(job) = fs::remove_job(id, write_jobs) {
+                crate::clanto::file_scan::release_scan_job(&job);
                 job.remove_download_file();
                 if let Some(tx) = tx_log {
                     if let Err(e) = tx.send(serialize_transfer_job(&job, false, true, "")) {
@@ -1111,16 +1118,47 @@ async fn handle_fs(
             }
         }
         ipc::FS::WriteDone { id, file_num } => {
-            if let Some(job) = fs::remove_job(id, write_jobs) {
-                job.modify_time();
-                send_raw(fs::new_done(id, file_num), tx);
-                tx_log.map(|tx| tx.send(serialize_transfer_job(&job, true, false, "")));
+            let scan_enabled = fs::get_job(id, write_jobs)
+                .map(|job| crate::clanto::file_scan::is_scan_enabled_for_job(job))
+                .unwrap_or(false);
+            if !scan_enabled {
+                if let Some(job) = fs::remove_job(id, write_jobs) {
+                    job.modify_time();
+                    send_raw(fs::new_done(id, file_num), tx);
+                    tx_log.map(|tx| tx.send(serialize_transfer_job(&job, true, false, "")));
+                    crate::clanto::file_scan::release_scan_job(&job);
+                }
+                return;
+            }
+            if let Some(mut job) = fs::remove_job(id, write_jobs) {
+                match crate::clanto::file_scan::finish_completed_download(&mut job, None).await {
+                    Ok(scanned) => {
+                        if !scanned {
+                            job.modify_time();
+                        }
+                        send_raw(fs::new_done(id, file_num), tx);
+                        tx_log.map(|tx| tx.send(serialize_transfer_job(&job, true, false, "")));
+                    }
+                    Err(error) => {
+                        send_raw(fs::new_error(id, &error, file_num), tx);
+                        tx_log.map(|tx| {
+                            tx.send(serialize_transfer_job(
+                                &job,
+                                false,
+                                false,
+                                &error.to_string(),
+                            ))
+                        });
+                    }
+                }
+                crate::clanto::file_scan::release_scan_job(&job);
             }
         }
         ipc::FS::WriteError { id, file_num, err } => {
             if let Some(job) = fs::remove_job(id, write_jobs) {
                 tx_log.map(|tx| tx.send(serialize_transfer_job(&job, false, false, &err)));
                 send_raw(fs::new_error(job.id(), err, file_num), tx);
+                crate::clanto::file_scan::release_scan_job(&job);
             }
         }
         ipc::FS::WriteBlock {
@@ -1129,8 +1167,48 @@ async fn handle_fs(
             data,
             compressed,
         } => {
-            if let Some(job) = fs::get_job(id, write_jobs) {
-                if let Err(err) = job
+            let scan_enabled = fs::get_job(id, write_jobs)
+                .map(|job| crate::clanto::file_scan::is_scan_enabled_for_job(job))
+                .unwrap_or(false);
+            if !scan_enabled {
+                if let Some(job) = fs::get_job(id, write_jobs) {
+                    if let Err(err) = job
+                        .write(FileTransferBlock {
+                            id,
+                            file_num,
+                            data,
+                            compressed,
+                            ..Default::default()
+                        })
+                        .await
+                    {
+                        send_raw(fs::new_error(id, err, file_num), &tx);
+                    }
+                }
+                return;
+            }
+            if let Some(index) = write_jobs.iter().position(|job| job.id() == id) {
+                let completed_file_num = write_jobs[index].file_num();
+                let scan_result = crate::clanto::file_scan::finish_completed_download(
+                    &mut write_jobs[index],
+                    Some(file_num),
+                )
+                .await;
+                if let Err(error) = scan_result {
+                    let job = write_jobs.remove(index);
+                    send_raw(fs::new_error(id, &error, completed_file_num), tx);
+                    tx_log.map(|tx| {
+                        tx.send(serialize_transfer_job(
+                            &job,
+                            false,
+                            false,
+                            &error.to_string(),
+                        ))
+                    });
+                    crate::clanto::file_scan::release_scan_job(&job);
+                    return;
+                }
+                let write_error = write_jobs[index]
                     .write(FileTransferBlock {
                         id,
                         file_num,
@@ -1139,8 +1217,19 @@ async fn handle_fs(
                         ..Default::default()
                     })
                     .await
-                {
-                    send_raw(fs::new_error(id, err, file_num), &tx);
+                    .err();
+                if let Some(error) = write_error {
+                    send_raw(fs::new_error(id, &error, file_num), &tx);
+                    let job = write_jobs.remove(index);
+                    tx_log.map(|tx| {
+                        tx.send(serialize_transfer_job(
+                            &job,
+                            false,
+                            false,
+                            &error.to_string(),
+                        ))
+                    });
+                    crate::clanto::file_scan::release_scan_job(&job);
                 }
             }
         }

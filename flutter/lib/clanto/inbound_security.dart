@@ -10,6 +10,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/utils/http_service.dart' as http;
 import 'package:settings_ui/settings_ui.dart';
 
+import 'file_transfer_security.dart';
 import 'protected_device.dart';
 
 const String kOptClantoPostureBypass = 'clanto-posture-bypass';
@@ -133,6 +134,7 @@ class _ClantoInboundSecuritySettingState
           subtitle: Text(translate('id_whitelist_tip')),
         ),
       ClantoProtectedDeviceSetting(enabled: widget.enabled),
+      ClantoFileTransferSecuritySetting(enabled: widget.enabled),
       if (_loading)
         const Padding(
             padding: EdgeInsets.all(12), child: CircularProgressIndicator()),

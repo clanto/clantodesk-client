@@ -75,6 +75,21 @@
     <policy name="PostureBypass" class="Machine" displayName="$(string.PostureBypass)" explainText="$(string.PostureBypass_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.PostureBypass)">
       <parentCategory ref="InboundSecurity" />
       <supportedOn ref="ClantoDesk150" /><elements><text id="PostureBypassValue" valueName="clanto-posture-bypass" /></elements></policy>
+    <policy name="FileScan" class="Machine" displayName="$(string.FileScan)" explainText="$(string.FileScan_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.FileScan)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><enum id="FileScanValue" valueName="clanto-file-scan"><item displayName="$(string.FileScanOff)"><value><string>off</string></value></item><item displayName="$(string.FileScanWarn)"><value><string>warn</string></value></item><item displayName="$(string.FileScanBlock)"><value><string>block</string></value></item></enum></elements></policy>
+    <policy name="FileScanClamd" class="Machine" displayName="$(string.FileScanClamd)" explainText="$(string.FileScanClamd_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.FileScanClamd)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="FileScanClamdValue" valueName="clanto-file-scan-clamd" /></elements></policy>
+    <policy name="FileScanMaxMb" class="Machine" displayName="$(string.FileScanMaxMb)" explainText="$(string.FileScanMaxMb_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.FileScanMaxMb)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><decimal id="FileScanMaxMbValue" valueName="clanto-file-scan-max-mb" minValue="1" maxValue="1048576" /></elements></policy>
+    <policy name="FileDirection" class="Machine" displayName="$(string.FileDirection)" explainText="$(string.FileDirection_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.FileDirection)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><enum id="FileDirectionValue" valueName="clanto-file-direction"><item displayName="$(string.FileDirectionBoth)"><value><string>both</string></value></item><item displayName="$(string.FileDirectionToHost)"><value><string>to-host</string></value></item><item displayName="$(string.FileDirectionFromHost)"><value><string>from-host</string></value></item><item displayName="$(string.FileDirectionNone)"><value><string>none</string></value></item></enum></elements></policy>
+    <policy name="FileBlockedExt" class="Machine" displayName="$(string.FileBlockedExt)" explainText="$(string.FileBlockedExt_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.FileBlockedExt)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="FileBlockedExtValue" valueName="clanto-file-blocked-ext" /></elements></policy>
     <policy name="OutgoingFileTransfer" class="Machine" displayName="$(string.OutgoingFileTransfer)" explainText="$(string.OutgoingFileTransfer_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-outgoing-file-transfer" presentation="$(presentation.OutgoingFileTransfer)">
       <parentCategory ref="OutgoingSessions" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
