@@ -5,3 +5,5 @@
 
 # Keep rustls-platform-verifier classes for JNI
 -keep, includedescriptorclasses class org.rustls.platformverifier.** { *; }
+# Called by name from Rust over JNI (src/clanto/keystore.rs): R8 must not drop or rename it
+-keep class it.clanto.clantodesk.clanto.ClantoUserKeyStore { *; }

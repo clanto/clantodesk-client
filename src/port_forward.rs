@@ -16,26 +16,78 @@ use hbb_common::{
 };
 use base::message_proto::*;
 
-fn run_rdp(port: u16, name: &str) {
-    std::process::Command::new("cmdkey")
-        .arg("/delete:localhost")
-        .output()
-        .ok();
-    let username = std::env::var("rdp_username").unwrap_or_default();
-    let password = std::env::var("rdp_password").unwrap_or_default();
-    if !username.is_empty() || !password.is_empty() {
-        let mut args = vec!["/generic:localhost".to_owned()];
-        if !username.is_empty() {
-            args.push(format!("/user:{}", username));
+struct RdpCredentialGuard;
+
+impl RdpCredentialGuard {
+    fn new(username: &str, password: &str) -> Self {
+        #[cfg(windows)]
+        {
+            delete_rdp_credential();
+            if !username.is_empty() || !password.is_empty() {
+                if let Err(err) = write_rdp_credential(username, password) {
+                    log::warn!("Failed to store the RDP session credential: {err}");
+                }
+            }
         }
-        if !password.is_empty() {
-            args.push(format!("/pass:{}", password));
-        }
-        std::process::Command::new("cmdkey")
-            .args(&args)
-            .output()
-            .ok();
+        #[cfg(not(windows))]
+        let _ = (username, password);
+        Self
     }
+}
+
+impl Drop for RdpCredentialGuard {
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        delete_rdp_credential();
+    }
+}
+
+#[cfg(windows)]
+fn write_rdp_credential(username: &str, password: &str) -> windows::core::Result<()> {
+    use windows::{
+        core::PWSTR,
+        Win32::Security::Credentials::{
+            CredWriteW, CREDENTIALW, CRED_PERSIST_SESSION, CRED_TYPE_GENERIC,
+        },
+    };
+
+    let mut target: Vec<u16> = "localhost".encode_utf16().chain(Some(0)).collect();
+    let mut username: Vec<u16> = username.encode_utf16().chain(Some(0)).collect();
+    let mut password: Vec<u16> = password.encode_utf16().collect();
+    let credential = CREDENTIALW {
+        Type: CRED_TYPE_GENERIC,
+        TargetName: PWSTR(target.as_mut_ptr()),
+        CredentialBlobSize: (password.len() * std::mem::size_of::<u16>()) as u32,
+        CredentialBlob: if password.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            password.as_mut_ptr().cast()
+        },
+        Persist: CRED_PERSIST_SESSION,
+        UserName: if username.len() > 1 {
+            PWSTR(username.as_mut_ptr())
+        } else {
+            PWSTR::null()
+        },
+        ..Default::default()
+    };
+    unsafe { CredWriteW(&credential, 0) }
+}
+
+#[cfg(windows)]
+fn delete_rdp_credential() {
+    use windows::{
+        core::PCWSTR,
+        Win32::Security::Credentials::{CredDeleteW, CRED_TYPE_GENERIC},
+    };
+
+    let target: Vec<u16> = "localhost".encode_utf16().chain(Some(0)).collect();
+    if let Err(err) = unsafe { CredDeleteW(PCWSTR(target.as_ptr()), CRED_TYPE_GENERIC, None) } {
+        log::trace!("RDP session credential was not deleted: {err}");
+    }
+}
+
+fn run_rdp(port: u16, name: &str) {
     // Keep using /v instead of a generated .rdp file: mstsc then preserves the
     // user's Default.rdp settings and avoids unsigned-file warnings or policies.
     match std::process::Command::new("mstsc")
@@ -80,11 +132,20 @@ pub async fn listen(
     lc: Arc<RwLock<LoginConfigHandler>>,
     remote_host: String,
     remote_port: i32,
+    rdp_credentials: Option<(String, String)>,
 ) -> ResultType<()> {
     let listener = tcp::new_listener(format!("127.0.0.1:{}", port), true).await?;
     let addr = listener.local_addr()?;
     log::info!("listening on port {:?}", addr);
     let is_rdp = port == 0;
+    let _rdp_credential = if is_rdp {
+        let (username, password) = rdp_credentials.as_ref().map_or(("", ""), |credentials| {
+            (credentials.0.as_str(), credentials.1.as_str())
+        });
+        Some(RdpCredentialGuard::new(username, password))
+    } else {
+        None
+    };
     if is_rdp {
         run_rdp(addr.port(), &rdp_display_name(&lc, &id));
     }

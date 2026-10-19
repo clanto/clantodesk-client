@@ -126,16 +126,42 @@ profilo dell'account locale, rubrica e gruppi. La chiave **macchina** protegge l
 configurazione globale dell'host: ID, password permanente, chiave privata, PIN di
 sblocco, password Socks5, dispositivi attendibili, segreto TOTP e token Telegram.
 
-Su Windows `machine.key` è un blob DPAPI con ambito macchina e `user.key` un blob
-DPAPI dell'utente. Entrambi stanno nella cartella di configurazione del relativo
-profilo. Durante `--import-config` viene copiato anche `machine.key`, così il
-servizio SYSTEM e il processo utente leggono la stessa configurazione host senza
-ricifrarla; il servizio SYSTEM non carica mai `user.key`. Se venisse importato il
-solo `Config2` mentre nella sorgente esiste `machine.key`, `--import-config`
-rifiuta l'operazione: importare i segreti senza il relativo `Config` potrebbe
-associare configurazione e chiave macchina diverse. Sulle altre piattaforme, in
-questa prima parte, i due file contengono chiavi casuali create atomicamente con
-permessi `0600` nella cartella di configurazione del profilo.
+La posizione dipende dalla piattaforma; `Config::path(...)` indica sempre la
+cartella di configurazione del profilo corrente.
+
+| Piattaforma | Chiave utente | Chiave macchina | Ripiego |
+| --- | --- | --- | --- |
+| Windows | `Config::path("user.key")`, blob DPAPI utente | `Config::path("machine.key")`, blob DPAPI macchina | Nessuno; SYSTEM non apre mai la chiave utente |
+| macOS | Keychain, generic password servizio `it.clanto.ClantoDesk`, account `user-key`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, non sincronizzabile | `~/Library/Preferences/it.clanto.ClantoDesk/machine.key`, file `0600` | Il precedente `~/Library/Preferences/it.clanto.ClantoDesk/user.key` resta utilizzabile finché l'importazione non è verificata; non vengono creati nuovi file utente |
+| iOS | Keychain dell'app, stessa voce e accessibilità di macOS, non sincronizzabile | `<contenitore app>/Documents/machine.key`, file `0600` | Il precedente `<contenitore app>/Documents/user.key` resta utilizzabile finché l'importazione non è verificata |
+| Linux | Secret Service sul bus di sessione, collection alias `default`, item con attributi `application=it.clanto.ClantoDesk` e `account=user-key` | `$XDG_CONFIG_HOME/clantodesk/machine.key`, oppure `~/.config/clantodesk/machine.key`, file `0600` | Se bus o Secret Service non esistono usa `user.key` nella stessa cartella, file `0600`; una collection esistente ma bloccata non abilita il ripiego |
+| Android | alias non esportabile `it.clanto.ClantoDesk.user-key` in `AndroidKeyStore`; i 32 byte sono AES-GCM in `${Context.filesDir}/clantodesk-user-key.v1` | `Config::path("machine.key")` nei dati privati dell'app, file `0600` | `Config::path("user.key")` nei dati privati dell'app se Android Keystore non è disponibile |
+
+I processi root/LaunchDaemon su macOS e Linux e il servizio SYSTEM su Windows non
+richiedono mai la chiave utente. Su Linux la chiave viene risolta prima della
+registrazione del provider, fuori dal runtime Tokio, e resta in cache per il
+processo. Se un accesso da un worker Tokio trova la cache vuota, restituisce chiave
+non disponibile e avvia la risoluzione su un thread dedicato, senza attendere il
+prompt. L'annullamento dello sblocco della collection `default` non crea una nuova
+collection né un nuovo `user.key`. I due manifest Android sono stati valutati: il
+Keystore non richiede permessi né componenti aggiuntivi, quindi il manifest ridotto
+della variante client resta invariato.
+
+Se esiste il `user.key` creato dalla prima parte, la chiave viene copiata nel
+portachiavi di sistema solo quando non vi è già una voce. Il file viene eliminato
+soltanto dopo una rilettura identica dal portachiavi; errore, voce mancante o valore
+diverso conservano il file. Una voce e un file esistenti ma diversi causano un
+errore e non vengono sovrascritti. Se un backend non disponibile ammette il
+ripiego (Linux e Android), il file continua a essere usato; una chiave nuova viene
+generata solo quando né il backend disponibile né il file contengono una chiave.
+Su Android l'esistenza del blob cifrato viene verificata separatamente: un blob
+già presente ma temporaneamente non decifrabile non genera mai un nuovo fallback.
+
+Durante `--import-config` viene copiato anche `machine.key`, così il servizio di
+sistema e il processo utente leggono la stessa configurazione host senza
+ricifrarla. Se venisse importato il solo `Config2` mentre nella sorgente esiste
+`machine.key`, `--import-config` rifiuta l'operazione: importare i segreti senza il
+relativo `Config` potrebbe associare configurazione e chiave macchina diverse.
 
 I valori nuovi hanno prefisso `02` per l'ambito macchina e `03` per l'ambito
 utente. I valori storici `00` continuano a essere letti con la chiave derivata
@@ -155,10 +181,13 @@ non è decifrabile il servizio non si registra né annuncia un ID vuoto al serve
 rendezvous e segnala periodicamente lo stato nel log. Ogni ciclo riprova, quindi
 la registrazione riprende senza riavvio appena la chiave torna disponibile. La
 protezione macchina non difende da un processo locale con privilegi
-amministrativi. Fuori da Windows, in questa prima parte, chi riesce a leggere e
-copiare anche il file della chiave può trasferire i segreti: la parte 2 sostituirà
-la chiave utente su file con Keychain su macOS/iOS, Secret Service su Linux e
-Keystore su Android.
+amministrativi.
+
+La password RDP non viene più scritta nelle variabili d'ambiente né passata a
+`cmdkey`. Su Windows il port-forward crea direttamente la credenziale generica
+`localhost` con `CredWriteW` e persistenza `CRED_PERSIST_SESSION`; una guardia la
+elimina con `CredDeleteW` alla chiusura del port-forward, incluse le uscite per
+errore. `mstsc` continua a ricevere soltanto `/v:localhost:<porta>`.
 
 ## Firma Apple locale
 

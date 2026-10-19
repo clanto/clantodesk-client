@@ -7165,6 +7165,7 @@ dependencies = [
  "samplerate",
  "sciter-rs",
  "scrap",
+ "security-framework 3.5.1",
  "serde 1.0.228",
  "serde_derive",
  "serde_json 1.0.118",

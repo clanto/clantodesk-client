@@ -36,6 +36,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `flutter/lib/clanto/settings_auth.dart`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoChatNotifier.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoDownloads.kt`
+- `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoUserKeyStore.kt`
 - `flutter/ios/Runner/ClantoFileExporter.swift`
 
 L'elenco deve essere aggiornato quando viene aggiunto, rimosso o riclassificato

@@ -67,8 +67,8 @@ fn apply_host_defaults() {
 /// Applica branding e valori server iniettati al build prima che `Config`
 /// venga usata per calcolare percorsi o impostazioni predefinite.
 pub fn apply_build_config() {
-    super::keystore::init();
     *config::APP_NAME.write().unwrap() = "ClantoDesk".to_owned();
+    super::keystore::init();
     apply_new_peer_defaults();
     apply_host_defaults();
 
