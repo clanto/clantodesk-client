@@ -134,7 +134,7 @@ cartella di configurazione del profilo corrente.
 | Windows | `Config::path("user.key")`, blob DPAPI utente | `Config::path("machine.key")`, blob DPAPI macchina | Nessuno; SYSTEM non apre mai la chiave utente |
 | macOS | Keychain, generic password servizio `it.clanto.ClantoDesk`, account `user-key`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, non sincronizzabile | `~/Library/Preferences/it.clanto.ClantoDesk/machine.key`, file `0600` | Il precedente `~/Library/Preferences/it.clanto.ClantoDesk/user.key` resta utilizzabile finché l'importazione non è verificata; non vengono creati nuovi file utente |
 | iOS | Keychain dell'app, stessa voce e accessibilità di macOS, non sincronizzabile | `<contenitore app>/Documents/machine.key`, file `0600` | Il precedente `<contenitore app>/Documents/user.key` resta utilizzabile finché l'importazione non è verificata |
-| Linux | Secret Service sul bus di sessione, collection alias `default`, item con attributi `application=it.clanto.ClantoDesk` e `account=user-key` | `$XDG_CONFIG_HOME/clantodesk/machine.key`, oppure `~/.config/clantodesk/machine.key`, file `0600` | Se bus o Secret Service non esistono usa `user.key` nella stessa cartella, file `0600`; una collection esistente ma bloccata non abilita il ripiego |
+| Linux | Secret Service sul bus di sessione, collection alias `default`, item con attributi `application=it.clanto.ClantoDesk` e `account=user-key`; l'uso viene registrato in `user.key.backend` nella cartella di configurazione, file `0600` con contenuto `secret-service` | `$XDG_CONFIG_HOME/clantodesk/machine.key`, oppure `~/.config/clantodesk/machine.key`, file `0600` | Al primo avvio, senza marcatore, se bus o Secret Service non esistono usa `user.key` nella stessa cartella, file `0600`; con il marcatore non crea una nuova chiave se Secret Service non è raggiungibile, e una collection esistente ma bloccata non abilita il ripiego |
 | Android | alias non esportabile `it.clanto.ClantoDesk.user-key` in `AndroidKeyStore`; i 32 byte sono AES-GCM in `${Context.filesDir}/clantodesk-user-key.v1` | `Config::path("machine.key")` nei dati privati dell'app, file `0600` | `Config::path("user.key")` nei dati privati dell'app se Android Keystore non è disponibile |
 
 I processi root/LaunchDaemon su macOS e Linux e il servizio SYSTEM su Windows non
@@ -146,6 +146,16 @@ prompt. L'annullamento dello sblocco della collection `default` non crea una nuo
 collection né un nuovo `user.key`. I due manifest Android sono stati valutati: il
 Keystore non richiede permessi né componenti aggiuntivi, quindi il manifest ridotto
 della variante client resta invariato.
+
+Su Linux il marcatore si trova in
+`$XDG_CONFIG_HOME/clantodesk/user.key.backend`, oppure
+`~/.config/clantodesk/user.key.backend`. Se Secret Service è temporaneamente
+indisponibile, il marcatore impedisce di generare un `user.key` diverso: la chiave
+resta non disponibile e la risoluzione viene ritentata in background. Per
+abbandonare deliberatamente il keyring, chiudere ClantoDesk, eliminare il marcatore
+e riavviare senza Secret Service; questa operazione accetta di rendere
+irrecuperabili le credenziali cifrate con la precedente chiave del keyring, che
+dovranno essere inserite di nuovo.
 
 Se esiste il `user.key` creato dalla prima parte, la chiave viene copiata nel
 portachiavi di sistema solo quando non vi è già una voce. Il file viene eliminato

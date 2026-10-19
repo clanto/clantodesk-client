@@ -19,6 +19,10 @@ use std::{
 const KEY_LEN: usize = 32;
 const MACHINE_KEY_FILE: &str = "machine.key";
 const USER_KEY_FILE: &str = "user.key";
+#[cfg(target_os = "linux")]
+const USER_KEY_BACKEND_FILE: &str = "user.key.backend";
+#[cfg(target_os = "linux")]
+const SECRET_SERVICE_BACKEND_MARKER: &[u8] = b"secret-service\n";
 
 #[cfg(any(
     target_os = "macos",
@@ -186,6 +190,7 @@ fn choose_user_key(
     backend: BackendSnapshot,
     file: Option<StoredKey>,
     fallback_when_unavailable: bool,
+    backend_marker_present: bool,
 ) -> Result<UserKeyChoice> {
     match (backend, file) {
         (BackendSnapshot::Present(backend), Some(file)) if backend != file => Err(anyhow!(
@@ -193,7 +198,15 @@ fn choose_user_key(
         )),
         (BackendSnapshot::Present(key), file) => Ok(UserKeyChoice::Backend(key, file.is_some())),
         (BackendSnapshot::Missing, Some(key)) => Ok(UserKeyChoice::ImportFile(key)),
-        (BackendSnapshot::Missing, None) => Ok(UserKeyChoice::CreateBackend),
+        (BackendSnapshot::Missing, None) if !backend_marker_present => {
+            Ok(UserKeyChoice::CreateBackend)
+        }
+        (BackendSnapshot::Missing, None) => Err(anyhow!(
+            "the recorded user credential key backend no longer contains the key"
+        )),
+        (BackendSnapshot::Unavailable, _) if backend_marker_present => Err(anyhow!(
+            "the recorded user credential key backend is unavailable"
+        )),
         (BackendSnapshot::Unavailable, Some(key)) => Ok(UserKeyChoice::FileFallback(key)),
         (BackendSnapshot::Unavailable, None) if fallback_when_unavailable => {
             Ok(UserKeyChoice::CreateFileFallback)
@@ -222,14 +235,25 @@ fn migration_verified(key: &StoredKey, readback: BackendReadback) -> bool {
 ))]
 fn load_user_key(path: &Path) -> Result<StoredKey> {
     let file_key = read_existing_key_file(path, KeyScope::User)?;
+    let backend_marker_present = user_backend_marker_present(path)?;
     let backend_result = read_user_key_backend();
     let backend = match &backend_result {
         Ok(Some(key)) => BackendSnapshot::Present(*key),
         Ok(None) => BackendSnapshot::Missing,
         Err(_) => BackendSnapshot::Unavailable,
     };
+    // A key read from the keychain stays usable even if the marker cannot be written.
+    if let Err(err) = record_present_user_backend(path, backend) {
+        log::error!("Cannot record the user key backend marker: {err}");
+    }
     let fallback_when_unavailable = user_backend_allows_new_file_when_unavailable(&backend_result);
-    let choice = choose_user_key(backend, file_key, fallback_when_unavailable).map_err(|err| {
+    let choice = choose_user_key(
+        backend,
+        file_key,
+        fallback_when_unavailable,
+        backend_marker_present,
+    )
+    .map_err(|err| {
         let message = backend_result.as_ref().err().map_or_else(
             || err.to_string(),
             |backend_err| format!("{err}: {backend_err}"),
@@ -283,6 +307,7 @@ fn persist_user_backend(path: &Path, key: StoredKey, migrating_file: bool) -> Re
         Err(_) => BackendReadback::Failed,
     };
     if migration_verified(&key, readback) {
+        record_user_backend(path)?;
         if migrating_file {
             remove_migrated_key_file(path);
         }
@@ -322,6 +347,51 @@ fn persist_user_backend(path: &Path, key: StoredKey, migrating_file: bool) -> Re
             .or_else(|| readback_result.err())
             .unwrap_or_else(|| anyhow!("failed to verify the saved user credential key")))
     }
+}
+
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "linux",
+    target_os = "android"
+))]
+fn record_present_user_backend(path: &Path, backend: BackendSnapshot) -> Result<()> {
+    if matches!(backend, BackendSnapshot::Present(_)) {
+        record_user_backend(path)?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn user_backend_marker_path(user_key_path: &Path) -> PathBuf {
+    user_key_path.with_file_name(USER_KEY_BACKEND_FILE)
+}
+
+#[cfg(target_os = "linux")]
+fn user_backend_marker_present(user_key_path: &Path) -> Result<bool> {
+    match fs::metadata(user_backend_marker_path(user_key_path)) {
+        Ok(_) => Ok(true),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(err.into()),
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn record_user_backend(user_key_path: &Path) -> Result<()> {
+    atomic_replace(
+        &user_backend_marker_path(user_key_path),
+        SECRET_SERVICE_BACKEND_MARKER,
+    )
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+fn user_backend_marker_present(_user_key_path: &Path) -> Result<bool> {
+    Ok(false)
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+fn record_user_backend(_user_key_path: &Path) -> Result<()> {
+    Ok(())
 }
 
 #[cfg(any(
@@ -1410,11 +1480,11 @@ mod tests {
         let key = [1; KEY_LEN];
 
         assert_eq!(
-            choose_user_key(BackendSnapshot::Present(key), None, true).unwrap(),
+            choose_user_key(BackendSnapshot::Present(key), None, true, false).unwrap(),
             UserKeyChoice::Backend(key, false)
         );
         assert_eq!(
-            choose_user_key(BackendSnapshot::Present(key), Some(key), true).unwrap(),
+            choose_user_key(BackendSnapshot::Present(key), Some(key), true, false).unwrap(),
             UserKeyChoice::Backend(key, true)
         );
     }
@@ -1424,11 +1494,11 @@ mod tests {
         let key = [2; KEY_LEN];
 
         assert_eq!(
-            choose_user_key(BackendSnapshot::Missing, Some(key), true).unwrap(),
+            choose_user_key(BackendSnapshot::Missing, Some(key), true, false).unwrap(),
             UserKeyChoice::ImportFile(key)
         );
         assert_eq!(
-            choose_user_key(BackendSnapshot::Unavailable, Some(key), true).unwrap(),
+            choose_user_key(BackendSnapshot::Unavailable, Some(key), true, false).unwrap(),
             UserKeyChoice::FileFallback(key)
         );
     }
@@ -1436,14 +1506,27 @@ mod tests {
     #[test]
     fn user_key_choice_creates_only_when_no_key_exists() {
         assert_eq!(
-            choose_user_key(BackendSnapshot::Missing, None, true).unwrap(),
+            choose_user_key(BackendSnapshot::Missing, None, true, false).unwrap(),
             UserKeyChoice::CreateBackend
         );
         assert_eq!(
-            choose_user_key(BackendSnapshot::Unavailable, None, true).unwrap(),
+            choose_user_key(BackendSnapshot::Unavailable, None, true, false).unwrap(),
             UserKeyChoice::CreateFileFallback
         );
-        assert!(choose_user_key(BackendSnapshot::Unavailable, None, false).is_err());
+        assert!(choose_user_key(BackendSnapshot::Unavailable, None, false, false).is_err());
+    }
+
+    #[test]
+    fn backend_marker_requires_recorded_backend_when_unavailable() {
+        assert!(choose_user_key(BackendSnapshot::Unavailable, None, true, true).is_err());
+        assert!(
+            choose_user_key(BackendSnapshot::Unavailable, Some([9; KEY_LEN]), true, true,).is_err()
+        );
+        assert!(choose_user_key(BackendSnapshot::Missing, None, true, true).is_err());
+        assert_eq!(
+            choose_user_key(BackendSnapshot::Unavailable, None, true, false).unwrap(),
+            UserKeyChoice::CreateFileFallback
+        );
     }
 
     #[test]
@@ -1452,6 +1535,7 @@ mod tests {
             BackendSnapshot::Present([3; KEY_LEN]),
             Some([4; KEY_LEN]),
             true,
+            false,
         )
         .is_err());
     }
@@ -1503,10 +1587,38 @@ mod tests {
         )));
         let fallback_allowed = user_backend_allows_new_file_when_unavailable(&backend_result);
         assert!(!fallback_allowed);
-        assert!(choose_user_key(BackendSnapshot::Unavailable, None, fallback_allowed).is_err());
+        assert!(
+            choose_user_key(BackendSnapshot::Unavailable, None, fallback_allowed, false,).is_err()
+        );
         assert!(!user_backend_has_file_fallback(
             backend_result.as_ref().err(),
             None
         ));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn present_secret_service_key_writes_private_backend_marker() {
+        let directory = std::env::temp_dir().join(format!(
+            "clantodesk-keystore-marker-{}-{}",
+            std::process::id(),
+            thread_rng().gen::<u64>()
+        ));
+        let user_key_path = directory.join(USER_KEY_FILE);
+
+        record_present_user_backend(&user_key_path, BackendSnapshot::Present([9; KEY_LEN]))
+            .unwrap();
+
+        let marker_path = user_backend_marker_path(&user_key_path);
+        assert!(user_backend_marker_present(&user_key_path).unwrap());
+        assert_eq!(
+            fs::read(&marker_path).unwrap(),
+            SECRET_SERVICE_BACKEND_MARKER
+        );
+        assert_eq!(
+            fs::metadata(&marker_path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        fs::remove_dir_all(directory).unwrap();
     }
 }
