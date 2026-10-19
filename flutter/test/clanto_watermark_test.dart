@@ -1,88 +1,89 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_hbb/clanto/watermark.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Clanto controller watermark', () {
-    test('uses account username and formats the current local minute', () {
-      final text = buildClantoWatermarkText(
-        controllerId: '123 456 789',
-        accountUsername: 'm.rossi',
-        computerName: 'PC-UFFICIO',
-        now: DateTime(2026, 10, 19, 7, 5),
-      );
-
-      expect(text,
-          'ClantoDesk ID: 123 456 789  •  m.rossi  •  2026-10-19 07:05');
-    });
-
-    test('falls back to the computer name when no account is logged in', () {
-      final text = buildClantoWatermarkText(
-        controllerId: '42',
-        accountUsername: '   ',
-        computerName: 'PC-UFFICIO',
-        now: DateTime(2026, 1, 2, 3, 4),
-      );
-
-      expect(text, contains('42  •  PC-UFFICIO  •  2026-01-02 03:04'));
-    });
-
-    test('local option or host requirement enables remote desktop watermark', () {
+    test('formats the controller identity line', () {
       expect(
-        shouldShowClantoWatermark(
-          localEnabled: false,
-          hostRequired: false,
-          sessionType: ClantoWatermarkSessionType.remoteDesktop,
+        buildClantoControllerIdentityLine(
+          controllerId: '123 456 789',
+          accountUser: 'm.rossi',
+          osUser: r'ACME\mrossi',
+          controllerPcName: 'PC-UFFICIO',
         ),
-        isFalse,
-      );
-      expect(
-        shouldShowClantoWatermark(
-          localEnabled: true,
-          hostRequired: false,
-          sessionType: ClantoWatermarkSessionType.remoteDesktop,
-        ),
-        isTrue,
-      );
-      expect(
-        shouldShowClantoWatermark(
-          localEnabled: false,
-          hostRequired: true,
-          sessionType: ClantoWatermarkSessionType.remoteDesktop,
-        ),
-        isTrue,
+        r'ID 123 456 789 · m.rossi · ACME\mrossi su PC-UFFICIO',
       );
     });
 
-    test('local option or host requirement enables camera watermark', () {
+    test('omits missing controller identity parts and separators', () {
       expect(
-        shouldShowClantoWatermark(
-          localEnabled: true,
-          hostRequired: false,
-          sessionType: ClantoWatermarkSessionType.viewCamera,
+        buildClantoControllerIdentityLine(
+          controllerId: '42',
+          accountUser: ' ',
+          osUser: '',
+          controllerPcName: 'PC-UFFICIO',
         ),
-        isTrue,
+        'ID 42 · PC-UFFICIO',
       );
       expect(
-        shouldShowClantoWatermark(
-          localEnabled: false,
-          hostRequired: true,
-          sessionType: ClantoWatermarkSessionType.viewCamera,
+        buildClantoControllerIdentityLine(
+          controllerId: '',
+          accountUser: 'account',
+          osUser: 'alice',
+          controllerPcName: '',
         ),
-        isTrue,
+        'account · alice',
       );
+    });
+
+    test('formats the host, Italian local date, and session code line', () {
+      expect(
+        buildClantoHostSessionLine(
+          hostName: 'HOST-01',
+          hostUser: 'mario',
+          sessionCode: 'S-0123-4567',
+          now: DateTime(2026, 10, 19, 7, 5),
+        ),
+        '→ HOST-01 (mario) · 19/10/2026 07:05 · S-0123-4567',
+      );
+    });
+
+    test('omits missing host identity parts', () {
+      expect(
+        buildClantoHostSessionLine(
+          hostName: '',
+          hostUser: 'mario',
+          sessionCode: '',
+          now: DateTime(2026, 1, 2, 3, 4),
+        ),
+        '→ mario · 02/01/2026 03:04',
+      );
+    });
+
+    test('only the host requirement enables desktop and camera watermarks', () {
+      for (final type in [
+        ClantoWatermarkSessionType.remoteDesktop,
+        ClantoWatermarkSessionType.viewCamera,
+      ]) {
+        expect(
+          shouldShowClantoWatermark(hostRequired: false, sessionType: type),
+          isFalse,
+        );
+        expect(
+          shouldShowClantoWatermark(hostRequired: true, sessionType: type),
+          isTrue,
+        );
+      }
     });
 
     test('non-screen session types never show the watermark', () {
       for (final type in ClantoWatermarkSessionType.values.where(
-          (type) =>
-              type != ClantoWatermarkSessionType.remoteDesktop &&
-              type != ClantoWatermarkSessionType.viewCamera)) {
+        (type) =>
+            type != ClantoWatermarkSessionType.remoteDesktop &&
+            type != ClantoWatermarkSessionType.viewCamera,
+      )) {
         expect(
-          shouldShowClantoWatermark(
-            localEnabled: true,
-            hostRequired: true,
-            sessionType: type,
-          ),
+          shouldShowClantoWatermark(hostRequired: true, sessionType: type),
           isFalse,
           reason: type.name,
         );

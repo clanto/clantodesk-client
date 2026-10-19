@@ -27,12 +27,16 @@ const CLEANUP_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 struct SessionRecord {
     record_type: String,
     session_key: String,
+    session_code: String,
     conn_id: i32,
     started_at: String,
     ended_at: String,
     duration_secs: Option<u64>,
     peer_id: String,
     peer_name: String,
+    account_user: String,
+    os_user: String,
+    pc_name: String,
     ip: String,
     connection_type: String,
     primary_auth: Option<i64>,
@@ -207,6 +211,19 @@ fn apply_connection(registry: &mut Registry, value: &Value) -> Option<SessionRec
         .map(|id| id as i32)?;
     let mut to_write = None;
     if let Some(record) = session_for(registry, conn_id) {
+        let mut metadata_changed = false;
+        for (key, target) in [
+            ("session_code", &mut record.session_code),
+            ("account_user", &mut record.account_user),
+            ("os_user", &mut record.os_user),
+            ("pc_name", &mut record.pc_name),
+        ] {
+            let value = value_str(value, key);
+            if !value.is_empty() && *target != value {
+                *target = value;
+                metadata_changed = true;
+            }
+        }
         if value.get("action").and_then(Value::as_str) == Some("close") {
             record.ended_at = now().to_rfc3339();
             record.duration_secs = value.get("duration_secs").and_then(Value::as_u64);
@@ -242,8 +259,11 @@ fn apply_connection(registry: &mut Registry, value: &Value) -> Option<SessionRec
                 .map(str::to_owned)
                 .collect();
         }
+        if metadata_changed && to_write.is_none() {
+            to_write = Some(record.clone());
+        }
     }
-    if to_write.is_some() {
+    if to_write.as_ref().is_some_and(|record| record.closed) {
         registry.active_by_conn.remove(&conn_id);
     }
     to_write
@@ -559,16 +579,31 @@ mod tests {
         let mut registry = Registry::default();
         let new = json!({"conn_id": 7, "ip": "192.0.2.1", "action": "new"});
         apply_connection(&mut registry, &new);
-        apply_connection(
+        let active = apply_connection(
             &mut registry,
-            &json!({"conn_id": 7, "peer": ["peer", "Peer"], "type": 0, "primary_auth": 2}),
-        );
+            &json!({"conn_id": 7, "peer": ["peer", "Peer"], "type": 0, "primary_auth": 2, "session_code": "S-0123-4567"}),
+        )
+        .unwrap();
+        assert_eq!(active.session_code, "S-0123-4567");
+        assert!(!active.closed);
+        assert!(registry.active_by_conn.contains_key(&7));
         let record = apply_connection(
             &mut registry,
-            &json!({"conn_id": 7, "action": "close", "duration_secs": 42}),
+            &json!({
+                "conn_id": 7,
+                "action": "close",
+                "duration_secs": 42,
+                "account_user": "account",
+                "os_user": "ACME\\alice",
+                "pc_name": "PC-ALICE",
+            }),
         )
         .unwrap();
         assert_eq!(record.peer_id, "peer");
+        assert_eq!(record.session_code, "S-0123-4567");
+        assert_eq!(record.account_user, "account");
+        assert_eq!(record.os_user, "ACME\\alice");
+        assert_eq!(record.pc_name, "PC-ALICE");
         assert_eq!(record.duration_secs, Some(42));
         assert!(record.closed);
     }

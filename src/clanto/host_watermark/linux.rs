@@ -57,7 +57,8 @@ mod wayland {
                 window.set_skip_taskbar_hint(true);
                 window.set_skip_pager_hint(true);
                 window.set_type_hint(gdk::WindowTypeHint::Notification);
-                window.set_default_size(geometry.width(), 48);
+                let height = text.lines().count().clamp(1, 4) as i32 * 24 + 16;
+                window.set_default_size(geometry.width(), height);
                 window.move_(geometry.x(), geometry.y());
                 window.stick();
                 window.set_opacity(0.86);
@@ -90,7 +91,8 @@ mod x11_overlay {
     const SHAPE_INPUT: c_int = 2;
     const SHAPE_SET: c_int = 0;
     const UNSORTED: c_int = 0;
-    const WATERMARK_HEIGHT: c_uint = 48;
+    const WATERMARK_LINE_HEIGHT: c_uint = 24;
+    const WATERMARK_VERTICAL_PADDING: c_uint = 16;
 
     #[link(name = "Xext")]
     extern "C" {
@@ -188,40 +190,43 @@ mod x11_overlay {
                 match rx.recv_timeout(Duration::from_secs(1)) {
                     Ok(Some(new_text)) => {
                         text = new_text;
-                        recreate_windows(display, screen, &mut windows);
+                        recreate_windows(display, screen, &mut windows, watermark_height(&text));
                     }
                     Ok(None) => destroy_windows(display, &mut windows),
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                 }
 
-                let fallback = font_set.is_null().then(|| ascii_fallback(&text));
-                let bytes = fallback.as_deref().unwrap_or(&text).as_bytes();
                 for &window in &windows {
                     xlib::XRaiseWindow(display, window);
                     xlib::XClearWindow(display, window);
-                    let length = bytes.len().min(c_int::MAX as usize) as c_int;
-                    if font_set.is_null() {
-                        xlib::XDrawString(
-                            display,
-                            window,
-                            gc,
-                            12,
-                            30,
-                            bytes.as_ptr().cast(),
-                            length,
-                        );
-                    } else {
-                        xlib::Xutf8DrawString(
-                            display,
-                            window,
-                            font_set,
-                            gc,
-                            12,
-                            30,
-                            bytes.as_ptr().cast(),
-                            length,
-                        );
+                    for (index, line) in text.lines().take(4).enumerate() {
+                        let fallback = font_set.is_null().then(|| ascii_fallback(line));
+                        let bytes = fallback.as_deref().unwrap_or(line).as_bytes();
+                        let length = bytes.len().min(c_int::MAX as usize) as c_int;
+                        let baseline = 24 + index as c_int * WATERMARK_LINE_HEIGHT as c_int;
+                        if font_set.is_null() {
+                            xlib::XDrawString(
+                                display,
+                                window,
+                                gc,
+                                12,
+                                baseline,
+                                bytes.as_ptr().cast(),
+                                length,
+                            );
+                        } else {
+                            xlib::Xutf8DrawString(
+                                display,
+                                window,
+                                font_set,
+                                gc,
+                                12,
+                                baseline,
+                                bytes.as_ptr().cast(),
+                                length,
+                            );
+                        }
                     }
                 }
                 xlib::XFlush(display);
@@ -248,10 +253,16 @@ mod x11_overlay {
             .collect()
     }
 
+    fn watermark_height(text: &str) -> c_uint {
+        text.lines().count().clamp(1, 4) as c_uint * WATERMARK_LINE_HEIGHT
+            + WATERMARK_VERTICAL_PADDING
+    }
+
     unsafe fn recreate_windows(
         display: *mut xlib::Display,
         screen: c_int,
         windows: &mut Vec<xlib::Window>,
+        height: c_uint,
     ) {
         destroy_windows(display, windows);
         let root = xlib::XRootWindow(display, screen);
@@ -289,7 +300,7 @@ mod x11_overlay {
                 x,
                 y,
                 width,
-                WATERMARK_HEIGHT,
+                height,
                 0,
                 0,
                 xlib::InputOutput as c_uint,

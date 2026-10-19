@@ -51,6 +51,7 @@ enum EventKey {
     SessionOpened,
     ConnectionClosed,
     SessionCompleted,
+    ControllerIdentityReceived,
     FileRemoteSend,
     FileRemoteReceive,
     AlarmIpWhitelist,
@@ -109,6 +110,13 @@ const EVENTS: &[EventDefinition] = &[
         key: EventKey::SessionCompleted,
         id: 61103,
         name: "Session completed",
+        syslog_severity: 6,
+        cef_severity: 3,
+    },
+    EventDefinition {
+        key: EventKey::ControllerIdentityReceived,
+        id: 61104,
+        name: "Controller identity received",
         syslog_severity: 6,
         cef_severity: 3,
     },
@@ -393,6 +401,9 @@ fn event_definition(kind: &str, value: &Value) -> &'static EventDefinition {
         }
         "conn" if value.get("action").and_then(Value::as_str) == Some("close") => {
             EventKey::ConnectionClosed
+        }
+        "conn" if value.get("action").and_then(Value::as_str) == Some("controller_identity") => {
+            EventKey::ControllerIdentityReceived
         }
         "conn" if value.get("type").and_then(Value::as_str) == Some("clanto_posture") => {
             EventKey::PosturePassed
@@ -1148,6 +1159,13 @@ mod tests {
     }
 
     #[test]
+    fn cef_includes_session_code_extension() {
+        let event = event_definition("conn", &json!({"peer": ["id", "name"]}));
+        let record = format_cef(event, &json!({"session_code": "S-0123-4567"}));
+        assert!(record.contains("session_code=S-0123-4567"));
+    }
+
+    #[test]
     fn rfc5424_and_cef_use_the_same_stable_event_id() {
         let event = event_definition("alarm", &json!({"typ": 11}));
         let value = json!({"reason": "posture"});
@@ -1196,6 +1214,10 @@ mod tests {
         assert_eq!(
             event_definition("conn", &json!({"action": "new"})).key,
             EventKey::ConnectionOpened
+        );
+        assert_eq!(
+            event_definition("conn", &json!({"action": "controller_identity"})).key,
+            EventKey::ControllerIdentityReceived
         );
         assert_eq!(
             event_definition("conn", &json!({"peer": ["id", "name"], "type": 0})).key,

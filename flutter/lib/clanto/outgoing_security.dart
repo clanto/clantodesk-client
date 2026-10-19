@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:settings_ui/settings_ui.dart';
 
-import 'watermark.dart';
-
 const String kOptClantoOutgoingFileTransfer = 'clanto-outgoing-file-transfer';
 const String kOptClantoOutgoingClipboard = 'clanto-outgoing-clipboard';
 const String kOptClantoOutgoingTunnel = 'clanto-outgoing-tunnel';
@@ -38,7 +36,6 @@ class ClantoOutgoingSecuritySetting extends StatefulWidget {
 class _ClantoOutgoingSecuritySettingState
     extends State<ClantoOutgoingSecuritySetting> {
   late Map<String, bool> _allowed;
-  late bool _watermarkEnabled;
 
   @override
   void initState() {
@@ -47,21 +44,12 @@ class _ClantoOutgoingSecuritySettingState
       for (final key in _restrictions.keys)
         key: bind.mainGetOptionSync(key: key) != 'N',
     };
-    _watermarkEnabled =
-        bind.mainGetOptionSync(key: kOptClantoControllerWatermark) == 'Y';
   }
 
   Future<void> _setAllowed(String key, bool allowed) async {
     if (!widget.enabled || isOptionFixed(key)) return;
     await bind.mainSetOption(key: key, value: allowed ? 'Y' : 'N');
     if (mounted) setState(() => _allowed[key] = allowed);
-  }
-
-  Future<void> _setWatermark(bool enabled) async {
-    if (!widget.enabled || isOptionFixed(kOptClantoControllerWatermark)) return;
-    await bind.mainSetOption(
-        key: kOptClantoControllerWatermark, value: enabled ? 'Y' : 'N');
-    if (mounted) setState(() => _watermarkEnabled = enabled);
   }
 
   @override
@@ -71,17 +59,6 @@ class _ClantoOutgoingSecuritySettingState
           style: Theme.of(context).textTheme.titleMedium),
       Text(translate('Choose what this PC may do in sessions it opens.'),
           style: Theme.of(context).textTheme.bodySmall),
-      CheckboxListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-        value: _watermarkEnabled,
-        onChanged:
-            widget.enabled && !isOptionFixed(kOptClantoControllerWatermark)
-                ? (value) => _setWatermark(value ?? false)
-                : null,
-        title: Text(translate('Show controller watermark')),
-        subtitle: Text(translate(
-            "Show this controller's ID, account user or PC name, and current time over remote sessions.")),
-      ),
       ..._restrictions.entries.map((entry) => CheckboxListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 10),
             value: _allowed[entry.key],

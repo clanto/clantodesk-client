@@ -136,7 +136,8 @@ message PeerInfo {
   // NOTE: Only support one-level dictionaries (for peer to update), and the key is of type string.
   string platform_additions = 12;
   WindowsSessions windows_sessions = 13;
-  bool clanto_host_watermark = 1000;
+  bool clanto_controller_identity_requested = 1000;
+  string clanto_session_code = 1001;
 }
 
 message WindowsSession {  
@@ -870,8 +871,14 @@ message Misc {
     // is rebuilt, and held again, the next time it is shown, before any connection names it
     // by id again, so the shape just selected is always there to give.
     uint64 request_cursor_data = 39;
-    string clanto_account_user = 1000;
+    ClantoControllerIdentity clanto_controller_identity = 1000;
   }
+}
+
+message ClantoControllerIdentity {
+  string account_user = 1;
+  string os_user = 2;
+  string pc_name = 3;
 }
 
 message VoiceCallRequest {

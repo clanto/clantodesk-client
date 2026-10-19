@@ -987,6 +987,10 @@ pub fn main_get_login_device_info() -> SyncReturn<String> {
     SyncReturn(get_login_device_info_json())
 }
 
+pub fn main_get_clanto_controller_os_user() -> SyncReturn<String> {
+    SyncReturn(crate::clanto::host_watermark::controller_os_user())
+}
+
 pub fn main_change_id(new_id: String) {
     change_id(new_id)
 }

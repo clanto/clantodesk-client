@@ -914,6 +914,7 @@ impl InvokeUiSession for FlutterHandler {
                 ("current_display", &pi.current_display.to_string()),
                 ("resolutions", &resolutions),
                 ("platform_additions", &pi.platform_additions),
+                ("clanto_session_code", &pi.clanto_session_code),
             ],
             &[],
         );

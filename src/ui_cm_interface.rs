@@ -147,6 +147,7 @@ pub struct Client {
     pub block_input: bool,
     pub privacy_mode: bool,
     pub from_switch: bool,
+    pub session_code: String,
     pub in_voice_call: bool,
     pub incoming_voice_call: bool,
     #[serde(skip)]
@@ -257,6 +258,7 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
             block_input,
             privacy_mode,
             from_switch,
+            session_code: String::new(),
             #[cfg(not(any(target_os = "ios")))]
             tx,
             in_voice_call: false,
@@ -271,10 +273,44 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
         self.ui_handler.add_connection(&client);
     }
 
-    fn update_clanto_account_user(&self, id: i32, account_user: String) {
+    fn update_clanto_controller_identity(
+        &self,
+        id: i32,
+        account_user: String,
+        os_user: String,
+        pc_name: String,
+    ) {
         if CLIENTS.read().unwrap().contains_key(&id) {
-            crate::clanto::host_watermark::connection_account_user(id, account_user);
+            crate::clanto::host_watermark::connection_identity(
+                id,
+                base::message_proto::ClantoControllerIdentity {
+                    account_user,
+                    os_user,
+                    pc_name,
+                    ..Default::default()
+                },
+            );
         }
+    }
+
+    fn update_clanto_session_code(&self, id: i32, session_code: String) {
+        if let Some(client) = CLIENTS.write().unwrap().get_mut(&id) {
+            client.session_code.clone_from(&session_code);
+            crate::clanto::host_watermark::connection_session_code(id, session_code);
+        }
+    }
+
+    fn update_clanto_effective_permissions(
+        &self,
+        id: i32,
+        keyboard: bool,
+        clipboard: bool,
+        audio: bool,
+        file: bool,
+    ) {
+        crate::clanto::host_watermark::connection_effective_permissions(
+            id, keyboard, clipboard, audio, file,
+        );
     }
 
     #[inline]
@@ -437,9 +473,24 @@ pub fn switch_permission(id: i32, name: String, enabled: bool) {
         );
         return;
     }
-    if let Some(client) = CLIENTS.read().unwrap().get(&id) {
-        allow_err!(client.tx.send(Data::SwitchPermission { name, enabled }));
+    if let Some(client) = CLIENTS.write().unwrap().get_mut(&id) {
+        allow_err!(client.tx.send(Data::SwitchPermission {
+            name: name.clone(),
+            enabled,
+        }));
+        match name.as_str() {
+            "keyboard" => client.keyboard = enabled,
+            "clipboard" => client.clipboard = enabled,
+            "audio" => client.audio = enabled,
+            "file" => client.file = enabled,
+            "restart" => client.restart = enabled,
+            "recording" => client.recording = enabled,
+            "block_input" => client.block_input = enabled,
+            "privacy_mode" => client.privacy_mode = enabled,
+            _ => return,
+        }
     };
+    crate::clanto::host_watermark::connection_permission(id, &name, enabled);
 }
 
 #[inline]
@@ -458,11 +509,15 @@ pub fn switch_permission_all(name: String, enabled: bool) {
         );
         return;
     }
-    for (_, client) in CLIENTS.read().unwrap().iter() {
+    for (id, client) in CLIENTS.write().unwrap().iter_mut() {
         allow_err!(client.tx.send(Data::SwitchPermission {
             name: name.clone(),
             enabled
         }));
+        if name == "keyboard" {
+            client.keyboard = enabled;
+            crate::clanto::host_watermark::connection_permission(*id, &name, enabled);
+        }
     }
 }
 
@@ -579,8 +634,14 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                     self.running = true;
                                     break;
                                 }
-                                Data::ClantoAccountUser { id, account_user } => {
-                                    self.cm.update_clanto_account_user(id, account_user);
+                                Data::ClantoControllerIdentity { id, account_user, os_user, pc_name } => {
+                                    self.cm.update_clanto_controller_identity(id, account_user, os_user, pc_name);
+                                }
+                                Data::ClantoSessionCode { id, session_code } => {
+                                    self.cm.update_clanto_session_code(id, session_code);
+                                }
+                                Data::ClantoEffectivePermissions { id, keyboard, clipboard, audio, file } => {
+                                    self.cm.update_clanto_effective_permissions(id, keyboard, clipboard, audio, file);
                                 }
                                 Data::Close => {
                                     log::info!("cm ipc connection closed from connection request");
@@ -618,6 +679,11 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                             // This reuses add_connection(), and cm.tis only selectively updates
                                             // existing rows (authorized/privacy_mode) for this fallback path.
                                             self.cm.ui_handler.add_connection(&client);
+                                            crate::clanto::host_watermark::connection_permission(
+                                                self.conn_id,
+                                                "privacy_mode",
+                                                enabled,
+                                            );
                                         }
                                     }
                                 }
@@ -951,8 +1017,25 @@ pub async fn start_listen<T: InvokeUiCM>(
                     tx.clone(),
                 );
             }
-            Some(Data::ClantoAccountUser { id, account_user }) => {
-                cm.update_clanto_account_user(id, account_user);
+            Some(Data::ClantoControllerIdentity {
+                id,
+                account_user,
+                os_user,
+                pc_name,
+            }) => {
+                cm.update_clanto_controller_identity(id, account_user, os_user, pc_name);
+            }
+            Some(Data::ClantoSessionCode { id, session_code }) => {
+                cm.update_clanto_session_code(id, session_code);
+            }
+            Some(Data::ClantoEffectivePermissions {
+                id,
+                keyboard,
+                clipboard,
+                audio,
+                file,
+            }) => {
+                cm.update_clanto_effective_permissions(id, keyboard, clipboard, audio, file);
             }
             Some(Data::ChatMessage { text }) => {
                 cm.new_message(current_id, text);

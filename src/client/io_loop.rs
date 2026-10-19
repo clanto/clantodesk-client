@@ -1598,7 +1598,8 @@ impl<T: InvokeUiSession> Remote<T> {
                         }
                     }
                     Some(login_response::Union::PeerInfo(pi)) => {
-                        let send_clanto_account_user = pi.clanto_host_watermark
+                        let send_clanto_controller_identity = pi
+                            .clanto_controller_identity_requested
                             && (self.handler.is_default() || self.handler.is_view_camera());
                         let peer_version = pi.version.clone();
                         let peer_platform = pi.platform.clone();
@@ -1616,16 +1617,14 @@ impl<T: InvokeUiSession> Remote<T> {
                             }
                         }
                         self.handler.handle_peer_info(pi);
-                        if send_clanto_account_user {
-                            let account_user =
-                                crate::clanto::host_watermark::controller_account_user();
-                            if !account_user.is_empty() {
-                                let mut misc = Misc::new();
-                                misc.set_clanto_account_user(account_user);
-                                let mut response = Message::new();
-                                response.set_misc(misc);
-                                allow_err!(peer.send(&response).await);
-                            }
+                        if send_clanto_controller_identity {
+                            let mut misc = Misc::new();
+                            misc.set_clanto_controller_identity(
+                                crate::clanto::host_watermark::controller_identity(),
+                            );
+                            let mut response = Message::new();
+                            response.set_misc(misc);
+                            allow_err!(peer.send(&response).await);
                         }
                         #[cfg(all(target_os = "windows", not(feature = "flutter")))]
                         self.check_clipboard_file_context();

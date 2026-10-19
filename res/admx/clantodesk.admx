@@ -114,9 +114,6 @@
     <policy name="OutgoingRecord" class="Machine" displayName="$(string.OutgoingRecord)" explainText="$(string.OutgoingRecord_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-outgoing-record" presentation="$(presentation.OutgoingRecord)">
       <parentCategory ref="OutgoingSessions" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
-    <policy name="ControllerWatermark" class="Machine" displayName="$(string.ControllerWatermark)" explainText="$(string.ControllerWatermark_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-controller-watermark" presentation="$(presentation.ControllerWatermark)">
-      <parentCategory ref="OutgoingSessions" />
-      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
     <policy name="EventLogEnabled" class="Machine" displayName="$(string.EventLogEnabled)" explainText="$(string.EventLogEnabled_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-eventlog-enabled" presentation="$(presentation.EventLogEnabled)">
       <parentCategory ref="AuditSiem" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>

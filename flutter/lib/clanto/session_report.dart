@@ -19,6 +19,7 @@ class _SessionRecord {
     required this.startedAt,
     required this.endedAt,
     required this.durationSecs,
+    required this.sessionCode,
     required this.peerId,
     required this.peerName,
     required this.ip,
@@ -37,6 +38,7 @@ class _SessionRecord {
   final DateTime? startedAt;
   final DateTime? endedAt;
   final int durationSecs;
+  final String sessionCode;
   final String peerId;
   final String peerName;
   final String ip;
@@ -67,6 +69,7 @@ class _SessionRecord {
           _date(json['started_at'] ?? json['occurred_at'] ?? json['start']),
       endedAt: _date(json['ended_at'] ?? json['end']),
       durationSecs: _integer(json['duration_secs']),
+      sessionCode: _string(json['session_code']),
       peerId: _string(json['peer_id']),
       peerName: _string(json['peer_name']),
       ip: _string(json['ip']),
@@ -272,6 +275,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
         'Ended at',
         'Ended',
         'Duration seconds',
+        'Session code',
         'Peer ID',
         'Peer name',
         'IP',
@@ -289,6 +293,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
             _date(record.endedAt),
             record.statusLabel(),
             record.closed ? '${record.durationSecs}' : '',
+            record.sessionCode,
             record.peerId,
             record.peerName,
             record.ip,
@@ -349,6 +354,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
             _detail('Ended',
                 record.closed ? _date(record.endedAt) : record.statusLabel()),
             if (record.closed) _detail('Duration', _duration(record.durationSecs)),
+            _detail('Session code', record.sessionCode),
             _detail('Peer', record.peer),
             _detail('IP', record.ip),
             _detail('Connection type', record.connectionType),

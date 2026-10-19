@@ -20,17 +20,17 @@ use winapi::{
             EnumDisplayMonitors, FillRect, GetClientRect, PeekMessageW, RegisterClassW,
             SetLayeredWindowAttributes, SetWindowDisplayAffinity, SetWindowPos, ShowWindow,
             TranslateMessage, UpdateWindow, CS_HREDRAW, CS_VREDRAW, DT_CENTER, DT_END_ELLIPSIS,
-            DT_SINGLELINE, DT_VCENTER, HTTRANSPARENT, HWND_TOPMOST, LWA_ALPHA, MA_NOACTIVATE, MSG,
-            PAINTSTRUCT, PM_REMOVE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_SHOWNOACTIVATE, WM_CLOSE,
-            WM_DESTROY, WM_ERASEBKGND, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT, WNDCLASSW,
-            WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
-            WS_POPUP,
+            HTTRANSPARENT, HWND_TOPMOST, LWA_ALPHA, MA_NOACTIVATE, MSG, PAINTSTRUCT, PM_REMOVE,
+            SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_SHOWNOACTIVATE, WM_CLOSE, WM_DESTROY, WM_ERASEBKGND,
+            WM_MOUSEACTIVATE, WM_NCHITTEST, WM_PAINT, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+            WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
         },
     },
 };
 
 const WINDOW_CLASS: &str = "ClantoDeskHostWatermark";
-const WATERMARK_HEIGHT: i32 = 48;
+const WATERMARK_LINE_HEIGHT: i32 = 24;
+const WATERMARK_VERTICAL_PADDING: i32 = 16;
 const WDA_EXCLUDEFROMCAPTURE: DWORD = 0x0000_0011;
 
 lazy_static::lazy_static! {
@@ -145,6 +145,10 @@ fn recreate_windows(
     windows: &mut Vec<HWND>,
 ) {
     destroy_windows(windows);
+    let height = CURRENT_TEXT
+        .lock()
+        .map(|text| watermark_height(&text))
+        .unwrap_or(WATERMARK_LINE_HEIGHT + WATERMARK_VERTICAL_PADDING);
     let mut monitors = Vec::<RECT>::new();
     unsafe {
         EnumDisplayMonitors(
@@ -169,7 +173,7 @@ fn recreate_windows(
                 monitor.left,
                 monitor.top,
                 width,
-                WATERMARK_HEIGHT,
+                height,
                 null_mut(),
                 null_mut(),
                 instance,
@@ -199,7 +203,7 @@ fn recreate_windows(
                 monitor.left,
                 monitor.top,
                 width,
-                WATERMARK_HEIGHT,
+                height,
                 SWP_NOACTIVATE | SWP_SHOWWINDOW,
             );
             ShowWindow(window, SW_SHOWNOACTIVATE);
@@ -258,7 +262,7 @@ unsafe extern "system" fn window_proc(
                     text.as_mut_ptr(),
                     -1,
                     &mut rect,
-                    DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS,
+                    DT_CENTER | DT_END_ELLIPSIS,
                 );
             }
             EndPaint(window, &paint);
@@ -270,4 +274,8 @@ unsafe extern "system" fn window_proc(
 
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
+}
+
+fn watermark_height(text: &str) -> i32 {
+    text.lines().count().clamp(1, 4) as i32 * WATERMARK_LINE_HEIGHT + WATERMARK_VERTICAL_PADDING
 }

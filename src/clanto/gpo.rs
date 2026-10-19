@@ -44,7 +44,6 @@ pub const GPO_KEYS: &[&str] = &[
     "clanto-outgoing-terminal",
     "clanto-outgoing-remote-printer",
     "clanto-outgoing-record",
-    "clanto-controller-watermark",
     "clanto-require-controller-watermark",
     "clanto-host-watermark",
 ];

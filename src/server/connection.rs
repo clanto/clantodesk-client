@@ -450,6 +450,8 @@ pub struct Connection {
     tx_post_seq: mpsc::UnboundedSender<(String, Value)>,
     conn_audit_primary_auth: ConnAuditPrimaryAuth,
     conn_audit_two_factor: ConnAuditTwoFactor,
+    session_code: Option<String>,
+    controller_identity: Option<ClantoControllerIdentity>,
     // Tracks read job IDs delegated to CM process.
     // When a read job is delegated to CM (via FS::ReadFile), the job id is added here.
     // Used to filter stale responses (FileBlockFromCM, FileReadDone, etc.) for
@@ -663,6 +665,8 @@ impl Connection {
             terminal_generic_service: None,
             conn_audit_primary_auth: ConnAuditPrimaryAuth::None,
             conn_audit_two_factor: ConnAuditTwoFactor::None,
+            session_code: None,
+            controller_identity: None,
         };
         let addr = hbb_common::try_into_v4(addr);
         if !conn.on_open(addr).await {
@@ -759,6 +763,7 @@ impl Connection {
                             if !conn.send_logon_response_and_keep_alive().await {
                                 break;
                             }
+                            conn.send_clanto_session_code();
                             if conn.port_forward_socket.is_some() {
                                 break;
                             }
@@ -910,6 +915,9 @@ impl Connection {
                                 }
                                 conn.privacy_mode = enabled;
                                 conn.send_permission(Permission::PrivacyMode, enabled).await;
+                            }
+                            if matches!(name.as_str(), "keyboard" | "clipboard" | "audio" | "file") {
+                                conn.send_clanto_effective_permissions();
                             }
                         }
                         ipc::Data::RawMessage(bytes) => {
@@ -1569,6 +1577,20 @@ impl Connection {
         v["uuid"] = json!(crate::encode64(hbb_common::get_uuid()));
         v["conn_id"] = json!(self.inner.id);
         v["session_id"] = json!(self.lr.session_id);
+        if let Some(session_code) = self.session_code.as_deref() {
+            v["session_code"] = json!(session_code);
+        }
+        if let Some(identity) = self.controller_identity.as_ref() {
+            if !identity.account_user.trim().is_empty() {
+                v["account_user"] = json!(&identity.account_user);
+            }
+            if !identity.os_user.trim().is_empty() {
+                v["os_user"] = json!(&identity.os_user);
+            }
+            if !identity.pc_name.trim().is_empty() {
+                v["pc_name"] = json!(&identity.pc_name);
+            }
+        }
         // Unique per record; the api server dedups retried posts by it.
         v["nonce"] = json!(uuid::Uuid::new_v4().to_string());
         // Sink Clanto (syslog / Windows Event Log): indipendenti dall'API server,
@@ -1917,6 +1939,17 @@ impl Connection {
         if !self.connect_port_forward_if_needed().await {
             return false;
         }
+        let session_code = match crate::clanto::watermark::generate_session_code() {
+            Ok(code) => code,
+            Err(error) => {
+                log::error!("#{}, {error}", self.inner.id());
+                self.remember_close_reason("Session code generation failed");
+                self.send_login_error("Session code generation failed")
+                    .await;
+                return false;
+            }
+        };
+        self.session_code = Some(session_code);
         self.authorized = true;
         self.unauthorized_id = None;
         // One-time means gone once it has let a peer in, not once that peer
@@ -1967,7 +2000,8 @@ impl Connection {
             version: VERSION.to_owned(),
             ..Default::default()
         };
-        pi.clanto_host_watermark = self.should_request_clanto_account_user();
+        pi.clanto_controller_identity_requested = self.should_request_controller_identity();
+        pi.clanto_session_code = self.session_code.clone().unwrap_or_default();
 
         #[cfg(not(target_os = "android"))]
         {
@@ -2258,17 +2292,20 @@ impl Connection {
         self.port_forward_socket.is_some() || self.port_forward_mux.is_some()
     }
 
-    fn should_request_clanto_account_user(&self) -> bool {
-        let enabled =
+    fn should_request_controller_identity(&self) -> bool {
+        let host_watermark =
             Config::get_option(crate::clanto::host_watermark::OPTION_HOST_WATERMARK) == "Y";
+        let controller_watermark =
+            Config::get_option(crate::clanto::watermark::OPT_REQUIRE_CONTROLLER_WATERMARK) == "Y";
         let eligible = crate::clanto::host_watermark::is_watermark_session(
             self.file_transfer.is_some(),
             self.view_camera,
             self.terminal,
             self.is_port_forward(),
         );
-        crate::clanto::host_watermark::should_request_account_user(
-            enabled,
+        crate::clanto::host_watermark::should_request_controller_identity(
+            host_watermark,
+            controller_watermark,
             self.authorized,
             eligible,
         )
@@ -2381,6 +2418,13 @@ impl Connection {
         self.file && self.enable_file_transfer
     }
 
+    fn clanto_file_permission_enabled(&self) -> bool {
+        #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
+        return self.file_transfer_enabled();
+        #[cfg(not(any(target_os = "windows", feature = "unix-file-copy-paste")))]
+        self.file
+    }
+
     #[cfg(feature = "unix-file-copy-paste")]
     fn can_sub_file_clipboard_service(&self) -> bool {
         self.clipboard_enabled()
@@ -2409,6 +2453,31 @@ impl Connection {
             block_input: self.block_input,
             privacy_mode: self.privacy_mode,
             from_switch: self.from_switch,
+        });
+        self.send_clanto_session_code();
+        self.send_clanto_effective_permissions();
+    }
+
+    fn send_clanto_session_code(&mut self) {
+        if let Some(session_code) = self.session_code.clone() {
+            self.send_to_cm(ipc::Data::ClantoSessionCode {
+                id: self.inner.id(),
+                session_code,
+            });
+        }
+    }
+
+    fn send_clanto_effective_permissions(&mut self) {
+        let keyboard = self.peer_keyboard_enabled();
+        let clipboard = self.clipboard_enabled();
+        let audio = self.audio_enabled();
+        let file = self.clanto_file_permission_enabled();
+        self.send_to_cm(ipc::Data::ClantoEffectivePermissions {
+            id: self.inner.id(),
+            keyboard,
+            clipboard,
+            audio,
+            file,
         });
     }
 
@@ -3987,11 +4056,15 @@ impl Connection {
                     _ => {}
                 },
                 Some(message::Union::Misc(misc)) => match misc.union {
-                    Some(misc::Union::ClantoAccountUser(account_user)) => {
-                        if self.should_request_clanto_account_user() {
-                            self.send_to_cm(ipc::Data::ClantoAccountUser {
+                    Some(misc::Union::ClantoControllerIdentity(identity)) => {
+                        if self.should_request_controller_identity() {
+                            self.controller_identity = Some(identity.clone());
+                            self.post_conn_audit(json!({"action": "controller_identity"}));
+                            self.send_to_cm(ipc::Data::ClantoControllerIdentity {
                                 id: self.inner.id(),
-                                account_user,
+                                account_user: identity.account_user,
+                                os_user: identity.os_user,
+                                pc_name: identity.pc_name,
                             });
                         }
                     }
@@ -5042,6 +5115,7 @@ impl Connection {
 
     async fn update_options(&mut self, o: &OptionMessage) {
         log::info!("Option update: {:?}", o);
+        let mut clanto_permissions_changed = false;
         if let Ok(q) = o.image_quality.enum_value() {
             let image_quality;
             if let ImageQuality::NotSet = q {
@@ -5113,6 +5187,7 @@ impl Connection {
         if let Ok(q) = o.disable_audio.enum_value() {
             if q != BoolOption::NotSet {
                 self.disable_audio = q == BoolOption::Yes;
+                clanto_permissions_changed = true;
                 if let Some(s) = self.server.upgrade() {
                     if self.is_authed_view_camera_conn() {
                         if self.voice_calling || !self.audio_enabled() {
@@ -5136,6 +5211,7 @@ impl Connection {
         if let Ok(q) = o.enable_file_transfer.enum_value() {
             if q != BoolOption::NotSet {
                 self.enable_file_transfer = q == BoolOption::Yes;
+                clanto_permissions_changed = true;
                 #[cfg(target_os = "windows")]
                 self.send_to_cm(ipc::Data::ClipboardFileEnabled(
                     self.file_transfer_enabled(),
@@ -5157,6 +5233,7 @@ impl Connection {
         if let Ok(q) = o.disable_clipboard.enum_value() {
             if q != BoolOption::NotSet {
                 self.disable_clipboard = q == BoolOption::Yes;
+                clanto_permissions_changed = true;
                 if let Some(s) = self.server.upgrade() {
                     s.write().unwrap().subscribe(
                         super::clipboard_service::NAME,
@@ -5169,6 +5246,7 @@ impl Connection {
         if let Ok(q) = o.disable_keyboard.enum_value() {
             if q != BoolOption::NotSet {
                 self.disable_keyboard = q == BoolOption::Yes;
+                clanto_permissions_changed = true;
                 if let Some(s) = self.server.upgrade() {
                     s.write().unwrap().subscribe(
                         super::clipboard_service::NAME,
@@ -5280,6 +5358,9 @@ impl Connection {
                     }
                 }
             }
+        }
+        if clanto_permissions_changed {
+            self.send_clanto_effective_permissions();
         }
     }
 
@@ -6199,7 +6280,7 @@ impl Connection {
             | Some(misc::Union::ToggleVirtualDisplay(_))
             | Some(misc::Union::ChangeResolution(_))
             | Some(misc::Union::ChangeDisplayResolution(_))
-            | Some(misc::Union::ClantoAccountUser(_)) => true,
+            | Some(misc::Union::ClantoControllerIdentity(_)) => true,
             Some(misc::Union::Option(option)) => Self::is_view_camera_scoped_option(option),
             #[cfg(windows)]
             Some(misc::Union::SelectedSid(_)) => true,
@@ -6320,7 +6401,7 @@ impl Connection {
             Some(misc::Union::MessageQuery(_)) => "misc.message_query",
             Some(misc::Union::FollowCurrentDisplay(_)) => "misc.follow_current_display",
             Some(misc::Union::SwitchSidesRequest(_)) => "misc.switch_sides_request",
-            Some(misc::Union::ClantoAccountUser(_)) => "misc.clanto_account_user",
+            Some(misc::Union::ClantoControllerIdentity(_)) => "misc.clanto_controller_identity",
             Some(_) => "misc.other",
             None => "misc.empty",
         }
@@ -7851,8 +7932,10 @@ mod test {
                         Some("port_forward_channel"),
                     ),
                     (
-                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
-                        Some("misc.clanto_account_user"),
+                        misc_msg(|m| {
+                            m.set_clanto_controller_identity(ClantoControllerIdentity::new())
+                        }),
+                        Some("misc.clanto_controller_identity"),
                     ),
                 ],
             ),
@@ -7920,8 +8003,10 @@ mod test {
                         Some("port_forward_channel"),
                     ),
                     (
-                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
-                        Some("misc.clanto_account_user"),
+                        misc_msg(|m| {
+                            m.set_clanto_controller_identity(ClantoControllerIdentity::new())
+                        }),
+                        Some("misc.clanto_controller_identity"),
                     ),
                 ],
             ),
@@ -7978,7 +8063,9 @@ mod test {
                         Some("misc.switch_sides_request"),
                     ),
                     (
-                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
+                        misc_msg(|m| {
+                            m.set_clanto_controller_identity(ClantoControllerIdentity::new())
+                        }),
                         None,
                     ),
                 ],
@@ -7996,7 +8083,9 @@ mod test {
                         None,
                     ),
                     (
-                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
+                        misc_msg(|m| {
+                            m.set_clanto_controller_identity(ClantoControllerIdentity::new())
+                        }),
                         None,
                     ),
                 ],
@@ -8036,8 +8125,10 @@ mod test {
                         None,
                     ),
                     (
-                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
-                        Some("misc.clanto_account_user"),
+                        misc_msg(|m| {
+                            m.set_clanto_controller_identity(ClantoControllerIdentity::new())
+                        }),
+                        Some("misc.clanto_controller_identity"),
                     ),
                 ],
             ),

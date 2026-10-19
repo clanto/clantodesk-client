@@ -1367,6 +1367,7 @@ class FfiModel with ChangeNotifier {
     _pi.username = evt['username'];
     _pi.hostname = evt['hostname'];
     _pi.platform = evt['platform'];
+    _pi.clantoSessionCode = evt['clanto_session_code'] ?? '';
     _pi.sasEnabled = evt['sas_enabled'] == 'true';
     final currentDisplay = int.parse(evt['current_display']);
     if (_pi.primaryDisplay == kInvalidDisplayIndex) {
@@ -4516,6 +4517,7 @@ class PeerInfo with ChangeNotifier {
   String username = '';
   String hostname = '';
   String platform = '';
+  String clantoSessionCode = '';
   bool sasEnabled = false;
   bool isSupportMultiUiSession = false;
   int currentDisplay = 0;

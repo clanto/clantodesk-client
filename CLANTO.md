@@ -383,6 +383,7 @@ riassegnare mai un ID, neppure dopo la rimozione di un evento.
 | 61101 | Session opened | 6 (informational) | 3 |
 | 61102 | Connection closed | 6 (informational) | 3 |
 | 61103 | Session completed | 6 (informational) | 3 |
+| 61104 | Controller identity received | 6 (informational) | 3 |
 | 61110 | `FileAuditType::RemoteSend` — File sent to peer | 5 (notice) | 5 |
 | 61111 | `FileAuditType::RemoteReceive` — File received from peer | 5 (notice) | 5 |
 | 61120 | `AlarmAuditType::IpWhitelist` — IP whitelist rejected | 4 (warning) | 7 |
@@ -531,37 +532,54 @@ operazione.
 
 ## Filigrana
 
-L'opzione del controller `clanto-controller-watermark` (predefinita `N`) mostra
-sopra il desktop remoto una filigrana diagonale ripetuta con ID ClantoDesk del
-controller, nome utente dell'account oppure nome del PC quando l'account non è
-connesso, e data e ora locali aggiornate al minuto. La filigrana è un widget
-Flutter separato dalla texture, non intercetta l'input e resta sopra l'immagine
-durante zoom, scorrimento e cambio monitor.
+È sempre il PC controllato a decidere. Non esiste un'opzione locale del
+controller: con `clanto-require-controller-watermark=Y` l'host comunica il
+requisito tramite la chiave omonima in `PeerInfo.platform_additions`. La
+filigrana diagonale compare nel controller soltanto per desktop remoto e
+visualizzazione fotocamera; non compare per trasferimento file, terminale o
+port forwarding/RDP. È un widget Flutter separato dalla texture, non intercetta
+l'input e resta sopra l'immagine durante zoom, scorrimento e cambio monitor.
 
-L'host può impostare `clanto-require-controller-watermark` (predefinita `N`).
-Con `Y`, comunica il requisito al controller tramite la chiave omonima in
-`PeerInfo.platform_additions`; il controller mostra la filigrana anche quando la
-propria opzione è `N`. Le due opzioni si applicano solo alle sessioni desktop di
-visualizzazione e controllo, non a trasferimento file, terminale, port
-forwarding/RDP. Vale anche per la visualizzazione della fotocamera.
+Le righe diagonali si alternano. La prima identifica il controller con ID
+ClantoDesk, utente dell'account, utente di sistema (con dominio su Windows) e
+nome del PC. La seconda identifica host e utente controllati, mostra data e ora
+locali nel formato italiano `dd/MM/yyyy HH:mm` e il codice della sessione. Le
+parti non disponibili e il relativo separatore vengono omessi.
 
 La filigrana lato controller è un deterrente applicato dal client: rende
 riconoscibile chi osserva la sessione negli screenshot e nelle fotografie, ma
-un client modificato può ignorare sia l'opzione locale sia il requisito
-comunicato dall'host. Non è una protezione tecnica contro acquisizioni
+un client modificato può ignorare il requisito comunicato dall'host. Non è una
+protezione tecnica contro acquisizioni
 effettuate con software o dispositivi esterni.
 
 L'opzione host `clanto-host-watermark` (predefinita `N`) mostra invece sul PC
 controllato una fascia semitrasparente su ogni schermo per tutta la durata di
 almeno una sessione desktop o fotocamera autorizzata. Riporta nome o ID del
-controller (preferendo l'alias), l'utente dell'account quando noto, l'ora di
-inizio e il numero di sessioni attive; si aggiorna agli ingressi e alle uscite e
-scompare alla chiusura dell'ultima sessione. Non si attiva per sessioni di solo
-trasferimento file, terminale o port forwarding/RDP. Il valore viene applicato
-anche tramite GPO e il controllo nell'interfaccia è bloccato quando la policy è
-configurata. L'utente dell'account non viene incluso nella richiesta di login:
-l'host lo richiede al controller soltanto dopo l'autorizzazione di una sessione
-coperta dalla filigrana e soltanto mentre l'opzione è `Y`.
+controller, codice sessione, tipo di accesso (controllo completo, sola
+visualizzazione o fotocamera), permessi effettivamente attivi, utente
+dell'account, utente di sistema, PC del controller, ora di inizio e numero di
+sessioni attive. Mostra una riga per sessione, fino a tre, e poi `+N altre`; si
+aggiorna anche quando cambiano i permessi e scompare alla chiusura dell'ultima
+sessione. Non si attiva per sessioni di solo trasferimento file, terminale o
+port forwarding/RDP. Il valore resta separato da
+`clanto-require-controller-watermark`, viene applicato anche tramite GPO e il
+controllo nell'interfaccia è bloccato quando la policy è configurata.
+
+Per ogni connessione autorizzata l'host genera con un generatore crittografico
+un codice breve `S-XXXX-XXXX`. Il codice viene inviato sempre al controller,
+anche quando nessuna filigrana è attiva, ed è scritto come `session_code` nei
+record di audit, nell'estensione CEF/SIEM e nel report locale delle sessioni
+(inclusa l'esportazione CSV). In questo modo una schermata può essere correlata
+al record amministrativo senza mostrare l'indirizzo IP.
+
+L'identità estesa del controller viene richiesta dopo l'autorizzazione e solo
+quando l'host ha attivato `clanto-host-watermark` oppure
+`clanto-require-controller-watermark`. Il messaggio contiene esclusivamente
+utente account, utente di sistema e nome PC: sono i dati personali minimi utili
+per attribuire visivamente la sessione e vengono conservati nel record della
+sessione e nell'audit. L'IP rimane disponibile ai controlli e ai log
+amministrativi esistenti, ma per minimizzazione non appare in nessuna delle due
+filigrane.
 
 Dove il sistema consente un overlay globale, la finestra è gestita solo da
 ClantoDesk: non ha bordi o controlli, non riceve mouse o tastiera, non prende il

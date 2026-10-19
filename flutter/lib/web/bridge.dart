@@ -803,6 +803,10 @@ class RustdeskImpl {
     });
   }
 
+  String mainGetClantoControllerOsUser({dynamic hint}) {
+    return '';
+  }
+
   Future<void> mainChangeId({required String newId, dynamic hint}) {
     throw UnimplementedError("mainChangeId");
   }

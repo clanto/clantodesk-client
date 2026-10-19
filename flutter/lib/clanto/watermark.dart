@@ -11,7 +11,6 @@ import 'package:get/get.dart';
 import '../common.dart';
 import '../models/model.dart';
 
-const String kOptClantoControllerWatermark = 'clanto-controller-watermark';
 const String kOptClantoRequireControllerWatermark =
     'clanto-require-controller-watermark';
 const String kPeerInfoClantoRequireControllerWatermark =
@@ -27,29 +26,54 @@ enum ClantoWatermarkSessionType {
 }
 
 bool shouldShowClantoWatermark({
-  required bool localEnabled,
   required bool hostRequired,
   required ClantoWatermarkSessionType sessionType,
 }) {
   return (sessionType == ClantoWatermarkSessionType.remoteDesktop ||
           sessionType == ClantoWatermarkSessionType.viewCamera) &&
-      (localEnabled || hostRequired);
+      hostRequired;
 }
 
-String buildClantoWatermarkText({
+String buildClantoControllerIdentityLine({
   required String controllerId,
-  required String accountUsername,
-  required String computerName,
+  required String accountUser,
+  required String osUser,
+  required String controllerPcName,
+}) {
+  final parts = <String>[
+    if (controllerId.trim().isNotEmpty) 'ID ${controllerId.trim()}',
+    if (accountUser.trim().isNotEmpty) accountUser.trim(),
+  ];
+  final os = osUser.trim();
+  final pc = controllerPcName.trim();
+  if (os.isNotEmpty && pc.isNotEmpty) {
+    parts.add('$os su $pc');
+  } else if (os.isNotEmpty || pc.isNotEmpty) {
+    parts.add(os.isNotEmpty ? os : pc);
+  }
+  return parts.join(' · ');
+}
+
+String buildClantoHostSessionLine({
+  required String hostName,
+  required String hostUser,
+  required String sessionCode,
   required DateTime now,
 }) {
-  final identity = accountUsername.trim().isNotEmpty
-      ? accountUsername.trim()
-      : computerName.trim();
+  final host = hostName.trim();
+  final user = hostUser.trim();
+  final destination = host.isNotEmpty && user.isNotEmpty
+      ? '$host ($user)'
+      : (host.isNotEmpty ? host : user);
   final local = now.toLocal();
   String twoDigits(int value) => value.toString().padLeft(2, '0');
-  final date = '${local.year}-${twoDigits(local.month)}-${twoDigits(local.day)}';
-  final time = '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
-  return 'ClantoDesk ID: ${controllerId.trim()}  •  $identity  •  $date $time';
+  final dateTime = '${twoDigits(local.day)}/${twoDigits(local.month)}/${local.year} '
+      '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
+  return [
+    if (destination.isNotEmpty) '→ $destination',
+    dateTime,
+    if (sessionCode.trim().isNotEmpty) sessionCode.trim(),
+  ].join(' · ');
 }
 
 ClantoWatermarkSessionType _sessionType(ConnType connType) {
@@ -72,27 +96,26 @@ Widget clantoControllerWatermark({
   required FFI ffi,
   required Widget child,
 }) {
-  final localEnabled =
-      bind.mainGetOptionSync(key: kOptClantoControllerWatermark) == 'Y';
   final hostRequired = ffi.ffiModel.pi
           .platformAdditions[kPeerInfoClantoRequireControllerWatermark] ==
       true;
   if (!ffi.ffiModel.pi.isSet.value ||
       !shouldShowClantoWatermark(
-        localEnabled: localEnabled,
         hostRequired: hostRequired,
         sessionType: _sessionType(ffi.connType),
       )) {
     return child;
   }
-  return ClantoControllerWatermark(child: child);
+  return ClantoControllerWatermark(ffi: ffi, child: child);
 }
 
 class ClantoControllerWatermark extends StatefulWidget {
+  final FFI ffi;
   final Widget child;
 
   const ClantoControllerWatermark({
     Key? key,
+    required this.ffi,
     required this.child,
   }) : super(key: key);
 
@@ -106,6 +129,7 @@ class _ClantoControllerWatermarkState
   Timer? _minuteTimer;
   String _controllerId = '';
   String _computerName = '';
+  String _osUser = '';
   DateTime _now = DateTime.now();
 
   @override
@@ -116,6 +140,7 @@ class _ClantoControllerWatermarkState
       _controllerId = knownId;
     }
     _computerName = _readComputerName();
+    _osUser = _readOsUser();
     _loadControllerId();
     final untilNextMinute = const Duration(minutes: 1) -
         Duration(seconds: _now.second, milliseconds: _now.millisecond);
@@ -149,6 +174,10 @@ class _ClantoControllerWatermarkState
     return '';
   }
 
+  String _readOsUser() {
+    return bind.mainGetClantoControllerOsUser().trim();
+  }
+
   @override
   void dispose() {
     _minuteTimer?.cancel();
@@ -163,15 +192,23 @@ class _ClantoControllerWatermarkState
         widget.child,
         Positioned.fill(
           child: Obx(() {
-            final text = buildClantoWatermarkText(
-              controllerId: _controllerId,
-              accountUsername: gFFI.userModel.userName.value,
-              computerName: _computerName,
-              now: _now,
-            );
+            final lines = [
+              buildClantoControllerIdentityLine(
+                controllerId: _controllerId,
+                accountUser: gFFI.userModel.userName.value,
+                osUser: _osUser,
+                controllerPcName: _computerName,
+              ),
+              buildClantoHostSessionLine(
+                hostName: widget.ffi.ffiModel.pi.hostname,
+                hostUser: widget.ffi.ffiModel.pi.username,
+                sessionCode: widget.ffi.ffiModel.pi.clantoSessionCode,
+                now: _now,
+              ),
+            ].where((line) => line.isNotEmpty).toList(growable: false);
             return IgnorePointer(
               child: ClipRect(
-                child: CustomPaint(painter: _ClantoWatermarkPainter(text)),
+                child: CustomPaint(painter: _ClantoWatermarkPainter(lines)),
               ),
             );
           }),
@@ -182,38 +219,28 @@ class _ClantoControllerWatermarkState
 }
 
 class _ClantoWatermarkPainter extends CustomPainter {
-  final String text;
+  final List<String> lines;
 
-  const _ClantoWatermarkPainter(this.text);
+  const _ClantoWatermarkPainter(this.lines);
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.isEmpty || text.isEmpty) return;
+    if (size.isEmpty || lines.isEmpty) return;
 
-    final outline = TextPainter(
+    TextPainter painter(String text, bool outline) => TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
+          color: outline ? null : Colors.white.withOpacity(0.24),
           fontSize: 18,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.4,
-          foreground: Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.2
-            ..color = Colors.black.withOpacity(0.28),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout();
-    final fill = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.24),
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.4,
+          foreground: outline
+              ? (Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 2.2
+                ..color = Colors.black.withOpacity(0.28))
+              : null,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -221,12 +248,15 @@ class _ClantoWatermarkPainter extends CustomPainter {
     )..layout();
 
     final extent = math.sqrt(size.width * size.width + size.height * size.height);
-    final horizontalStep = math.max(fill.width + 90, 420.0).toDouble();
     const verticalStep = 105.0;
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.rotate(-math.pi / 6);
     for (double y = -extent; y <= extent; y += verticalStep) {
+      final lineIndex = (y / verticalStep).round().abs() % lines.length;
+      final outline = painter(lines[lineIndex], true);
+      final fill = painter(lines[lineIndex], false);
+      final horizontalStep = math.max(fill.width + 90, 420.0).toDouble();
       final stagger = ((y / verticalStep).round().isEven)
           ? -extent
           : -extent + horizontalStep / 2;
@@ -241,5 +271,5 @@ class _ClantoWatermarkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ClantoWatermarkPainter oldDelegate) =>
-      oldDelegate.text != text;
+      !listEquals(oldDelegate.lines, lines);
 }

@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.text.TextUtils
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -55,7 +54,9 @@ object ClantoHostWatermark {
 
         watermarkView?.let {
             it.text = text
-            it.isSelected = true
+            it.maxLines = lineCount(text)
+            it.layoutParams.height = watermarkHeight(context, text)
+            windowManager?.updateViewLayout(it, it.layoutParams)
             return
         }
 
@@ -67,11 +68,7 @@ object ClantoHostWatermark {
             setTypeface(Typeface.DEFAULT, Typeface.BOLD)
             gravity = Gravity.CENTER
             setPadding(dp(context, 16), dp(context, 10), dp(context, 16), dp(context, 10))
-            setSingleLine(true)
-            setHorizontallyScrolling(true)
-            ellipsize = TextUtils.TruncateAt.MARQUEE
-            marqueeRepeatLimit = -1
-            isSelected = true
+            maxLines = lineCount(text)
             background = GradientDrawable().apply {
                 setColor(Color.argb(170, 116, 0, 0))
             }
@@ -88,7 +85,7 @@ object ClantoHostWatermark {
         }
         val params = WindowManager.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(context, 48),
+            watermarkHeight(context, text),
             windowType,
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
@@ -130,4 +127,10 @@ object ClantoHostWatermark {
 
     private fun dp(context: Context, value: Int): Int =
         (value * context.resources.displayMetrics.density).toInt()
+
+    private fun lineCount(text: String): Int =
+        text.lineSequence().count().coerceIn(1, 4)
+
+    private fun watermarkHeight(context: Context, text: String): Int =
+        dp(context, lineCount(text) * 24 + 16)
 }

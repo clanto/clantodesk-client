@@ -342,9 +342,22 @@ pub enum Data {
         privacy_mode: bool,
         from_switch: bool,
     },
-    ClantoAccountUser {
+    ClantoControllerIdentity {
         id: i32,
         account_user: String,
+        os_user: String,
+        pc_name: String,
+    },
+    ClantoSessionCode {
+        id: i32,
+        session_code: String,
+    },
+    ClantoEffectivePermissions {
+        id: i32,
+        keyboard: bool,
+        clipboard: bool,
+        audio: bool,
+        file: bool,
     },
     ChatMessage {
         text: String,

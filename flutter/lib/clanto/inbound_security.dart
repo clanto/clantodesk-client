@@ -172,7 +172,7 @@ class _ClantoInboundSecuritySettingState
             : null,
         title: Text(translate('Require controller watermark')),
         subtitle: Text(translate(
-            'Require connecting controllers to show their ID, account user or PC name, and current time.')),
+            'Require connecting controllers to show controller identity, host identity, time, and session code.')),
       ),
       CheckboxListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 10),
@@ -182,7 +182,7 @@ class _ClantoInboundSecuritySettingState
             : null,
         title: Text(translate('Show host watermark')),
         subtitle: Text(translate(
-            'Show connected controllers, account users, session start time, and active session count on this device.')),
+            'Show session code, access type, active permissions, controller identity, start time, and active session count on this device.')),
       ),
       ClantoFileTransferSecuritySetting(enabled: widget.enabled),
       if (_loading)
