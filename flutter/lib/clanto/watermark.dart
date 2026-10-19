@@ -5,11 +5,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../common.dart';
+import '../common/formatter/id_formatter.dart';
 import '../models/model.dart';
+import '../models/platform_model.dart';
 
 const String kOptClantoRequireControllerWatermark =
     'clanto-require-controller-watermark';
@@ -135,7 +138,7 @@ class _ClantoControllerWatermarkState
   @override
   void initState() {
     super.initState();
-    final knownId = gFFI.serverModel.serverId.id.trim();
+    final knownId = trimID(gFFI.serverModel.serverId.text).trim();
     if (knownId.isNotEmpty && !knownId.contains(translate('Generating ...'))) {
       _controllerId = knownId;
     }
