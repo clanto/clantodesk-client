@@ -16,3 +16,4 @@ pub mod outgoing;
 pub mod posture;
 pub mod session_log;
 pub mod temp_password;
+pub mod watermark;

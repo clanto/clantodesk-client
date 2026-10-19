@@ -285,5 +285,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Don't ask again for this device", ""),
         ("Privacy mode is not available on this device.", ""),
         ("Ask to enable privacy mode at the start of every session", ""),
+        ("Show controller watermark", ""),
+        ("Show this controller's ID, account user or PC name, and current time over remote sessions.", ""),
+        ("Require controller watermark", ""),
+        ("Require connecting controllers to show their ID, account user or PC name, and current time.", ""),
     ].iter().cloned().collect();
 }

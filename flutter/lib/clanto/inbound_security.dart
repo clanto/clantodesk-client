@@ -12,6 +12,7 @@ import 'package:settings_ui/settings_ui.dart';
 
 import 'file_transfer_security.dart';
 import 'protected_device.dart';
+import 'watermark.dart';
 
 const String kOptClantoPostureBypass = 'clanto-posture-bypass';
 const String _postureRulesUrl =
@@ -66,6 +67,9 @@ class _ClantoInboundSecuritySettingState
   String? _error;
   bool _loading = true;
   bool _hasIdWhitelist = idWhitelistNotEmpty();
+  bool _requireControllerWatermark = bind.mainGetOptionSync(
+          key: kOptClantoRequireControllerWatermark) ==
+      'Y';
 
   @override
   void initState() {
@@ -118,6 +122,15 @@ class _ClantoInboundSecuritySettingState
     });
   }
 
+  Future<void> _setRequireControllerWatermark(bool value) async {
+    if (!widget.enabled ||
+        isOptionFixed(kOptClantoRequireControllerWatermark)) return;
+    await bind.mainSetOption(
+        key: kOptClantoRequireControllerWatermark,
+        value: value ? 'Y' : 'N');
+    if (mounted) setState(() => _requireControllerWatermark = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -134,6 +147,17 @@ class _ClantoInboundSecuritySettingState
           subtitle: Text(translate('id_whitelist_tip')),
         ),
       ClantoProtectedDeviceSetting(enabled: widget.enabled),
+      CheckboxListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+        value: _requireControllerWatermark,
+        onChanged: widget.enabled &&
+                !isOptionFixed(kOptClantoRequireControllerWatermark)
+            ? (value) => _setRequireControllerWatermark(value ?? false)
+            : null,
+        title: Text(translate('Require controller watermark')),
+        subtitle: Text(translate(
+            'Require connecting controllers to show their ID, account user or PC name, and current time.')),
+      ),
       ClantoFileTransferSecuritySetting(enabled: widget.enabled),
       if (_loading)
         const Padding(

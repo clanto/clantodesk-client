@@ -869,5 +869,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("No file transfers", "Nessun trasferimento file"),
         ("Blocked file extensions", "Estensioni file bloccate"),
         ("Comma-separated extensions without dots", "Estensioni separate da virgole, senza punti"),
+        ("Show controller watermark", "Mostra la filigrana del controller"),
+        ("Show this controller's ID, account user or PC name, and current time over remote sessions.", "Mostra l'ID ClantoDesk di questo controller, l'utente dell'account o il nome del PC e l'ora corrente sulle sessioni remote."),
+        ("Require controller watermark", "Richiedi la filigrana del controller"),
+        ("Require connecting controllers to show their ID, account user or PC name, and current time.", "Richiedi ai controller che si connettono di mostrare il proprio ID, l'utente dell'account o il nome del PC e l'ora corrente."),
     ].iter().cloned().collect();
 }

@@ -12,6 +12,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
+import '../../clanto/watermark.dart';
 import '../../common.dart';
 import '../../common/widgets/overlay.dart';
 import '../../common/widgets/dialog.dart';
@@ -373,7 +374,8 @@ class _ViewCameraPageState extends State<ViewCameraPage>
         color: MyTheme.canvasColor,
         child: Stack(children: () {
           final paints = [
-            ImagePaint(),
+            Obx(() => clantoControllerWatermark(
+                ffi: gFFI, child: ImagePaint())),
             Positioned(
               top: 10,
               right: 10,
@@ -415,7 +417,10 @@ class _ViewCameraPageState extends State<ViewCameraPage>
   }
 
   Widget getBodyForDesktopWithListener() {
-    var paints = <Widget>[ImagePaint()];
+    var paints = <Widget>[
+      Obx(() => clantoControllerWatermark(
+          ffi: gFFI, child: ImagePaint()))
+    ];
     return Container(
         color: MyTheme.canvasColor, child: Stack(children: paints));
   }

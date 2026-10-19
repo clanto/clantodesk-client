@@ -529,6 +529,28 @@ La restrizione vale solo per ClantoDesk in esecuzione su questo PC. Non
 impedisce allo stesso utente di usare un altro programma per svolgere la stessa
 operazione.
 
+## Filigrana
+
+L'opzione del controller `clanto-controller-watermark` (predefinita `N`) mostra
+sopra il desktop remoto una filigrana diagonale ripetuta con ID ClantoDesk del
+controller, nome utente dell'account oppure nome del PC quando l'account non è
+connesso, e data e ora locali aggiornate al minuto. La filigrana è un widget
+Flutter separato dalla texture, non intercetta l'input e resta sopra l'immagine
+durante zoom, scorrimento e cambio monitor.
+
+L'host può impostare `clanto-require-controller-watermark` (predefinita `N`).
+Con `Y`, comunica il requisito al controller tramite la chiave omonima in
+`PeerInfo.platform_additions`; il controller mostra la filigrana anche quando la
+propria opzione è `N`. Le due opzioni si applicano solo alle sessioni desktop di
+visualizzazione e controllo, non a trasferimento file, terminale, port
+forwarding/RDP. Vale anche per la visualizzazione della fotocamera.
+
+È un deterrente applicato dal client: rende riconoscibile chi osserva la
+sessione negli screenshot e nelle fotografie, ma un client modificato può
+ignorare sia l'opzione locale sia il requisito comunicato dall'host. Non è una
+protezione tecnica contro acquisizioni effettuate con software o dispositivi
+esterni.
+
 ## Password locale delle impostazioni
 
 `flutter/lib/clanto/settings_password.dart`. Nasce per i monitor interattivi:

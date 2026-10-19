@@ -802,5 +802,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("No file transfers", ""),
         ("Blocked file extensions", ""),
         ("Comma-separated extensions without dots", ""),
+        ("Show controller watermark", ""),
+        ("Show this controller's ID, account user or PC name, and current time over remote sessions.", ""),
+        ("Require controller watermark", ""),
+        ("Require connecting controllers to show their ID, account user or PC name, and current time.", ""),
     ].iter().cloned().collect();
 }

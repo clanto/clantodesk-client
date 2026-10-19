@@ -27,6 +27,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/audit_sink.rs`
 - `src/clanto/config.rs`
 - `src/clanto/mod.rs`
+- `src/clanto/watermark.rs`
 - `flutter/lib/clanto/accessibility_disclosure.dart`
 - `flutter/lib/clanto/android_file_transfer.dart`
 - `flutter/lib/clanto/audit_settings.dart`
@@ -34,6 +35,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `flutter/lib/clanto/ios_file_transfer.dart`
 - `flutter/lib/clanto/mobile_file_transfer.dart`
 - `flutter/lib/clanto/settings_auth.dart`
+- `flutter/lib/clanto/watermark.dart`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoChatNotifier.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoDownloads.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoUserKeyStore.kt`

@@ -15,6 +15,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
+import '../../clanto/watermark.dart';
 import '../../common.dart';
 import '../../common/widgets/overlay.dart';
 import '../../common/widgets/dialog.dart';
@@ -672,7 +673,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         color: MyTheme.canvasColor,
         child: Stack(children: () {
           final paints = [
-            ImagePaint(ffiModel: gFFI.ffiModel),
+            Obx(() => clantoControllerWatermark(
+                ffi: gFFI, child: ImagePaint(ffiModel: gFFI.ffiModel))),
             Positioned(
               top: 10,
               right: 10,
@@ -730,7 +732,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget getBodyForDesktopWithListener() {
     final ffiModel = Provider.of<FfiModel>(context);
-    var paints = <Widget>[ImagePaint(ffiModel: ffiModel)];
+    var paints = <Widget>[
+      Obx(() => clantoControllerWatermark(
+          ffi: gFFI, child: ImagePaint(ffiModel: ffiModel)))
+    ];
     if (showCursorPaint) {
       final cursor = bind.sessionGetToggleOptionSync(
           sessionId: sessionId, arg: 'show-remote-cursor');

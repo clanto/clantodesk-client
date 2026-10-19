@@ -13,6 +13,7 @@ import '../../common/widgets/overlay.dart';
 import '../../common.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/toolbar.dart';
+import '../../clanto/watermark.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../../common/shared_state.dart';
@@ -455,12 +456,16 @@ class _ViewCameraPageState extends State<ViewCameraPage>
               ? Container(color: Colors.transparent)
               : Obx(() {
                   _ffi.textureModel.updateCurrentDisplay(peerDisplay.value);
-                  return ImagePaint(
-                    id: widget.id,
-                    cursorOverImage: _cursorOverImage,
-                    listenerBuilder: (child) => _buildRawTouchAndPointerRegion(
-                        child, enterView, leaveView),
+                  return clantoControllerWatermark(
                     ffi: _ffi,
+                    child: ImagePaint(
+                      id: widget.id,
+                      cursorOverImage: _cursorOverImage,
+                      listenerBuilder: (child) =>
+                          _buildRawTouchAndPointerRegion(
+                              child, enterView, leaveView),
+                      ffi: _ffi,
+                    ),
                   );
                 }),
         );

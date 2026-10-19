@@ -14,6 +14,7 @@ import '../../common/widgets/remote_input.dart';
 import '../../common.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/toolbar.dart';
+import '../../clanto/watermark.dart';
 import '../../models/model.dart';
 import '../../models/input_model.dart';
 import '../../models/platform_model.dart';
@@ -961,16 +962,19 @@ class _RemotePageState extends State<RemotePage>
                   ? Container(color: Colors.transparent)
                   : Obx(() {
                       _ffi.textureModel.updateCurrentDisplay(peerDisplay.value);
-                      return ImagePaint(
-                        id: widget.id,
-                        zoomCursor: _zoomCursor,
-                        cursorOverImage: _cursorOverImage,
-                        keyboardEnabled: _keyboardEnabled,
-                        remoteCursorMoved: _remoteCursorMoved,
-                        listenerBuilder: (child) =>
-                            _buildRawTouchAndPointerRegion(
-                                child, enterView, leaveView),
+                      return clantoControllerWatermark(
                         ffi: _ffi,
+                        child: ImagePaint(
+                          id: widget.id,
+                          zoomCursor: _zoomCursor,
+                          cursorOverImage: _cursorOverImage,
+                          keyboardEnabled: _keyboardEnabled,
+                          remoteCursorMoved: _remoteCursorMoved,
+                          listenerBuilder: (child) =>
+                              _buildRawTouchAndPointerRegion(
+                                  child, enterView, leaveView),
+                          ffi: _ffi,
+                        ),
                       );
                     }),
             );
