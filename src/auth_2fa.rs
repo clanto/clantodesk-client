@@ -3,7 +3,7 @@ use hbb_common::{
     bail,
     config::Config,
     get_time,
-    password_security::{decrypt_vec_or_original, encrypt_vec_or_original},
+    password_security::{decrypt_vec_or_original_scoped, encrypt_vec_or_original_scoped, KeyScope},
     ResultType,
 };
 use serde_derive::{Deserialize, Serialize};
@@ -52,7 +52,11 @@ impl TOTPInfo {
     }
 
     pub fn into_string(&self) -> ResultType<String> {
-        let secret = encrypt_vec_or_original(self.secret.as_slice(), "00", 1024);
+        let secret =
+            encrypt_vec_or_original_scoped(self.secret.as_slice(), KeyScope::Machine, 1024);
+        if secret.is_empty() && !self.secret.is_empty() {
+            bail!("machine credential key is unavailable")
+        }
         let totp_info = TOTPInfo {
             secret,
             ..self.clone()
@@ -62,11 +66,17 @@ impl TOTPInfo {
     }
 
     pub fn from_str(data: &str) -> ResultType<TOTP> {
+        Self::from_str_with_migration(data).map(|(_, totp, _)| totp)
+    }
+
+    fn from_str_with_migration(data: &str) -> ResultType<(TOTPInfo, TOTP, bool)> {
         let mut totp_info = serde_json::from_str::<TOTPInfo>(data)?;
-        let (secret, success, _) = decrypt_vec_or_original(&totp_info.secret, "00");
+        let (secret, success, store_again) =
+            decrypt_vec_or_original_scoped(&totp_info.secret, KeyScope::Machine);
         if success {
             totp_info.secret = secret;
-            return Ok(totp_info.new_totp()?);
+            let totp = totp_info.new_totp()?;
+            return Ok((totp_info, totp, store_again));
         } else {
             bail!("decrypt_vec_or_original 2fa secret failed")
         }
@@ -106,8 +116,17 @@ pub fn verify2fa(code: String) -> bool {
 }
 
 pub fn get_2fa(raw: Option<String>) -> Option<TOTP> {
-    TOTPInfo::from_str(&raw.unwrap_or(Config::get_option("2fa")))
-        .map(|x| Some(x))
+    let stored_locally = raw.is_none();
+    let data = raw.unwrap_or_else(|| Config::get_option("2fa"));
+    TOTPInfo::from_str_with_migration(&data)
+        .map(|(info, totp, store_again)| {
+            if stored_locally && store_again {
+                if let Ok(migrated) = info.into_string() {
+                    Config::set_option("2fa".to_owned(), migrated);
+                }
+            }
+            Some(totp)
+        })
         .unwrap_or_default()
 }
 
@@ -121,7 +140,11 @@ pub struct TelegramBot {
 
 impl TelegramBot {
     fn into_string(&self) -> ResultType<String> {
-        let token = encrypt_vec_or_original(self.token_str.as_bytes(), "00", 1024);
+        let token =
+            encrypt_vec_or_original_scoped(self.token_str.as_bytes(), KeyScope::Machine, 1024);
+        if token.is_empty() && !self.token_str.is_empty() {
+            bail!("machine credential key is unavailable")
+        }
         let bot = TelegramBot {
             token,
             ..self.clone()
@@ -145,9 +168,13 @@ impl TelegramBot {
             return Ok(None);
         }
         let mut bot = serde_json::from_str::<TelegramBot>(&data)?;
-        let (token, success, _) = decrypt_vec_or_original(&bot.token, "00");
+        let (token, success, store_again) =
+            decrypt_vec_or_original_scoped(&bot.token, KeyScope::Machine);
         if success {
             bot.token_str = String::from_utf8(token)?;
+            if store_again {
+                Config::set_option("bot".to_owned(), bot.into_string()?);
+            }
             return Ok(Some(bot));
         }
         bail!("decrypt_vec_or_original telegram bot token failed")

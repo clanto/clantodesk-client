@@ -262,6 +262,10 @@ pub async fn create_tcp_connection(
 async fn identity_handshake(stream: &mut Stream, secure: bool) -> ResultType<()> {
     let (sk, pk) = Config::get_key_pair();
     if secure && pk.len() == sign::PUBLICKEYBYTES && sk.len() == sign::SECRETKEYBYTES {
+        let id = Config::get_id();
+        if id.is_empty() {
+            bail!("Device ID is protected but unavailable");
+        }
         let mut sk_ = [0u8; sign::SECRETKEYBYTES];
         sk_[..].copy_from_slice(&sk);
         let sk = sign::SecretKey(sk_);
@@ -287,7 +291,7 @@ async fn identity_handshake(stream: &mut Stream, secure: bool) -> ResultType<()>
         msg_out.set_signed_id(SignedId {
             id: sign::sign(
                 &IdPk {
-                    id: Config::get_id(),
+                    id,
                     pk: Bytes::from(our_pk_b.0.to_vec()),
                     dtls_fingerprint,
                     kx_version: advertised,
@@ -833,7 +837,7 @@ async fn wait_initial_config_sync() {
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 async fn sync_and_watch_config_dir(sync_done_tx: Option<tokio::sync::oneshot::Sender<()>>) {
-    let mut cfg0 = (Config::get(), Config2::get());
+    let mut cfg0 = (Config::get(), Config2::get_for_sync());
     let mut synced = false;
     let mut is_root_config_empty = false;
     let mut sync_done_tx = sync_done_tx;
@@ -893,7 +897,7 @@ async fn sync_and_watch_config_dir(sync_done_tx: Option<tokio::sync::oneshot::Se
 
                 loop {
                     sleep(CONFIG_SYNC_INTERVAL_SECS).await;
-                    let cfg = (Config::get(), Config2::get());
+                    let cfg = (Config::get(), Config2::get_for_sync());
                     let should_sync = cfg != cfg0 || (is_root_config_empty && !cfg.0.is_empty());
                     if should_sync {
                         if is_root_config_empty {

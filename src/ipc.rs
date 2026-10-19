@@ -1069,7 +1069,7 @@ async fn handle(data: Data, stream: &mut Connection) {
             allow_err!(
                 stream
                     .send(&Data::SyncConfig(Some(
-                        (Config::get(), Config2::get()).into()
+                        (Config::get(), Config2::get_for_sync()).into()
                     )))
                     .await
             );
@@ -1845,22 +1845,19 @@ pub fn clear_trusted_devices() {
 }
 
 pub fn get_id() -> String {
-    // An empty id may come from a process that took over the main IPC with a
-    // config scope that has no id yet (e.g. a user GUI that became the server
-    // while the installed service was restarting). Treat it as no answer,
-    // otherwise the empty id is adopted below and wipes the local one.
     if let Ok(Some(v)) = get_config("id") {
-        if !v.is_empty() {
-            // update salt also, so that next time reinstallation not causing first-time auto-login failure
-            if let Ok(Some(v2)) = get_config("salt") {
-                Config::set_salt(&v2);
-            }
-            if v != Config::get_id() {
-                Config::set_key_confirmed(false);
-                Config::set_id(&v);
-            }
+        if v.is_empty() {
             return v;
         }
+        // update salt also, so that next time reinstallation not causing first-time auto-login failure
+        if let Ok(Some(v2)) = get_config("salt") {
+            Config::set_salt(&v2);
+        }
+        if v != Config::get_id() {
+            Config::set_key_confirmed(false);
+            Config::set_id(&v);
+        }
+        return v;
     }
     Config::get_id()
 }

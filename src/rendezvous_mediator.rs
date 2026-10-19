@@ -160,12 +160,29 @@ const ICE_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60)
 /// A declined punch is one line a minute, carrying the number it stands for, for the same
 /// reason: the peer decides how often it asks.
 const PUNCH_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+const ID_UNAVAILABLE_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 static UNKNOWN_ICE_SESSION_LOG: hbb_common::log_throttle::LogThrottle =
     hbb_common::log_throttle::LogThrottle::new(ICE_LOG_INTERVAL);
 static REJECTED_REMOTE_ICE_LOG: hbb_common::log_throttle::LogThrottle =
     hbb_common::log_throttle::LogThrottle::new(ICE_LOG_INTERVAL);
 static FULL_ICE_QUEUE_LOG: hbb_common::log_throttle::LogThrottle =
     hbb_common::log_throttle::LogThrottle::new(ICE_LOG_INTERVAL);
+
+fn non_empty_registration_id(id: String) -> Option<String> {
+    (!id.is_empty()).then_some(id)
+}
+
+fn registration_id() -> Option<String> {
+    let id = non_empty_registration_id(Config::get_id());
+    if id.is_none() {
+        hbb_common::throttled_log!(
+            ID_UNAVAILABLE_LOG_INTERVAL,
+            error,
+            "Device ID is protected but unavailable; rendezvous registration is paused"
+        );
+    }
+    id
+}
 
 struct IceRoute {
     tx: mpsc::Sender<String>,
@@ -742,9 +759,12 @@ impl RendezvousMediator {
             ..Default::default()
         };
         if initiate {
+            let Some(id) = registration_id() else {
+                return Ok(());
+            };
             rr.uuid = uuid.clone();
             rr.relay_server = relay_server.clone();
-            rr.set_id(Config::get_id());
+            rr.set_id(id);
         }
         msg_out.set_relay_response(rr);
         socket.send(&msg_out).await?;
@@ -826,6 +846,9 @@ impl RendezvousMediator {
         socket_addr_v6: bytes::Bytes,
         meta: ConnectionMeta,
     ) -> ResultType<()> {
+        let Some(id) = registration_id() else {
+            return Ok(());
+        };
         let peer_addr = AddrMangle::decode(&fla.socket_addr);
         log::debug!("Handle intranet from {:?}", peer_addr);
         // The listen this opens waits for the peer like a TCP punch and is declined like one; the
@@ -846,7 +869,7 @@ impl RendezvousMediator {
             format!("{}:{}", local_addr.ip(), local_addr.port()).parse()?;
         let mut msg_out = Message::new();
         msg_out.set_local_addr(LocalAddr {
-            id: Config::get_id(),
+            id,
             socket_addr: AddrMangle::encode(peer_addr).into(),
             local_addr: AddrMangle::encode(local_addr).into(),
             relay_server,
@@ -1051,6 +1074,9 @@ impl RendezvousMediator {
     }
 
     async fn handle_punch_hole(&self, mut ph: PunchHole, server: ServerPtr) -> ResultType<()> {
+        let Some(id) = registration_id() else {
+            return Ok(());
+        };
         // WebRTC spento: l'offerta si ignora e si ricade su punch/relay.
         if !crate::clanto::config::webrtc_allowed() {
             ph.webrtc_sdp_offer.clear();
@@ -1149,7 +1175,7 @@ impl RendezvousMediator {
         let nat_type = NatType::from_i32(Config::get_nat_type()).unwrap_or(NatType::UNKNOWN_NAT);
         let msg_punch = PunchHoleSent {
             socket_addr: ph.socket_addr,
-            id: Config::get_id(),
+            id,
             relay_server,
             nat_type: nat_type.into(),
             version: crate::VERSION.to_owned(),
@@ -1257,6 +1283,9 @@ impl RendezvousMediator {
     }
 
     async fn register_pk(&mut self, socket: Sink<'_>) -> ResultType<()> {
+        let Some(id) = registration_id() else {
+            return Ok(());
+        };
         // Throttle register_pk when the device is awaiting deployment: server
         // already told us we're not in its db; sending more often than every
         // DEPLOY_RETRY_INTERVAL ms is wasted traffic until the operator runs
@@ -1275,7 +1304,6 @@ impl RendezvousMediator {
         let mut msg_out = Message::new();
         let pk = Config::get_key_pair().1;
         let uuid = hbb_common::get_uuid();
-        let id = Config::get_id();
         msg_out.set_register_pk(RegisterPk {
             id,
             uuid: uuid.into(),
@@ -1316,7 +1344,9 @@ impl RendezvousMediator {
             );
             return self.register_pk(socket).await;
         }
-        let id = Config::get_id();
+        let Some(id) = registration_id() else {
+            return Ok(());
+        };
         log::trace!(
             "Register my id {:?} to rendezvous server {:?}",
             id,
@@ -1734,9 +1764,10 @@ impl Drop for CheckIfResendPk {
 #[cfg(test)]
 mod tests {
     use super::{
-        connection_meta, mpsc, socket_client, tokio, udp_nat_listen, AnswererSlot, Arc, IceRoute,
-        IntoTargetAddr, Ordering, PunchHoleSent, RendezvousMediator, RendezvousMessage,
-        ICE_DEDUP_WINDOW, MAX_PENDING_REMOTE_ICE, MAX_WEBRTC_ANSWERERS, TCP_PUNCHES, UDP_PUNCHES,
+        connection_meta, mpsc, non_empty_registration_id, socket_client, tokio, udp_nat_listen,
+        AnswererSlot, Arc, IceRoute, IntoTargetAddr, Ordering, PunchHoleSent, RendezvousMediator,
+        RendezvousMessage, ICE_DEDUP_WINDOW, MAX_PENDING_REMOTE_ICE, MAX_WEBRTC_ANSWERERS,
+        TCP_PUNCHES, UDP_PUNCHES,
     };
     use hbb_common::{protobuf::Message as _, tcp::new_listener};
     use std::net::SocketAddr;
@@ -1746,6 +1777,15 @@ mod tests {
 
     fn pools() -> std::sync::MutexGuard<'static, ()> {
         POOLS.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    #[test]
+    fn rendezvous_registration_rejects_an_empty_id() {
+        assert!(non_empty_registration_id(String::new()).is_none());
+        assert_eq!(
+            non_empty_registration_id("123456789".to_owned()).as_deref(),
+            Some("123456789")
+        );
     }
 
     // The places are the bound and they come back on drop: a punch past the limit is declined

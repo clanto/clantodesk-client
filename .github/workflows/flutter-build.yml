@@ -121,7 +121,7 @@ jobs:
         shell: bash
         run: |
           # Il rollback del submodule ha fatto fallire ogni job di build con E0432
-          # (simboli assenti). Qui confrontiamo con quello che il tag upstream pinna.
+          # (simboli assenti). Il fork deve contenere quello che il tag upstream pinna.
           VER=$(grep -m1 '^version = ' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
           OURS=$(git ls-tree HEAD libs/hbb_common | awk '{print $3}')
           echo "nostro:   $OURS"
@@ -131,12 +131,31 @@ jobs:
           fi
           THEIRS=$(git ls-tree FETCH_HEAD libs/hbb_common | awk '{print $3}')
           echo "upstream $VER: $THEIRS"
-          if [ "$OURS" != "$THEIRS" ]; then
-            echo "::error::libs/hbb_common e' $OURS ma upstream $VER pinna $THEIRS."
-            echo "::error::Se e' voluto rimuovi questo controllo; se no: git -C libs/hbb_common checkout $THEIRS"
+          FORK_URL=$(git config -f .gitmodules --get submodule.libs/hbb_common.url || true)
+          if [ -z "$FORK_URL" ]; then
+            echo "::error::URL del fork hbb_common assente da .gitmodules."
             exit 1
           fi
-          echo "submodule allineato a upstream $VER"
+          CHECK_DIR=$(mktemp -d "$RUNNER_TEMP/hbb-common-ancestry.XXXXXX")
+          git init -q "$CHECK_DIR"
+          if ! git -C "$CHECK_DIR" fetch -q --filter=blob:none --no-tags "$FORK_URL" "$OURS" || \
+             ! git -C "$CHECK_DIR" cat-file -e "$OURS^{commit}"; then
+            echo "::error::il commit $OURS e' assente dal fork $FORK_URL: push del branch del submodule mancante."
+            exit 1
+          fi
+          if ! git -C "$CHECK_DIR" cat-file -e "$THEIRS^{commit}" && \
+             ! git -C "$CHECK_DIR" fetch -q --filter=blob:none --no-tags "$FORK_URL" "$THEIRS"; then
+            if ! git -C "$CHECK_DIR" fetch -q --filter=blob:none --no-tags \
+                 https://github.com/rustdesk/hbb_common "$THEIRS"; then
+              echo "::error::il commit upstream $THEIRS non e' recuperabile dal fork ne' da rustdesk/hbb_common."
+              exit 1
+            fi
+          fi
+          if ! git -C "$CHECK_DIR" merge-base --is-ancestor "$THEIRS" "$OURS"; then
+            echo "::error::il fork e' indietro rispetto a upstream $VER: $THEIRS non e' antenato di $OURS."
+            exit 1
+          fi
+          echo "submodule Clanto $OURS contiene il pin upstream $VER ($THEIRS)"
 
       - name: Check no rustdesk- artifact names
         shell: bash

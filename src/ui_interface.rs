@@ -1100,6 +1100,9 @@ pub fn deploy_device(token: String, new_id: Option<String>) -> DeployResult {
     let local_id = Config::get_id();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let local_id = ipc::get_id();
+    if local_id.is_empty() {
+        return DeployResult::Error("Device ID is protected but unavailable.".to_owned());
+    }
     let id_to_deploy = new_id.clone().unwrap_or_else(|| local_id.clone());
     let uuid = crate::encode64(hbb_common::get_uuid());
     let pk = crate::encode64(Config::get_key_pair().1);

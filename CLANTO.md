@@ -110,12 +110,55 @@ Il job `verify-secrets` in `flutter-build.yml` blocca tutti i build se:
 1. mancano i secret dei server
 2. la versione in `Cargo.toml` non coincide con i 7 file che non la derivano da lui
    (`pubspec.yaml`, `env.VERSION` ×2, i due rpm-flutter, i due AppImage)
-3. `libs/hbb_common` non è allineato al submodule che il tag upstream pinna —
-   un disallineamento fa fallire *ogni* job di build con `E0432`
+3. il commit di `libs/hbb_common` pinnato dal tag upstream non è un antenato del
+   commit del fork Clanto — il fork può essere avanti, ma non può perdere modifiche upstream
 4. resta qualche nome di artefatto `rustdesk-*`
 
 `build.py` riscrive da sé la versione in `PKGBUILD`, `rpm.spec` e `rpm-suse.spec`
 leggendola da `Cargo.toml`: quei file non vanno aggiornati a mano.
+
+## Credenziali protette
+
+I segreti locali usano due chiavi casuali indipendenti. La chiave **utente**
+protegge le credenziali necessarie per collegarsi ad altri PC: password e opzioni
+del peer (`os-username`, `os-password`, `rdp_username`, `rdp_password`), token e
+profilo dell'account locale, rubrica e gruppi. La chiave **macchina** protegge la
+configurazione globale dell'host: ID, password permanente, chiave privata, PIN di
+sblocco, password Socks5, dispositivi attendibili, segreto TOTP e token Telegram.
+
+Su Windows `machine.key` è un blob DPAPI con ambito macchina e `user.key` un blob
+DPAPI dell'utente. Entrambi stanno nella cartella di configurazione del relativo
+profilo. Durante `--import-config` viene copiato anche `machine.key`, così il
+servizio SYSTEM e il processo utente leggono la stessa configurazione host senza
+ricifrarla; il servizio SYSTEM non carica mai `user.key`. Se venisse importato il
+solo `Config2` mentre nella sorgente esiste `machine.key`, `--import-config`
+rifiuta l'operazione: importare i segreti senza il relativo `Config` potrebbe
+associare configurazione e chiave macchina diverse. Sulle altre piattaforme, in
+questa prima parte, i due file contengono chiavi casuali create atomicamente con
+permessi `0600` nella cartella di configurazione del profilo.
+
+I valori nuovi hanno prefisso `02` per l'ambito macchina e `03` per l'ambito
+utente. I valori storici `00` continuano a essere letti con la chiave derivata
+dall'UUID (incluso il fallback alla chiave pubblica) e vengono riscritti nel nuovo
+formato al primo salvataggio utile. In assenza del provider di chiavi,
+`hbb_common` conserva esattamente il formato e il comportamento upstream.
+Se invece il provider è registrato ma la chiave dell'ambito non è disponibile,
+non viene mai creato un nuovo valore `00`: uno scoped ciphertext già presente
+resta invariato e un valore nuovo o modificato non viene salvato. L'errore viene
+registrato una sola volta per ambito durante il processo.
+
+Copiare i file TOML, rubrica o gruppi senza il relativo file `.key` su un'altra
+macchina, oppure in un altro profilo, rende intenzionalmente indecifrabili i
+segreti del relativo ambito. I dati non vengono rigenerati o sovrascritti quando
+manca la chiave; in particolare l'ID cifrato viene lasciato intatto. Finché l'ID
+non è decifrabile il servizio non si registra né annuncia un ID vuoto al server
+rendezvous e segnala periodicamente lo stato nel log. Ogni ciclo riprova, quindi
+la registrazione riprende senza riavvio appena la chiave torna disponibile. La
+protezione macchina non difende da un processo locale con privilegi
+amministrativi. Fuori da Windows, in questa prima parte, chi riesce a leggere e
+copiare anche il file della chiave può trasferire i segreti: la parte 2 sostituirà
+la chiave utente su file con Keychain su macOS/iOS, Secret Service su Linux e
+Keystore su Android.
 
 ## Firma Apple locale
 

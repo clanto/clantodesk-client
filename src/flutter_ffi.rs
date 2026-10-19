@@ -39,12 +39,13 @@ lazy_static::lazy_static! {
 }
 
 fn initialize(app_dir: &str, custom_client_config: &str) {
-    flutter::async_tasks::start_flutter_async_runner();
     // `APP_DIR` is set in `main_get_data_dir_ios()` on iOS.
     #[cfg(not(target_os = "ios"))]
     {
         *config::APP_DIR.write().unwrap() = app_dir.to_owned();
     }
+    crate::clanto::config::apply_build_config();
+    flutter::async_tasks::start_flutter_async_runner();
     // core_main's load_custom_client does not work for flutter since it is only applied to its load_library in main.c
     if custom_client_config.is_empty() {
         crate::load_custom_client();
@@ -2162,6 +2163,7 @@ pub fn main_set_home_dir(_home: String) {
 // This is a temporary method to get data dir for ios
 pub fn main_get_data_dir_ios(app_dir: String) -> SyncReturn<String> {
     *config::APP_DIR.write().unwrap() = app_dir;
+    crate::clanto::config::apply_build_config();
     let data_dir = config::Config::path("data");
     if !data_dir.exists() {
         if let Err(e) = std::fs::create_dir_all(&data_dir) {
@@ -2990,6 +2992,7 @@ pub mod server_side {
         if let Ok(home_dir) = env.get_string(&home_dir) {
             *config::APP_HOME_DIR.write().unwrap() = home_dir.into();
         }
+        crate::clanto::config::apply_build_config();
         if let Ok(custom_client_config) = env.get_string(&custom_client_config) {
             if !custom_client_config.is_empty() {
                 let custom_client_config: String = custom_client_config.into();
@@ -3002,6 +3005,7 @@ pub mod server_side {
     #[no_mangle]
     pub unsafe extern "system" fn Java_ffi_FFI_startService(_env: JNIEnv, _class: JClass) {
         log::debug!("startService from jvm");
+        crate::clanto::config::apply_build_config();
         config::Config::set_option("stop-service".into(), "".into());
         crate::rendezvous_mediator::reset_needs_deploy_notification();
         crate::rendezvous_mediator::RendezvousMediator::restart();
@@ -3048,6 +3052,7 @@ pub mod server_side {
         key: JString,
     ) -> jstring {
         let mut env = env;
+        crate::clanto::config::apply_build_config();
         let res = if let Ok(key) = env.get_string(&key) {
             let key: String = key.into();
             super::get_local_option(key)
@@ -3064,6 +3069,7 @@ pub mod server_side {
         key: JString,
     ) -> jstring {
         let mut env = env;
+        crate::clanto::config::apply_build_config();
         let res = if let Ok(key) = env.get_string(&key) {
             let key: String = key.into();
             super::get_builtin_option(&key)

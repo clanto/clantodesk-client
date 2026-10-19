@@ -22,10 +22,12 @@
 - **Audio/Video Services**: Real-time audio/video streaming in `src/server/`
 - **File Transfer**: Secure file transfer implementation in `libs/base/src/fs.rs`
 
-`hbb_common` is a git submodule shared with the server, so changing it costs a
-round-trip. Put client-only code in `libs/base` instead; it is a normal
-workspace member. `base::config::keys` re-exports the handful of keys
-`hbb_common` still reads, so callers get the whole set from that one path.
+`hbb_common` is the Clanto fork of the submodule shared with the server and future
+ports. Keep platform-specific implementations in the client and expose only
+platform-neutral interfaces from the submodule. Put ordinary client-only code in
+`libs/base`; it is a normal workspace member. `base::config::keys` re-exports the
+handful of keys `hbb_common` still reads, so callers get the whole set from that
+one path. Upstream changes are ported by hand: never merge upstream into the fork.
 
 ### UI Architecture
 - **Legacy UI**: Sciter-based (deprecated) - files in `src/ui/`

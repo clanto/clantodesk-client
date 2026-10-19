@@ -11,6 +11,7 @@ pub mod audit_sink;
 pub mod config;
 pub mod file_scan;
 pub mod gpo;
+pub mod keystore;
 pub mod outgoing;
 pub mod posture;
 pub mod session_log;
