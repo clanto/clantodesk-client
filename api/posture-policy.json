@@ -1,0 +1,491 @@
+{
+  "version": 2,
+  "revoked_versions": [],
+  "groups": {
+    "aule": []
+  },
+  "eol": {
+    "Windows": [
+      {
+        "field": "os_build",
+        "regex": "^19044$",
+        "edition_regex": "(?i)IoT.*LTSC",
+        "date": "2032-01-13"
+      },
+      {
+        "field": "os_build",
+        "regex": "^19044$",
+        "edition_regex": "(?i)LTSC|LTSB",
+        "date": "2027-01-12"
+      },
+      {
+        "field": "os_build",
+        "regex": "^19044$",
+        "edition_regex": "(?i)enterprise|(?<!pro )education",
+        "date": "2024-06-11"
+      },
+      {
+        "field": "os_build",
+        "regex": "^19044$",
+        "date": "2023-06-13"
+      },
+      {
+        "field": "os_build",
+        "regex": "^19045$",
+        "date": "2025-10-14"
+      },
+      {
+        "field": "os_build",
+        "regex": "^22000$",
+        "edition_regex": "(?i)enterprise|(?<!pro )education",
+        "date": "2024-10-08"
+      },
+      {
+        "field": "os_build",
+        "regex": "^22000$",
+        "date": "2023-10-10"
+      },
+      {
+        "field": "os_build",
+        "regex": "^22621$",
+        "edition_regex": "(?i)enterprise|(?<!pro )education",
+        "date": "2025-10-14"
+      },
+      {
+        "field": "os_build",
+        "regex": "^22621$",
+        "date": "2024-10-08"
+      },
+      {
+        "field": "os_build",
+        "regex": "^22631$",
+        "edition_regex": "(?i)enterprise|(?<!pro )education",
+        "date": "2026-11-10"
+      },
+      {
+        "field": "os_build",
+        "regex": "^22631$",
+        "date": "2025-11-11"
+      },
+      {
+        "field": "os_build",
+        "regex": "^26100$",
+        "edition_regex": "(?i)IoT.*LTSC",
+        "date": "2034-10-10"
+      },
+      {
+        "field": "os_build",
+        "regex": "^26100$",
+        "edition_regex": "(?i)LTSC",
+        "date": "2029-10-09"
+      },
+      {
+        "field": "os_build",
+        "regex": "^26100$",
+        "edition_regex": "(?i)enterprise|(?<!pro )education",
+        "date": "2027-10-12"
+      },
+      {
+        "field": "os_build",
+        "regex": "^26100$",
+        "date": "2026-10-13"
+      },
+      {
+        "field": "os_build",
+        "regex": "^26200$",
+        "edition_regex": "(?i)enterprise|(?<!pro )education",
+        "date": "2028-10-10"
+      },
+      {
+        "field": "os_build",
+        "regex": "^26200$",
+        "date": "2027-10-12"
+      },
+      {
+        "field": "os_build",
+        "regex": "^26300$",
+        "edition_regex": "(?i)enterprise|(?<!pro )education",
+        "date": "2029-10-09"
+      },
+      {
+        "field": "os_build",
+        "regex": "^26300$",
+        "date": "2028-10-10"
+      },
+      {
+        "field": "os_build",
+        "regex": "^28000$",
+        "edition_regex": "(?i)enterprise|(?<!pro )education",
+        "date": "2029-03-13"
+      },
+      {
+        "field": "os_build",
+        "regex": "^28000$",
+        "date": "2028-03-14"
+      }
+    ],
+    "Linux": [
+      {
+        "field": "os_version",
+        "regex": "^ubuntu18\\.04$",
+        "date": "2023-05-31"
+      },
+      {
+        "field": "os_version",
+        "regex": "^ubuntu20\\.04$",
+        "date": "2025-05-31"
+      },
+      {
+        "field": "os_version",
+        "regex": "^ubuntu22\\.04$",
+        "date": "2027-05-31"
+      },
+      {
+        "field": "os_version",
+        "regex": "^ubuntu24\\.04$",
+        "date": "2029-05-31"
+      },
+      {
+        "field": "os_version",
+        "regex": "^debian10$",
+        "date": "2024-06-30"
+      },
+      {
+        "field": "os_version",
+        "regex": "^debian11$",
+        "date": "2026-08-31"
+      },
+      {
+        "field": "os_version",
+        "regex": "^debian12$",
+        "date": "2028-06-30"
+      }
+    ]
+  },
+  "rules": [
+    {
+      "id": "sistema-supportato",
+      "enabled": true,
+      "platforms": [
+        "Windows",
+        "Linux"
+      ],
+      "op": "not_eol",
+      "message": "Il sistema operativo non riceve più aggiornamenti di sicurezza dal produttore: aggiornarlo alla versione più recente."
+    },
+    {
+      "id": "windows-build-minima",
+      "enabled": true,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "os_build",
+      "op": "num_gte",
+      "value": 19044,
+      "message": "Versione di Windows troppo vecchia: aggiornare a Windows 11."
+    },
+    {
+      "id": "macos-versione-minima",
+      "enabled": true,
+      "platforms": [
+        "Mac OS"
+      ],
+      "field": "os_version",
+      "op": "version_gte",
+      "value": "15.0",
+      "message": "Versione di macOS non più supportata: aggiornare almeno a macOS 15 Sequoia."
+    },
+    {
+      "id": "ios-versione-minima",
+      "enabled": true,
+      "platforms": [
+        "iOS"
+      ],
+      "field": "os_version",
+      "op": "version_gte",
+      "value": "18.0",
+      "message": "Versione di iOS non più supportata: aggiornare almeno a iOS 18."
+    },
+    {
+      "id": "android-patch-recenti",
+      "enabled": true,
+      "platforms": [
+        "Android"
+      ],
+      "field": "os_build",
+      "op": "date_within_days",
+      "value": 180,
+      "message": "Le patch di sicurezza Android hanno più di 6 mesi: aggiornare il dispositivo o sostituirlo se non riceve più aggiornamenti."
+    },
+    {
+      "id": "aggiornamenti-recenti",
+      "enabled": true,
+      "platforms": [
+        "Windows",
+        "Mac OS",
+        "Linux"
+      ],
+      "field": "last_update_days",
+      "op": "num_lte",
+      "value": 45,
+      "unknown_is": "pass",
+      "message": "Nessun aggiornamento di sistema installato negli ultimi 45 giorni: eseguire gli aggiornamenti."
+    },
+    {
+      "id": "antivirus-attivo",
+      "enabled": true,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "av_enabled",
+      "op": "eq",
+      "value": "true",
+      "message": "Nessun antivirus attivo: attivare Microsoft Defender o un antivirus equivalente."
+    },
+    {
+      "id": "antivirus-aggiornato",
+      "enabled": true,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "av_uptodate",
+      "op": "eq",
+      "value": "true",
+      "unknown_is": "pass",
+      "message": "L'antivirus non è aggiornato: aggiornarlo prima di collegarsi."
+    },
+    {
+      "id": "antivirus-firme-recenti",
+      "enabled": true,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "av_signature_days",
+      "op": "num_lte",
+      "value": 7,
+      "unknown_is": "pass",
+      "message": "Le firme antivirus hanno più di 7 giorni: aggiornarle."
+    },
+    {
+      "id": "antivirus-vietati",
+      "enabled": true,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "av_products",
+      "op": "none_match",
+      "value": "/(segurazo|santivirus|bytefence|reimage|restoro)/i",
+      "bypassable": false,
+      "message": "È installato un software spacciato per antivirus e non affidabile: disinstallarlo e usare Microsoft Defender o un antivirus riconosciuto."
+    },
+    {
+      "id": "firewall-attivo",
+      "enabled": true,
+      "platforms": [
+        "Windows",
+        "Mac OS"
+      ],
+      "field": "firewall_enabled",
+      "op": "eq",
+      "value": "true",
+      "message": "Il firewall è disattivato: riattivarlo."
+    },
+    {
+      "id": "uac-attivo",
+      "enabled": true,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "uac_enabled",
+      "op": "eq",
+      "value": "true",
+      "unknown_is": "pass",
+      "message": "Il Controllo dell'account utente (UAC) è disattivato: riattivarlo."
+    },
+    {
+      "id": "avvio-uefi",
+      "enabled": true,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "firmware_type",
+      "op": "eq",
+      "value": "uefi",
+      "unknown_is": "pass",
+      "message": "Il PC si avvia in modalità BIOS legacy: serve l'avvio UEFI."
+    },
+    {
+      "id": "avvio-protetto",
+      "enabled": true,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "secure_boot",
+      "op": "eq",
+      "value": "true",
+      "unknown_is": "pass",
+      "message": "Avvio protetto (Secure Boot) disattivato: attivarlo dal firmware UEFI."
+    },
+    {
+      "id": "sip-attivo",
+      "enabled": true,
+      "platforms": [
+        "Mac OS"
+      ],
+      "field": "sip_enabled",
+      "op": "eq",
+      "value": "true",
+      "unknown_is": "pass",
+      "message": "La protezione dell'integrità di sistema (SIP) è disattivata: riattivarla."
+    },
+    {
+      "id": "gatekeeper-attivo",
+      "enabled": true,
+      "platforms": [
+        "Mac OS"
+      ],
+      "field": "gatekeeper_enabled",
+      "op": "eq",
+      "value": "true",
+      "unknown_is": "pass",
+      "message": "Gatekeeper è disattivato: riattivarlo."
+    },
+    {
+      "id": "disco-cifrato-mac",
+      "enabled": true,
+      "platforms": [
+        "Mac OS"
+      ],
+      "field": "disk_encrypted",
+      "op": "eq",
+      "value": "true",
+      "unknown_is": "pass",
+      "message": "FileVault è disattivato: attivare la cifratura del disco."
+    },
+    {
+      "id": "wifi-sicuro",
+      "enabled": true,
+      "platforms": [],
+      "field": "wifi_security",
+      "op": "not_in",
+      "value": [
+        "open",
+        "wep"
+      ],
+      "unknown_is": "pass",
+      "message": "Rete Wi-Fi non protetta (aperta o WEP): collegarsi a una rete protetta o usare una VPN."
+    },
+    {
+      "id": "android-non-modificato",
+      "enabled": true,
+      "platforms": [
+        "Android"
+      ],
+      "field": "rooted",
+      "op": "ne",
+      "value": "true",
+      "unknown_is": "pass",
+      "bypassable": false,
+      "message": "Il dispositivo risulta modificato (root): non è ammesso."
+    },
+    {
+      "id": "disco-cifrato-windows",
+      "enabled": false,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "disk_encrypted",
+      "op": "eq",
+      "value": "true",
+      "unknown_is": "pass",
+      "message": "Il disco non è cifrato: attivare BitLocker o la crittografia del dispositivo."
+    },
+    {
+      "id": "tpm-2",
+      "enabled": false,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "tpm_version",
+      "op": "version_gte",
+      "value": "2.0",
+      "unknown_is": "pass",
+      "message": "Serve un chip TPM 2.0."
+    },
+    {
+      "id": "riavvio-in-sospeso",
+      "enabled": false,
+      "platforms": [
+        "Windows",
+        "Linux"
+      ],
+      "field": "pending_reboot",
+      "op": "eq",
+      "value": "false",
+      "unknown_is": "pass",
+      "message": "Ci sono aggiornamenti in attesa di riavvio: riavviare il dispositivo."
+    },
+    {
+      "id": "utente-non-amministratore",
+      "enabled": false,
+      "platforms": [
+        "Windows",
+        "Mac OS",
+        "Linux"
+      ],
+      "field": "user_is_admin",
+      "op": "eq",
+      "value": "false",
+      "unknown_is": "pass",
+      "message": "Si sta usando un account amministratore: collegarsi da un account standard."
+    },
+    {
+      "id": "android-debug-usb",
+      "enabled": false,
+      "platforms": [
+        "Android"
+      ],
+      "field": "dev_options",
+      "op": "ne",
+      "value": "true",
+      "unknown_is": "pass",
+      "message": "Le opzioni sviluppatore sono attive: disattivarle."
+    },
+    {
+      "id": "non-macchina-virtuale",
+      "enabled": false,
+      "platforms": [],
+      "field": "is_vm",
+      "op": "eq",
+      "value": "false",
+      "unknown_is": "pass",
+      "message": "Non sono ammesse macchine virtuali."
+    },
+    {
+      "id": "aule-orario-scolastico",
+      "enabled": false,
+      "platforms": [],
+      "groups": [
+        "aule"
+      ],
+      "op": "schedule",
+      "value": {
+        "tz": "Europe/Rome",
+        "windows": [
+          {
+            "days": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "from": "07:30",
+            "to": "18:00"
+          }
+        ]
+      },
+      "message": "Accesso alle aule consentito solo dal lunedì al venerdì, dalle 07:30 alle 18:00."
+    }
+  ]
+}

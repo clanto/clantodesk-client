@@ -1,4 +1,6 @@
 <?php
+// SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
+// SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 /**
  * ClantoDesk Update & Download Hub
  * Gestisce sia le richieste API dei client che la pagina di download per i browser.

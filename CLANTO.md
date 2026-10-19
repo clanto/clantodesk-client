@@ -450,9 +450,14 @@ mancanti valgono rifiuto. Il PC host deve quindi raggiungere `clanto.it`.
   `clanto-posture-bypass` (id separati da virgola) le ignora su quel PC; `decide()` non lascia mai
   passare un id `core:` (firma, coerenza, versione revocata). Ogni accesso entrato con un bypass va
   nell'audit. Lo script RMM, profilo `restrittivo`, svuota i bypass.
-- **Policy.** Vive solo sul server, in `posture-policy.json` accanto alla PHP: regole, tabella EOL per
+- **Policy.** Vive sul server, in `posture-policy.json` accanto alla PHP: regole, tabella EOL per
   edizione, gruppi di host, fasce orarie. Si cambia senza rilasciare il client. Una regola malformata
   blocca tutti gli accessi (`core:policy:<id>`): provarla prima di pubblicarla.
+- **Server.** I file stanno in `api/` di questo repo (`clantodesk-posture.php`, `posture-policy.json`,
+  insieme a `clantodesk.php` dei download) e si caricano così come sono su `clanto.it/api/`. Il
+  segreto non è nel repo: `CLANTO_POSTURE_MASTER` si imposta nell'ambiente del sito (su ISPConfig con
+  Apache: scheda Opzioni, direttive Apache, `SetEnv CLANTO_POSTURE_MASTER <valore>`), con lo stesso
+  valore del secret GitHub. Senza, la PHP risponde `core:config` e rifiuta ogni accesso.
 - **Limite noto.** Con l'accesso diretto via IP il controller firma con l'IP al posto dell'ID e la
   verifica fallisce sempre: con l'opzione attiva l'accesso via IP è di fatto escluso.
 
