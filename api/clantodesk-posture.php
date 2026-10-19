@@ -453,6 +453,11 @@ try {
     }
     $master = getenv('CLANTO_POSTURE_MASTER');
     if (!is_string($master) || $master === '') {
+        // ISPConfig: <sito>/private/ sta accanto a <sito>/web/ e nginx non lo serve.
+        $file = __DIR__ . '/../../private/clanto-posture.secret';
+        $master = is_readable($file) ? trim((string) file_get_contents($file)) : '';
+    }
+    if ($master === '') {
         error_log('clanto-posture: master non configurato');
         respond_core('core:config', 'verifica non configurata');
     }
