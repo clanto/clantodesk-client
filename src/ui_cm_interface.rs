@@ -267,7 +267,14 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
             .unwrap()
             .retain(|_, c| !(c.disconnected && c.peer_id == client.peer_id));
         CLIENTS.write().unwrap().insert(id, client.clone());
+        crate::clanto::host_watermark::connection_added(&client);
         self.ui_handler.add_connection(&client);
+    }
+
+    fn update_clanto_account_user(&self, id: i32, account_user: String) {
+        if CLIENTS.read().unwrap().contains_key(&id) {
+            crate::clanto::host_watermark::connection_account_user(id, account_user);
+        }
     }
 
     #[inline]
@@ -291,6 +298,8 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
                 .get_mut(&id)
                 .map(|c| c.disconnected = true);
         }
+
+        crate::clanto::host_watermark::connection_removed(id);
 
         #[cfg(target_os = "windows")]
         {
@@ -362,6 +371,10 @@ pub fn get_click_time() -> i64 {
     CLICK_TIME.load(Ordering::SeqCst)
 }
 
+pub fn host_watermark_option_changed(enabled: bool) {
+    crate::clanto::host_watermark::option_changed(enabled);
+}
+
 #[inline]
 #[cfg(not(any(target_os = "ios")))]
 pub fn authorize(id: i32) {
@@ -369,6 +382,7 @@ pub fn authorize(id: i32) {
         client.authorized = true;
         allow_err!(client.tx.send(Data::Authorize));
     };
+    crate::clanto::host_watermark::connection_authorized(id);
 }
 
 #[inline]
@@ -564,6 +578,9 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                     }
                                     self.running = true;
                                     break;
+                                }
+                                Data::ClantoAccountUser { id, account_user } => {
+                                    self.cm.update_clanto_account_user(id, account_user);
                                 }
                                 Data::Close => {
                                     log::info!("cm ipc connection closed from connection request");
@@ -933,6 +950,9 @@ pub async fn start_listen<T: InvokeUiCM>(
                     from_switch,
                     tx.clone(),
                 );
+            }
+            Some(Data::ClantoAccountUser { id, account_user }) => {
+                cm.update_clanto_account_user(id, account_user);
             }
             Some(Data::ChatMessage { text }) => {
                 cm.new_message(current_id, text);
@@ -1847,6 +1867,7 @@ pub fn quit_cm() {
     // in case of std::process::exit not work
     log::info!("quit cm");
     CLIENTS.write().unwrap().clear();
+    crate::clanto::host_watermark::clear();
     // `quit_gui()` ends the process on Windows and macOS, but on Linux it calls
     // `gtk_main_quit()`, which has no effect in the Flutter connection manager:
     // `flutter/linux/main.cc` runs `g_application_run()` (GtkApplication), so

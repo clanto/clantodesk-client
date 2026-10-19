@@ -873,5 +873,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Show this controller's ID, account user or PC name, and current time over remote sessions.", "Mostra l'ID ClantoDesk di questo controller, l'utente dell'account o il nome del PC e l'ora corrente sulle sessioni remote."),
         ("Require controller watermark", "Richiedi la filigrana del controller"),
         ("Require connecting controllers to show their ID, account user or PC name, and current time.", "Richiedi ai controller che si connettono di mostrare il proprio ID, l'utente dell'account o il nome del PC e l'ora corrente."),
+        ("Show host watermark", "Mostra la filigrana sull'host"),
+        ("Show connected controllers, account users, session start time, and active session count on this device.", "Mostra su questo dispositivo i controller collegati, gli utenti degli account, l'ora di inizio delle sessioni e il numero di sessioni attive."),
     ].iter().cloned().collect();
 }

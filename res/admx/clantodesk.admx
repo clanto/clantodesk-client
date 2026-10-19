@@ -75,6 +75,9 @@
     <policy name="RequireControllerWatermark" class="Machine" displayName="$(string.RequireControllerWatermark)" explainText="$(string.RequireControllerWatermark_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-require-controller-watermark" presentation="$(presentation.RequireControllerWatermark)">
       <parentCategory ref="InboundSecurity" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="HostWatermark" class="Machine" displayName="$(string.HostWatermark)" explainText="$(string.HostWatermark_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-host-watermark" presentation="$(presentation.HostWatermark)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
     <policy name="PostureBypass" class="Machine" displayName="$(string.PostureBypass)" explainText="$(string.PostureBypass_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.PostureBypass)">
       <parentCategory ref="InboundSecurity" />
       <supportedOn ref="ClantoDesk150" /><elements><text id="PostureBypassValue" valueName="clanto-posture-bypass" /></elements></policy>

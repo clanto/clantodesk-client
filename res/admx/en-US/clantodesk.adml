@@ -33,6 +33,7 @@
       <string id="TemporaryPasswordRotation">Temporary password rotation interval</string><string id="TemporaryPasswordRotation_Help">Sets how often the temporary password changes, in minutes. Set 0 to disable rotation. Valid values are 0 to 1440. If not configured, rotation is disabled.</string>
       <string id="RequireProtectedDevice">Require protected connecting devices</string><string id="RequireProtectedDevice_Help">Requires a connecting device to pass the Clanto security posture check. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
       <string id="RequireControllerWatermark">Require controller watermark</string><string id="RequireControllerWatermark_Help">Requires connecting ClantoDesk controllers to show an identifying watermark over remote desktop and camera view sessions. This is a client-applied deterrent and cannot protect against a modified client. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
+      <string id="HostWatermark">Show host watermark</string><string id="HostWatermark_Help">Shows the connected controller identity, account user when known, session start time, and active session count on every host display during authorized remote desktop and camera sessions. Default: disabled. If not configured, the local ClantoDesk setting is used.</string>
       <string id="PostureBypass">Security posture bypass list</string><string id="PostureBypass_Help">Sets comma-separated posture rule IDs to ignore on this PC. Default: empty. If not configured, the local ClantoDesk setting is used.</string>
       <string id="FileScan">Scan files received by the host</string><string id="FileScan_Help">Selects whether completed incoming files are not scanned (off), delivered with an audit warning when malware is found or scanning is unavailable (warn), or quarantined and rejected in those cases (block). Default: off. If not configured, the local ClantoDesk setting is used.</string>
       <string id="FileScanOff">Off</string><string id="FileScanWarn">Warn</string><string id="FileScanBlock">Block</string>
@@ -81,6 +82,7 @@
       <presentation id="SyslogTlsCa"><textBox refId="SyslogTlsCaValue"><label>$(string.Value)</label></textBox></presentation>
       <presentation id="SyslogFormat"><dropdownList refId="SyslogFormatValue"><label>$(string.Value)</label></dropdownList></presentation>
       <presentation id="SessionLogDays"><decimalTextBox refId="SessionLogDaysValue"><label>$(string.Value)</label></decimalTextBox></presentation>
+      <presentation id="HostWatermark"><text>$(string.Configure)</text></presentation>
     </presentationTable>
   </resources>
 </policyDefinitionResources>

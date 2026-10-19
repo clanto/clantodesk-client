@@ -15,6 +15,7 @@ import 'protected_device.dart';
 import 'watermark.dart';
 
 const String kOptClantoPostureBypass = 'clanto-posture-bypass';
+const String kOptClantoHostWatermark = 'clanto-host-watermark';
 const String _postureRulesUrl =
     'https://clanto.it/api/clantodesk-posture.php?rules';
 
@@ -70,6 +71,8 @@ class _ClantoInboundSecuritySettingState
   bool _requireControllerWatermark = bind.mainGetOptionSync(
           key: kOptClantoRequireControllerWatermark) ==
       'Y';
+  bool _hostWatermark =
+      bind.mainGetOptionSync(key: kOptClantoHostWatermark) == 'Y';
 
   @override
   void initState() {
@@ -131,6 +134,19 @@ class _ClantoInboundSecuritySettingState
     if (mounted) setState(() => _requireControllerWatermark = value);
   }
 
+  Future<void> _setHostWatermark(bool value) async {
+    if (!widget.enabled || isOptionFixed(kOptClantoHostWatermark)) return;
+    if (value &&
+        isAndroid &&
+        !await AndroidPermissionManager.check(kSystemAlertWindow) &&
+        !await AndroidPermissionManager.request(kSystemAlertWindow)) {
+      return;
+    }
+    await bind.mainSetOption(
+        key: kOptClantoHostWatermark, value: value ? 'Y' : 'N');
+    if (mounted) setState(() => _hostWatermark = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -157,6 +173,16 @@ class _ClantoInboundSecuritySettingState
         title: Text(translate('Require controller watermark')),
         subtitle: Text(translate(
             'Require connecting controllers to show their ID, account user or PC name, and current time.')),
+      ),
+      CheckboxListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+        value: _hostWatermark,
+        onChanged: widget.enabled && !isOptionFixed(kOptClantoHostWatermark)
+            ? (value) => _setHostWatermark(value ?? false)
+            : null,
+        title: Text(translate('Show host watermark')),
+        subtitle: Text(translate(
+            'Show connected controllers, account users, session start time, and active session count on this device.')),
       ),
       ClantoFileTransferSecuritySetting(enabled: widget.enabled),
       if (_loading)

@@ -1386,8 +1386,24 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                                 UI_STATUS.lock().unwrap().mouse_time = v;
                             }
                             Ok(Some(ipc::Data::Options(Some(v)))) => {
-                                *OPTIONS.lock().unwrap() = v;
+                                let host_watermark_changed = {
+                                    let mut options = OPTIONS.lock().unwrap();
+                                    let changed = options.get(
+                                        crate::clanto::host_watermark::OPTION_HOST_WATERMARK,
+                                    ) != v.get(
+                                        crate::clanto::host_watermark::OPTION_HOST_WATERMARK,
+                                    );
+                                    *options = v;
+                                    changed
+                                };
                                 *OPTION_SYNCED.lock().unwrap() = true;
+                                if is_cm && host_watermark_changed {
+                                    crate::ui_cm_interface::host_watermark_option_changed(
+                                        get_option(
+                                            crate::clanto::host_watermark::OPTION_HOST_WATERMARK,
+                                        ) == "Y",
+                                    );
+                                }
                             }
                             Ok(Some(ipc::Data::Config((name, Some(value))))) => {
                                 if name == "id" {

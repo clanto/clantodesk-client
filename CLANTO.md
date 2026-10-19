@@ -545,11 +545,58 @@ propria opzione è `N`. Le due opzioni si applicano solo alle sessioni desktop d
 visualizzazione e controllo, non a trasferimento file, terminale, port
 forwarding/RDP. Vale anche per la visualizzazione della fotocamera.
 
-È un deterrente applicato dal client: rende riconoscibile chi osserva la
-sessione negli screenshot e nelle fotografie, ma un client modificato può
-ignorare sia l'opzione locale sia il requisito comunicato dall'host. Non è una
-protezione tecnica contro acquisizioni effettuate con software o dispositivi
-esterni.
+La filigrana lato controller è un deterrente applicato dal client: rende
+riconoscibile chi osserva la sessione negli screenshot e nelle fotografie, ma
+un client modificato può ignorare sia l'opzione locale sia il requisito
+comunicato dall'host. Non è una protezione tecnica contro acquisizioni
+effettuate con software o dispositivi esterni.
+
+L'opzione host `clanto-host-watermark` (predefinita `N`) mostra invece sul PC
+controllato una fascia semitrasparente su ogni schermo per tutta la durata di
+almeno una sessione desktop o fotocamera autorizzata. Riporta nome o ID del
+controller (preferendo l'alias), l'utente dell'account quando noto, l'ora di
+inizio e il numero di sessioni attive; si aggiorna agli ingressi e alle uscite e
+scompare alla chiusura dell'ultima sessione. Non si attiva per sessioni di solo
+trasferimento file, terminale o port forwarding/RDP. Il valore viene applicato
+anche tramite GPO e il controllo nell'interfaccia è bloccato quando la policy è
+configurata. L'utente dell'account non viene incluso nella richiesta di login:
+l'host lo richiede al controller soltanto dopo l'autorizzazione di una sessione
+coperta dalla filigrana e soltanto mentre l'opzione è `Y`.
+
+Dove il sistema consente un overlay globale, la finestra è gestita solo da
+ClantoDesk: non ha bordi o controlli, non riceve mouse o tastiera, non prende il
+focus, non può essere chiusa o spostata dall'utente locale o dal controller e
+non compare nel selettore delle applicazioni, nella taskbar o nel Dock.
+
+Le garanzie della filigrana host dipendono dalla piattaforma:
+
+* su Windows è una finestra nativa layered, trasparente all'input, topmost,
+  tool window e no-activate, creata nel processo dell'utente interattivo anche
+  quando la finestra CM è nascosta. Non compare in Alt-Tab o nella taskbar ed è
+  esclusa dalla cattura tramite `WDA_EXCLUDEFROMCAPTURE`;
+* su macOS è una `NSWindow` borderless sopra screensaver e status bar,
+  `ignoresMouseEvents`, senza focus né Dock, visibile in tutti gli Space ed
+  esclusa dalla cattura con `sharingType = .none`;
+* su Linux X11 è una finestra override-redirect sempre in primo piano, senza
+  area di input grazie a XShape. X11 non offre qui un'esclusione affidabile
+  dalla cattura, quindi la filigrana può comparire nell'immagine trasmessa;
+* su Linux Wayland un client non può imporre un overlay globale sempre in primo
+  piano. ClantoDesk usa finestre persistenti di tipo notifica, una per monitor,
+  ma il compositor può ignorarne posizione e livello; non può quindi garantire
+  overlay su ogni monitor, click-through globale o esclusione dalla cattura;
+* su Android host usa `TYPE_APPLICATION_OVERLAY` con
+  `FLAG_NOT_TOUCHABLE | FLAG_NOT_FOCUSABLE`, tramite il permesso
+  `SYSTEM_ALERT_WINDOW` già presente nel manifest principale. Il manifest
+  ridotto della build solo controller non viene modificato. L'interfaccia
+  richiede l'autorizzazione overlay prima di abilitare l'opzione; se la policy
+  viene distribuita via GPO/RMM, l'amministratore deve anche preautorizzare
+  l'app-op overlay Android, altrimenti il sistema non permette di mostrarla.
+
+Il collegamento o la rimozione di un monitor mentre una sessione è già attiva
+viene recepito al successivo ingresso/uscita di sessione (o al riavvio del CM):
+la filigrana non mantiene un ulteriore watcher permanente dei display.
+
+RMM (profilo restrittivo): `clanto-host-watermark=Y`.
 
 ## Password locale delle impostazioni
 

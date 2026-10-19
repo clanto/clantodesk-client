@@ -1013,6 +1013,8 @@ pub fn main_get_error() -> String {
 
 pub fn main_set_option(key: String, value: String) {
     #[cfg(target_os = "android")]
+    let is_host_watermark = key == crate::clanto::host_watermark::OPTION_HOST_WATERMARK;
+    #[cfg(target_os = "android")]
     {
         let is_permission_option = key.eq(keys::OPTION_ENABLE_CLIPBOARD)
             || key.eq(keys::OPTION_ENABLE_FILE_TRANSFER)
@@ -1068,6 +1070,10 @@ pub fn main_set_option(key: String, value: String) {
         crate::common::test_rendezvous_server();
     } else {
         set_option(key, value.clone());
+    }
+    #[cfg(target_os = "android")]
+    if is_host_watermark {
+        crate::ui_cm_interface::host_watermark_option_changed(value == "Y");
     }
 }
 

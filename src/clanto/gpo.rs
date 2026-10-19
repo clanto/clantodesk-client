@@ -46,6 +46,7 @@ pub const GPO_KEYS: &[&str] = &[
     "clanto-outgoing-record",
     "clanto-controller-watermark",
     "clanto-require-controller-watermark",
+    "clanto-host-watermark",
 ];
 
 #[cfg(windows)]

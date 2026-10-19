@@ -1598,6 +1598,8 @@ impl<T: InvokeUiSession> Remote<T> {
                         }
                     }
                     Some(login_response::Union::PeerInfo(pi)) => {
+                        let send_clanto_account_user = pi.clanto_host_watermark
+                            && (self.handler.is_default() || self.handler.is_view_camera());
                         let peer_version = pi.version.clone();
                         let peer_platform = pi.platform.clone();
                         self.set_peer_info(&pi);
@@ -1614,6 +1616,17 @@ impl<T: InvokeUiSession> Remote<T> {
                             }
                         }
                         self.handler.handle_peer_info(pi);
+                        if send_clanto_account_user {
+                            let account_user =
+                                crate::clanto::host_watermark::controller_account_user();
+                            if !account_user.is_empty() {
+                                let mut misc = Misc::new();
+                                misc.set_clanto_account_user(account_user);
+                                let mut response = Message::new();
+                                response.set_misc(misc);
+                                allow_err!(peer.send(&response).await);
+                            }
+                        }
                         #[cfg(all(target_os = "windows", not(feature = "flutter")))]
                         self.check_clipboard_file_context();
                         if self.handler.is_default() {

@@ -342,6 +342,10 @@ pub enum Data {
         privacy_mode: bool,
         from_switch: bool,
     },
+    ClantoAccountUser {
+        id: i32,
+        account_user: String,
+    },
     ChatMessage {
         text: String,
     },

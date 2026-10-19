@@ -1967,6 +1967,7 @@ impl Connection {
             version: VERSION.to_owned(),
             ..Default::default()
         };
+        pi.clanto_host_watermark = self.should_request_clanto_account_user();
 
         #[cfg(not(target_os = "android"))]
         {
@@ -2255,6 +2256,22 @@ impl Connection {
     #[inline]
     fn is_port_forward(&self) -> bool {
         self.port_forward_socket.is_some() || self.port_forward_mux.is_some()
+    }
+
+    fn should_request_clanto_account_user(&self) -> bool {
+        let enabled =
+            Config::get_option(crate::clanto::host_watermark::OPTION_HOST_WATERMARK) == "Y";
+        let eligible = crate::clanto::host_watermark::is_watermark_session(
+            self.file_transfer.is_some(),
+            self.view_camera,
+            self.terminal,
+            self.is_port_forward(),
+        );
+        crate::clanto::host_watermark::should_request_account_user(
+            enabled,
+            self.authorized,
+            eligible,
+        )
     }
 
     fn try_sub_monitor_services(&mut self) {
@@ -3970,6 +3987,14 @@ impl Connection {
                     _ => {}
                 },
                 Some(message::Union::Misc(misc)) => match misc.union {
+                    Some(misc::Union::ClantoAccountUser(account_user)) => {
+                        if self.should_request_clanto_account_user() {
+                            self.send_to_cm(ipc::Data::ClantoAccountUser {
+                                id: self.inner.id(),
+                                account_user,
+                            });
+                        }
+                    }
                     Some(misc::Union::SwitchDisplay(s)) => {
                         self.handle_switch_display(s).await;
                     }
@@ -6173,7 +6198,8 @@ impl Connection {
             | Some(misc::Union::TogglePrivacyMode(_))
             | Some(misc::Union::ToggleVirtualDisplay(_))
             | Some(misc::Union::ChangeResolution(_))
-            | Some(misc::Union::ChangeDisplayResolution(_)) => true,
+            | Some(misc::Union::ChangeDisplayResolution(_))
+            | Some(misc::Union::ClantoAccountUser(_)) => true,
             Some(misc::Union::Option(option)) => Self::is_view_camera_scoped_option(option),
             #[cfg(windows)]
             Some(misc::Union::SelectedSid(_)) => true,
@@ -6294,6 +6320,7 @@ impl Connection {
             Some(misc::Union::MessageQuery(_)) => "misc.message_query",
             Some(misc::Union::FollowCurrentDisplay(_)) => "misc.follow_current_display",
             Some(misc::Union::SwitchSidesRequest(_)) => "misc.switch_sides_request",
+            Some(misc::Union::ClantoAccountUser(_)) => "misc.clanto_account_user",
             Some(_) => "misc.other",
             None => "misc.empty",
         }
@@ -7823,6 +7850,10 @@ mod test {
                         msg(|m| m.set_port_forward_channel(PortForwardChannel::new())),
                         Some("port_forward_channel"),
                     ),
+                    (
+                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
+                        Some("misc.clanto_account_user"),
+                    ),
                 ],
             ),
             (
@@ -7888,6 +7919,10 @@ mod test {
                         msg(|m| m.set_port_forward_channel(PortForwardChannel::new())),
                         Some("port_forward_channel"),
                     ),
+                    (
+                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
+                        Some("misc.clanto_account_user"),
+                    ),
                 ],
             ),
             (
@@ -7942,6 +7977,10 @@ mod test {
                         misc_msg(|m| m.set_switch_sides_request(SwitchSidesRequest::new())),
                         Some("misc.switch_sides_request"),
                     ),
+                    (
+                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
+                        None,
+                    ),
                 ],
             ),
             (
@@ -7954,6 +7993,10 @@ mod test {
                     (msg(|m| m.set_terminal_action(TerminalAction::new())), None),
                     (
                         misc_msg(|m| m.set_switch_sides_request(SwitchSidesRequest::new())),
+                        None,
+                    ),
+                    (
+                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
                         None,
                     ),
                 ],
@@ -7991,6 +8034,10 @@ mod test {
                     (
                         msg(|m| m.set_port_forward_channel(PortForwardChannel::new())),
                         None,
+                    ),
+                    (
+                        misc_msg(|m| m.set_clanto_account_user("user".to_owned())),
+                        Some("misc.clanto_account_user"),
                     ),
                 ],
             ),

@@ -121,6 +121,7 @@ qrcode-generator = "4.1"
 winapi = { version = "0.3", features = [
     "winbase",
     "winuser",
+    "wingdi",
     "wincrypt",
     "shellscalingapi",
     "pdh",
@@ -217,6 +218,7 @@ wl-clipboard-rs = "0.9"
 termios = "0.3"
 terminfo = "0.8"
 winit = "0.30"
+x11 = { version = "2.21", features = ["xlib", "xinerama"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }

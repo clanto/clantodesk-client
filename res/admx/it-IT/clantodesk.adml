@@ -33,6 +33,7 @@
       <string id="TemporaryPasswordRotation">Intervallo di rotazione della password temporanea</string><string id="TemporaryPasswordRotation_Help">Imposta ogni quanti minuti cambia la password temporanea. Impostare 0 per disabilitare la rotazione. I valori validi vanno da 0 a 1440. Se non configurata, la rotazione è disabilitata.</string>
       <string id="RequireProtectedDevice">Richiedi dispositivi di connessione protetti</string><string id="RequireProtectedDevice_Help">Richiede che il dispositivo di connessione superi il controllo di postura di sicurezza Clanto. Valore predefinito: disabilitata. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
       <string id="RequireControllerWatermark">Richiedi la filigrana del controller</string><string id="RequireControllerWatermark_Help">Richiede ai controller ClantoDesk che si connettono di mostrare una filigrana identificativa sulle sessioni desktop remote e di visualizzazione della fotocamera. È un deterrente applicato dal client e non protegge da un client modificato. Valore predefinito: disabilitata. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
+      <string id="HostWatermark">Mostra la filigrana sull'host</string><string id="HostWatermark_Help">Mostra l'identità del controller collegato, l'utente dell'account se noto, l'ora di inizio della sessione e il numero di sessioni attive su ogni schermo dell'host durante sessioni desktop remoto e fotocamera autorizzate. Valore predefinito: disabilitata. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
       <string id="PostureBypass">Elenco eccezioni postura di sicurezza</string><string id="PostureBypass_Help">Imposta gli ID delle regole di postura da ignorare su questo PC, separati da virgole. Valore predefinito: vuoto. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
       <string id="FileScan">Controlla i file ricevuti dall'host</string><string id="FileScan_Help">Seleziona se i file in entrata completi non vengono controllati (off), vengono consegnati con un avviso di audit quando è rilevato malware o la scansione non è disponibile (warn), oppure vengono messi in quarantena e rifiutati in questi casi (block). Valore predefinito: off. Se non configurata, viene usata l'impostazione locale di ClantoDesk.</string>
       <string id="FileScanOff">Disattivato</string><string id="FileScanWarn">Avvisa</string><string id="FileScanBlock">Blocca</string>
@@ -81,6 +82,7 @@
       <presentation id="SyslogTlsCa"><textBox refId="SyslogTlsCaValue"><label>$(string.Value)</label></textBox></presentation>
       <presentation id="SyslogFormat"><dropdownList refId="SyslogFormatValue"><label>$(string.Value)</label></dropdownList></presentation>
       <presentation id="SessionLogDays"><decimalTextBox refId="SessionLogDaysValue"><label>$(string.Value)</label></decimalTextBox></presentation>
+      <presentation id="HostWatermark"><text>$(string.Configure)</text></presentation>
     </presentationTable>
   </resources>
 </policyDefinitionResources>

@@ -4,6 +4,7 @@
 //! Branding e configurazione obbligatoria dell'infrastruttura ClantoDesk.
 
 use super::{
+    host_watermark::OPTION_HOST_WATERMARK,
     outgoing::{self, OPT_CLIPBOARD, OPT_FILE_TRANSFER},
     posture::{OPT_POSTURE_BYPASS, OPT_REQUIRE_PROTECTED_DEVICE},
     session_log::OPT_SESSION_LOG_DAYS,
@@ -45,7 +46,7 @@ fn apply_new_peer_defaults() {
 
 /// Predefiniti lato PC controllato (chiavi di `KEYS_SETTINGS`), in
 /// `DEFAULT_SETTINGS`: un valore salvato dall'utente vince. Il timeout e' in minuti.
-const HOST_DEFAULTS: [(&str, &str); 9] = [
+const HOST_DEFAULTS: [(&str, &str); 10] = [
     (keys::OPTION_ALLOW_AUTO_DISCONNECT, "Y"),
     (keys::OPTION_AUTO_DISCONNECT_TIMEOUT, "10"),
     (keys::OPTION_ENABLE_LAN_DISCOVERY, "N"),
@@ -55,6 +56,7 @@ const HOST_DEFAULTS: [(&str, &str); 9] = [
     (OPT_REQUIRE_PROTECTED_DEVICE, "N"),
     (OPT_POSTURE_BYPASS, ""),
     (OPT_SESSION_LOG_DAYS, "180"),
+    (OPTION_HOST_WATERMARK, "N"),
 ];
 
 fn apply_host_defaults() {
@@ -237,7 +239,9 @@ fn check_own_server_configured() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_host_defaults, apply_new_peer_defaults, servers_fixed};
+    use super::{
+        apply_host_defaults, apply_new_peer_defaults, servers_fixed, OPTION_HOST_WATERMARK,
+    };
     use base::config::keys;
     use hbb_common::config::UserDefaultConfig;
 
@@ -282,6 +286,10 @@ mod tests {
         let defaults = hbb_common::config::DEFAULT_SETTINGS.read().unwrap();
         assert_eq!(defaults.get(keys::OPTION_AUTO_DISCONNECT_TIMEOUT).map(String::as_str), Some("10"));
         assert_eq!(defaults.get(keys::OPTION_ENABLE_TUNNEL).map(String::as_str), Some("N"));
+        assert_eq!(
+            defaults.get(OPTION_HOST_WATERMARK).map(String::as_str),
+            Some("N")
+        );
         let overwrite = hbb_common::config::OVERWRITE_SETTINGS.read().unwrap();
         assert!(super::HOST_DEFAULTS.iter().all(|(k, _)| !overwrite.contains_key(*k)));
     }

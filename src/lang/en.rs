@@ -289,5 +289,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Show this controller's ID, account user or PC name, and current time over remote sessions.", ""),
         ("Require controller watermark", ""),
         ("Require connecting controllers to show their ID, account user or PC name, and current time.", ""),
+        ("Show host watermark", ""),
+        ("Show connected controllers, account users, session start time, and active session count on this device.", ""),
     ].iter().cloned().collect();
 }
