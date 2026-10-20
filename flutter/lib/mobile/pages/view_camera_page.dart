@@ -375,7 +375,7 @@ class _ViewCameraPageState extends State<ViewCameraPage>
         child: Stack(children: () {
           final paints = [
             Obx(() => clantoControllerWatermark(
-                ffi: gFFI, child: ImagePaint())),
+                ffi: gFFI, child: SizedBox.expand(child: ImagePaint()))),
             Positioned(
               top: 10,
               right: 10,
@@ -419,7 +419,7 @@ class _ViewCameraPageState extends State<ViewCameraPage>
   Widget getBodyForDesktopWithListener() {
     var paints = <Widget>[
       Obx(() => clantoControllerWatermark(
-          ffi: gFFI, child: ImagePaint()))
+          ffi: gFFI, child: SizedBox.expand(child: ImagePaint())))
     ];
     return Container(
         color: MyTheme.canvasColor, child: Stack(children: paints));

@@ -674,7 +674,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         child: Stack(children: () {
           final paints = [
             Obx(() => clantoControllerWatermark(
-                ffi: gFFI, child: ImagePaint(ffiModel: gFFI.ffiModel))),
+                ffi: gFFI,
+                child: SizedBox.expand(child: ImagePaint(ffiModel: gFFI.ffiModel)))),
             Positioned(
               top: 10,
               right: 10,
@@ -734,7 +735,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     final ffiModel = Provider.of<FfiModel>(context);
     var paints = <Widget>[
       Obx(() => clantoControllerWatermark(
-          ffi: gFFI, child: ImagePaint(ffiModel: ffiModel)))
+          ffi: gFFI,
+          child: SizedBox.expand(child: ImagePaint(ffiModel: ffiModel))))
     ];
     if (showCursorPaint) {
       final cursor = bind.sessionGetToggleOptionSync(
