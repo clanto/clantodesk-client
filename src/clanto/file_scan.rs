@@ -470,6 +470,8 @@ fn max_scan_bytes() -> u64 {
     Config::get_option(OPT_FILE_SCAN_MAX_MB)
         .trim()
         .parse::<u64>()
+        .ok()
+        .filter(|mb| *mb > 0)
         .unwrap_or(DEFAULT_MAX_MB)
         .saturating_mul(1024 * 1024)
 }
