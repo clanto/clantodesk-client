@@ -288,7 +288,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Require controller watermark", "Require controller watermark"),
         ("Require connecting controllers to show controller identity, host identity, time, and session code.", "Require connecting controllers to show controller identity, host identity, time, and session code."),
         ("Show host watermark", "Show host watermark"),
-        ("Show session code, access type, active permissions, controller identity, start time, and active session count on this device.", "Show session code, access type, active permissions, controller identity, start time, and active session count on this device."),
+        ("Show a bar with the technician, session code and start time on this device.", "Show a bar with the technician, session code and start time on this device."),
         ("Session code", "Session code"),
         ("Remote session", "Remote session"),
         ("Full control", ""),

@@ -3,10 +3,12 @@
 
 use hbb_common::{
     anyhow::{anyhow, Context, Result},
-    config::Config,
+    config::{Config, Config2},
     log,
-    password_security::{set_key_provider, KeyProvider, KeyScope},
+    password_security::{set_key_provider, KeyProvider, KeyScope, MACHINE_ENC_VERSION},
     rand::{thread_rng, Rng},
+    sodiumoxide::{base64, crypto::secretbox},
+    toml,
 };
 use std::{
     fs::{self, OpenOptions},
@@ -17,6 +19,7 @@ use std::{
 };
 
 const KEY_LEN: usize = 32;
+const SCOPED_KEY_FORMAT_V1: u8 = 1;
 const MACHINE_KEY_FILE: &str = "machine.key";
 const USER_KEY_FILE: &str = "user.key";
 #[cfg(target_os = "linux")]
@@ -99,14 +102,17 @@ pub fn init() {
     });
 }
 
-pub fn import_machine_key(source_config: &Path) -> Result<()> {
+pub fn import_machine_key(source_config: &Path, config2_is_imported: bool) -> Result<()> {
     let source = source_machine_key_path(source_config)?;
     if !source.exists() {
         return Ok(());
     }
-    let data = fs::read(&source).with_context(|| format!("failed to read {}", source.display()))?;
-    validate_stored_key(&data, KeyScope::Machine)?;
-    atomic_replace(&key_path(KeyScope::Machine), &data)
+    let destination_config2 = (!config2_is_imported).then(Config2::file);
+    import_machine_key_files(
+        &source,
+        &key_path(KeyScope::Machine),
+        destination_config2.as_deref(),
+    )
 }
 
 pub fn source_has_machine_key(source_config: &Path) -> bool {
@@ -118,6 +124,221 @@ fn source_machine_key_path(source_config: &Path) -> Result<PathBuf> {
         .parent()
         .ok_or_else(|| anyhow!("source config has no parent directory"))?
         .join(MACHINE_KEY_FILE))
+}
+
+fn import_machine_key_files(
+    source_key: &Path,
+    destination_key: &Path,
+    destination_config2: Option<&Path>,
+) -> Result<()> {
+    let source_data =
+        fs::read(source_key).with_context(|| format!("failed to read {}", source_key.display()))?;
+    let new_key = decode_stored_key(&source_data, KeyScope::Machine)?;
+
+    let prepared_config2 = if let Some(path) = destination_config2.filter(|path| path.exists()) {
+        let old_key = load_or_create_key(destination_key, KeyScope::Machine)?;
+        let old_key_data = fs::read(destination_key)
+            .with_context(|| format!("failed to read {}", destination_key.display()))?;
+        let source = fs::read_to_string(path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let mut config: toml::Value = toml::from_str(&source)
+            .with_context(|| format!("failed to parse {}", path.display()))?;
+        reencrypt_config2_value(&mut config, &old_key, &new_key, "")?;
+        let serialized = toml::to_string(&config)
+            .with_context(|| format!("failed to serialize {}", path.display()))?;
+        Some((path, old_key_data, serialized.into_bytes()))
+    } else {
+        None
+    };
+
+    atomic_replace(destination_key, &source_data)?;
+    if let Some((path, old_key_data, config2_data)) = prepared_config2 {
+        if let Err(err) = atomic_replace(path, &config2_data) {
+            if let Err(rollback_err) = atomic_replace(destination_key, &old_key_data) {
+                return Err(anyhow!(
+                    "failed to rewrite {} after importing the machine key: {err}; failed to restore the previous machine key: {rollback_err}",
+                    path.display()
+                ));
+            }
+            return Err(err).with_context(|| {
+                format!(
+                    "failed to rewrite {} after importing the machine key; restored the previous machine key",
+                    path.display()
+                )
+            });
+        }
+    }
+    Ok(())
+}
+
+fn reencrypt_config2_value(
+    value: &mut toml::Value,
+    old_key: &[u8; KEY_LEN],
+    new_key: &[u8; KEY_LEN],
+    path: &str,
+) -> Result<()> {
+    match value {
+        toml::Value::String(stored) => {
+            if stored
+                .as_bytes()
+                .starts_with(MACHINE_ENC_VERSION.as_bytes())
+            {
+                reencrypt_string(stored, old_key, new_key, path)?;
+            } else if is_plain_config2_secret(path, stored) {
+                *stored = String::from_utf8(encrypt_machine_value(stored.as_bytes(), new_key)?)?;
+            } else if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(stored) {
+                let mut changed = false;
+                reencrypt_json_value(&mut json, old_key, new_key, path, &mut changed)?;
+                if changed {
+                    *stored = serde_json::to_string(&json)?;
+                }
+            }
+        }
+        toml::Value::Array(values) => {
+            for (index, value) in values.iter_mut().enumerate() {
+                reencrypt_config2_value(
+                    value,
+                    old_key,
+                    new_key,
+                    &config_path(path, &index.to_string()),
+                )?;
+            }
+        }
+        toml::Value::Table(values) => {
+            for (key, value) in values {
+                reencrypt_config2_value(value, old_key, new_key, &config_path(path, key))?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn reencrypt_json_value(
+    value: &mut serde_json::Value,
+    old_key: &[u8; KEY_LEN],
+    new_key: &[u8; KEY_LEN],
+    path: &str,
+    changed: &mut bool,
+) -> Result<()> {
+    match value {
+        serde_json::Value::String(stored)
+            if stored
+                .as_bytes()
+                .starts_with(MACHINE_ENC_VERSION.as_bytes()) =>
+        {
+            *changed |= reencrypt_string(stored, old_key, new_key, path)?;
+        }
+        serde_json::Value::Array(values) => {
+            let bytes = values
+                .iter()
+                .map(|value| value.as_u64().and_then(|value| u8::try_from(value).ok()))
+                .collect::<Option<Vec<_>>>();
+            if let Some(bytes) =
+                bytes.filter(|bytes| bytes.starts_with(MACHINE_ENC_VERSION.as_bytes()))
+            {
+                match decrypt_machine_value(&bytes, old_key) {
+                    Ok(plain) => {
+                        *values = encrypt_machine_value(&plain, new_key)?
+                            .into_iter()
+                            .map(serde_json::Value::from)
+                            .collect();
+                        *changed = true;
+                    }
+                    Err(err) => log_config2_decryption_error(path, &err),
+                }
+            } else {
+                for (index, value) in values.iter_mut().enumerate() {
+                    reencrypt_json_value(
+                        value,
+                        old_key,
+                        new_key,
+                        &config_path(path, &index.to_string()),
+                        changed,
+                    )?;
+                }
+            }
+        }
+        serde_json::Value::Object(values) => {
+            for (key, value) in values {
+                reencrypt_json_value(value, old_key, new_key, &config_path(path, key), changed)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn reencrypt_string(
+    stored: &mut String,
+    old_key: &[u8; KEY_LEN],
+    new_key: &[u8; KEY_LEN],
+    path: &str,
+) -> Result<bool> {
+    match decrypt_machine_value(stored.as_bytes(), old_key) {
+        Ok(plain) => {
+            *stored = String::from_utf8(encrypt_machine_value(&plain, new_key)?)?;
+            Ok(true)
+        }
+        Err(err) => {
+            log_config2_decryption_error(path, &err);
+            Ok(false)
+        }
+    }
+}
+
+fn decrypt_machine_value(value: &[u8], key: &[u8; KEY_LEN]) -> Result<Vec<u8>> {
+    let encoded = value
+        .strip_prefix(MACHINE_ENC_VERSION.as_bytes())
+        .ok_or_else(|| anyhow!("not a machine-scoped credential"))?;
+    let payload = base64::decode(encoded, base64::Variant::Original)
+        .map_err(|_| anyhow!("invalid base64 payload"))?;
+    let nonce_end = 1 + secretbox::NONCEBYTES;
+    if payload.first() != Some(&SCOPED_KEY_FORMAT_V1)
+        || payload.len() < nonce_end + secretbox::MACBYTES
+    {
+        return Err(anyhow!("invalid encrypted payload"));
+    }
+    let nonce = secretbox::Nonce::from_slice(&payload[1..nonce_end])
+        .ok_or_else(|| anyhow!("invalid nonce"))?;
+    let key = secretbox::Key::from_slice(key).ok_or_else(|| anyhow!("invalid machine key"))?;
+    secretbox::open(&payload[nonce_end..], &nonce, &key)
+        .map_err(|_| anyhow!("credential authentication failed"))
+}
+
+fn encrypt_machine_value(value: &[u8], key: &[u8; KEY_LEN]) -> Result<Vec<u8>> {
+    let nonce = secretbox::gen_nonce();
+    let key = secretbox::Key::from_slice(key).ok_or_else(|| anyhow!("invalid machine key"))?;
+    let encrypted = secretbox::seal(value, &nonce, &key);
+    let mut payload = Vec::with_capacity(1 + nonce.0.len() + encrypted.len());
+    payload.push(SCOPED_KEY_FORMAT_V1);
+    payload.extend(nonce.0);
+    payload.extend(encrypted);
+
+    let mut stored = MACHINE_ENC_VERSION.as_bytes().to_vec();
+    stored.extend(base64::encode(payload, base64::Variant::Original).as_bytes());
+    Ok(stored)
+}
+
+fn is_plain_config2_secret(path: &str, value: &str) -> bool {
+    !value.is_empty()
+        && !value.starts_with("00")
+        && matches!(path, "unlock_pin" | "trusted_devices" | "socks.password")
+}
+
+fn config_path(parent: &str, child: &str) -> String {
+    if parent.is_empty() {
+        child.to_owned()
+    } else {
+        format!("{parent}.{child}")
+    }
+}
+
+fn log_config2_decryption_error(path: &str, err: &hbb_common::anyhow::Error) {
+    log::error!(
+        "Protected Config2 field '{}' cannot be decrypted with the previous machine key; preserving its stored value: {err}",
+        path
+    );
 }
 
 struct ClientKeyProvider;
@@ -1266,10 +1487,6 @@ fn load_or_create_key(path: &Path, scope: KeyScope) -> Result<[u8; KEY_LEN]> {
     }
 }
 
-fn validate_stored_key(data: &[u8], scope: KeyScope) -> Result<()> {
-    decode_stored_key(data, scope).map(|_| ())
-}
-
 #[cfg(not(windows))]
 fn encode_stored_key(key: &[u8; KEY_LEN], _scope: KeyScope) -> Result<Vec<u8>> {
     Ok(key.to_vec())
@@ -1618,6 +1835,83 @@ mod tests {
         assert_eq!(
             fs::metadata(&marker_path).unwrap().permissions().mode() & 0o777,
             0o600
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn machine_key_import_reencrypts_existing_config2_secrets() {
+        use hbb_common::password_security::{
+            decrypt_str_or_original_scoped, encrypt_str_or_original_scoped,
+        };
+
+        let directory = std::env::temp_dir().join(format!(
+            "clantodesk-machine-key-import-{}-{}",
+            std::process::id(),
+            thread_rng().gen::<u64>()
+        ));
+        let source_directory = directory.join("source");
+        let destination_directory = directory.join("destination");
+        fs::create_dir_all(&source_directory).unwrap();
+        fs::create_dir_all(&destination_directory).unwrap();
+
+        let source_key = source_directory.join(MACHINE_KEY_FILE);
+        let destination_key = destination_directory.join(MACHINE_KEY_FILE);
+        let destination_config2 = destination_directory.join("ClantoDesk2.toml");
+        let old_key = [0x11; KEY_LEN];
+        let new_key = [0x22; KEY_LEN];
+        fs::write(
+            &destination_key,
+            encode_stored_key(&old_key, KeyScope::Machine).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &source_key,
+            encode_stored_key(&new_key, KeyScope::Machine).unwrap(),
+        )
+        .unwrap();
+        set_key_provider(Arc::new(FileTestProvider(destination_key.clone())));
+
+        let unlock_pin = encrypt_str_or_original_scoped("123456", KeyScope::Machine, 128);
+        let socks_password = encrypt_str_or_original_scoped("proxy-secret", KeyScope::Machine, 128);
+        let unreadable = String::from_utf8(
+            encrypt_machine_value(b"unreadable devices", &[0x33; KEY_LEN]).unwrap(),
+        )
+        .unwrap();
+        let mut socks = toml::map::Map::new();
+        socks.insert("password".to_owned(), toml::Value::String(socks_password));
+        let mut config = toml::map::Map::new();
+        config.insert("unlock_pin".to_owned(), toml::Value::String(unlock_pin));
+        config.insert(
+            "trusted_devices".to_owned(),
+            toml::Value::String(unreadable.clone()),
+        );
+        config.insert("socks".to_owned(), toml::Value::Table(socks));
+        fs::write(
+            &destination_config2,
+            toml::to_string(&toml::Value::Table(config)).unwrap(),
+        )
+        .unwrap();
+
+        import_machine_key_files(&source_key, &destination_key, Some(&destination_config2))
+            .unwrap();
+
+        let stored: toml::Value =
+            toml::from_str(&fs::read_to_string(&destination_config2).unwrap()).unwrap();
+        let stored_pin = stored["unlock_pin"].as_str().unwrap();
+        let stored_socks_password = stored["socks"]["password"].as_str().unwrap();
+        let (pin, pin_decrypted, _) = decrypt_str_or_original_scoped(stored_pin, KeyScope::Machine);
+        let (password, password_decrypted, _) =
+            decrypt_str_or_original_scoped(stored_socks_password, KeyScope::Machine);
+
+        assert!(pin_decrypted);
+        assert!(password_decrypted);
+        assert_eq!(pin, "123456");
+        assert_eq!(password, "proxy-secret");
+        assert_eq!(stored["trusted_devices"].as_str().unwrap(), unreadable);
+        assert_eq!(
+            decode_stored_key(&fs::read(&destination_key).unwrap(), KeyScope::Machine).unwrap(),
+            new_key
         );
         fs::remove_dir_all(directory).unwrap();
     }

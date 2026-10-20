@@ -1715,6 +1715,11 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
           await _setOptionOn(key, on);
         },
       ),
+      Text(
+        translate(
+            'Show a bar with the technician, session code and start time on this device.'),
+        style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+      ).marginOnly(left: _kContentHSubMargin),
       _OptionCheckBox(
         context,
         'Scan received files for malware',

@@ -273,7 +273,7 @@ class _ClantoInboundSecuritySettingState
             : null,
         title: Text(translate('Show host watermark')),
         subtitle: Text(translate(
-            'Show session code, access type, active permissions, controller identity, start time, and active session count on this device.')),
+            'Show a bar with the technician, session code and start time on this device.')),
       ),
       ClantoFileTransferSecuritySetting(enabled: widget.enabled),
     ]);

@@ -167,11 +167,15 @@ generata solo quando né il backend disponibile né il file contengono una chiav
 Su Android l'esistenza del blob cifrato viene verificata separatamente: un blob
 già presente ma temporaneamente non decifrabile non genera mai un nuovo fallback.
 
-Durante `--import-config` viene copiato anche `machine.key`, così il servizio di
-sistema e il processo utente leggono la stessa configurazione host senza
-ricifrarla. Se venisse importato il solo `Config2` mentre nella sorgente esiste
-`machine.key`, `--import-config` rifiuta l'operazione: importare i segreti senza il
-relativo `Config` potrebbe associare configurazione e chiave macchina diverse.
+Durante `--import-config` viene copiato anche `machine.key`. Se il `Config2` della
+sorgente è più recente, viene importato insieme alla relativa chiave. Altrimenti
+le opzioni più recenti del servizio restano intatte: prima della sostituzione i
+segreti del `Config2` di destinazione vengono decifrati con la chiave precedente e
+poi riscritti con quella nuova. Un campo che non può essere decifrato viene
+segnalato nel log e il relativo valore cifrato resta invariato nello storage. Se
+venisse importato il solo `Config2` mentre nella sorgente esiste `machine.key`,
+`--import-config` rifiuta l'operazione: importare i segreti senza il relativo
+`Config` potrebbe associare configurazione e chiave macchina diverse.
 
 I valori nuovi hanno prefisso `02` per l'ambito macchina e `03` per l'ambito
 utente. I valori storici `00` continuano a essere letti con la chiave derivata

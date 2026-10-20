@@ -756,7 +756,7 @@ fn import_config(path: &str) {
         && get_modified_time(&path) < get_exe_time();
     let import_config2 = get_modified_time(&path2) > get_modified_time(&Config2::file());
     if import_config {
-        if let Err(err) = crate::clanto::keystore::import_machine_key(path) {
+        if let Err(err) = crate::clanto::keystore::import_machine_key(path, import_config2) {
             log::error!("Failed to import protected machine key: {err}");
             return;
         }

@@ -872,7 +872,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Require controller watermark", "Forza la filigrana del controller"),
         ("Require connecting controllers to show controller identity, host identity, time, and session code.", "Richiedi ai controller che si connettono di mostrare identità del controller, identità dell’host, ora e codice sessione"),
         ("Show host watermark", "Mostra la filigrana sull'host"),
-        ("Show session code, access type, active permissions, controller identity, start time, and active session count on this device.", "Mostra su questo dispositivo codice sessione, tipo di accesso, permessi attivi, identità del controller, ora di inizio e numero di sessioni attive"),
+        ("Show a bar with the technician, session code and start time on this device.", "Mostra una barra con tecnico, codice sessione e ora di inizio su questo dispositivo."),
         ("Session code", "Codice sessione"),
         ("Remote session", "Sessione remota"),
         ("Full control", "Controllo completo"),
