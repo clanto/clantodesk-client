@@ -18,8 +18,10 @@ Future<void> _setClantoRequireProtectedDevice(bool on) => bind.mainSetOption(
 
 class ClantoProtectedDeviceSetting extends StatefulWidget {
   final bool enabled;
+  final VoidCallback? onModify;
 
-  const ClantoProtectedDeviceSetting({Key? key, this.enabled = true})
+  const ClantoProtectedDeviceSetting(
+      {Key? key, this.enabled = true, this.onModify})
       : super(key: key);
 
   @override
@@ -57,6 +59,11 @@ class _ClantoProtectedDeviceSettingState
                   'Requires an Internet connection to clanto.it to verify the connecting device.'),
               style: Theme.of(context).textTheme.bodySmall),
         ])),
+        if (widget.onModify != null)
+          OutlinedButton(
+            onPressed: _on && widget.enabled ? widget.onModify : null,
+            child: Text(translate('Modify')),
+          ),
       ]).marginOnly(left: 10, top: 5, bottom: 5),
     );
   }

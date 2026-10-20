@@ -68,6 +68,10 @@ class _ClantoFileTransferSecuritySettingState
     if (mounted) setState(() => _scanMode = value);
   }
 
+  Future<void> _setScanEnabled(bool enabled) async {
+    await _setScanMode(enabled ? 'block' : 'off');
+  }
+
   Future<void> _setDirection(String? value) async {
     if (value == null ||
         !widget.enabled ||
@@ -139,39 +143,49 @@ class _ClantoFileTransferSecuritySettingState
 
   @override
   Widget build(BuildContext context) {
+    final scanEnabled = _scanMode != 'off';
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Divider().marginSymmetric(horizontal: 10),
-      _dropdown(
-        'Incoming file scan',
-        _scanMode,
-        [
-          DropdownMenuItem(
-              value: 'off', child: Text(translate('Scanning disabled'))),
-          DropdownMenuItem(
-              value: 'warn', child: Text(translate('Warn and deliver'))),
-          DropdownMenuItem(
-              value: 'block', child: Text(translate('Block unsafe files'))),
-        ],
-        widget.enabled && !isOptionFixed(kOptClantoFileScan)
-            ? _setScanMode
+      CheckboxListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+        value: scanEnabled,
+        onChanged: widget.enabled && !isOptionFixed(kOptClantoFileScan)
+            ? (value) => _setScanEnabled(value == true)
             : null,
+        title: Text(translate('Scan received files for malware')),
       ),
-      _field(
-        'ClamAV daemon endpoint',
-        'Unix socket path or host:port',
-        _clamdEndpoint,
-        optionKey: kOptClantoFileScanClamd,
-        onDone: () => _setTextOption(
-            kOptClantoFileScanClamd, _clamdEndpoint.text),
-      ),
-      _field(
-        'Maximum file size (MB)',
-        null,
-        _maxMb,
-        optionKey: kOptClantoFileScanMaxMb,
-        numeric: true,
-        onDone: _setMaxMb,
-      ),
+      if (scanEnabled) ...[
+        _dropdown(
+          'Scan mode',
+          _scanMode,
+          [
+            DropdownMenuItem(
+                value: 'warn', child: Text(translate('Warn and deliver'))),
+            DropdownMenuItem(
+                value: 'block', child: Text(translate('Block unsafe files'))),
+          ],
+          widget.enabled && !isOptionFixed(kOptClantoFileScan)
+              ? _setScanMode
+              : null,
+        ),
+        if (!isWindows)
+          _field(
+            'ClamAV endpoint',
+            'Unix socket path or host:port',
+            _clamdEndpoint,
+            optionKey: kOptClantoFileScanClamd,
+            onDone: () => _setTextOption(
+                kOptClantoFileScanClamd, _clamdEndpoint.text),
+          ),
+        _field(
+          'Maximum file size (MB)',
+          null,
+          _maxMb,
+          optionKey: kOptClantoFileScanMaxMb,
+          numeric: true,
+          onDone: _setMaxMb,
+        ),
+      ],
       _dropdown(
         'File transfer direction',
         _direction,

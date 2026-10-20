@@ -730,23 +730,27 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
               ),
             ],
           ),
+        if (!disabledSettings &&
+            !hideSecuritySettings &&
+            (!incomingOnly || (isAndroid && !outgoingOnly)))
+          SettingsSection(
+            title: Text(translate('Security')),
+            tiles: [
+              if (isAndroid && !outgoingOnly)
+                clantoInboundSecurityTile(),
+              if (!incomingOnly) clantoOutgoingSecurityTile(),
+            ],
+          ),
         SettingsSection(title: Text(translate("Settings")), tiles: [
           // Alternativa a PIN e biometria per i dispositivi che non ne hanno,
           // e opzione per coprire anche la schermata host.
           if (isAndroid)
             ...clantoLocalPasswordTiles(refresh: () => setState(() {})),
-          if (isAndroid &&
-              !outgoingOnly &&
-              !disabledSettings &&
-              !hideSecuritySettings)
-            clantoInboundSecurityTile(),
           if (isMobile &&
               !outgoingOnly &&
               !disabledSettings &&
               !hideSecuritySettings)
             clantoSessionReportTile(),
-          if (!incomingOnly && !disabledSettings && !hideSecuritySettings)
-            clantoOutgoingSecurityTile(),
           if (!disabledSettings && !_hideNetwork && !_hideServer)
             SettingsTile(
                 title: Text(translate('ID/Relay Server')),

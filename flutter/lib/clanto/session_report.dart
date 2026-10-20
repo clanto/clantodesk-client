@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/clanto/mobile_file_transfer.dart';
+import 'package:flutter_hbb/clanto/session_report_data.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:settings_ui/settings_ui.dart';
@@ -14,143 +14,6 @@ import 'package:settings_ui/settings_ui.dart';
 const String kOptClantoSessionLogDays = 'clanto-session-log-days';
 
 enum _ReportPeriod { today, week, month, all }
-
-class _SessionRecord {
-  const _SessionRecord({
-    required this.startedAt,
-    required this.endedAt,
-    required this.durationSecs,
-    required this.sessionCode,
-    required this.peerId,
-    required this.peerName,
-    required this.ip,
-    required this.connectionType,
-    required this.primaryAuth,
-    required this.twoFactor,
-    required this.postureResult,
-    required this.postureBypasses,
-    required this.permissions,
-    required this.files,
-    required this.closeReason,
-    required this.rejected,
-    required this.closed,
-  });
-
-  final DateTime? startedAt;
-  final DateTime? endedAt;
-  final int durationSecs;
-  final String sessionCode;
-  final String peerId;
-  final String peerName;
-  final String ip;
-  final String connectionType;
-  final String primaryAuth;
-  final String twoFactor;
-  final String postureResult;
-  final List<String> postureBypasses;
-  final Set<String> permissions;
-  final List<Map<String, dynamic>> files;
-  final String closeReason;
-  final bool rejected;
-  final bool closed;
-
-  factory _SessionRecord.fromJson(Map<String, dynamic> json) {
-    final rawPermissions = json['permissions_used'] ?? json['permissions'];
-    final permissions = <String>{};
-    if (rawPermissions is Map) {
-      rawPermissions.forEach((key, value) {
-        if (value == true || value == 'Y') permissions.add(key.toString());
-      });
-    } else if (rawPermissions is List) {
-      permissions.addAll(rawPermissions.map((value) => value.toString()));
-    }
-    final rawFiles = json['files'];
-    return _SessionRecord(
-      startedAt:
-          _date(json['started_at'] ?? json['occurred_at'] ?? json['start']),
-      endedAt: _date(json['ended_at'] ?? json['end']),
-      durationSecs: _integer(json['duration_secs']),
-      sessionCode: _string(json['session_code']),
-      peerId: _string(json['peer_id']),
-      peerName: _string(json['peer_name']),
-      ip: _string(json['ip']),
-      connectionType: _string(json['connection_type'] ?? json['type']),
-      primaryAuth: _primaryAuth(json['primary_auth']),
-      twoFactor: _twoFactor(json['two_factor']),
-      postureResult: _string(json['posture_result']),
-      postureBypasses: (json['posture_bypasses'] as List?)
-              ?.map((value) => value.toString())
-              .toList(growable: false) ??
-          const [],
-      permissions: permissions,
-      files: rawFiles is List
-          ? rawFiles.whereType<Map>().map((file) {
-              return file.map((key, value) => MapEntry(key.toString(), value));
-            }).toList(growable: false)
-          : const [],
-      closeReason:
-          _string(json['close_reason'] ?? json['alarm_type'] ?? json['details']),
-      rejected: json['record_type'] == 'rejected_attempt',
-      closed: json['closed'] == true,
-    );
-  }
-
-  static String _string(dynamic value) => value?.toString() ?? '';
-
-  static int _integer(dynamic value) =>
-      value is num ? value.toInt() : int.tryParse(_string(value)) ?? 0;
-
-  static String _primaryAuth(dynamic value) {
-    switch (_integer(value)) {
-      case 1:
-        return translate('Approval');
-      case 2:
-        return translate('Temporary password');
-      case 3:
-        return translate('Permanent password');
-      case 4:
-        return translate('Switch sides');
-      default:
-        return '';
-    }
-  }
-
-  static String _twoFactor(dynamic value) {
-    switch (_integer(value)) {
-      case 1:
-        return 'TOTP';
-      case 2:
-        return translate('Trusted device');
-      default:
-        return '';
-    }
-  }
-
-  static DateTime? _date(dynamic value) {
-    if (value is num) {
-      return DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true)
-          .toLocal();
-    }
-    final text = _string(value);
-    if (text.isEmpty) return null;
-    final number = int.tryParse(text);
-    if (number != null) {
-      return DateTime.fromMillisecondsSinceEpoch(number, isUtc: true).toLocal();
-    }
-    return DateTime.tryParse(text)?.toLocal();
-  }
-
-  String get peer => peerName.isEmpty ? peerId : '$peerName ($peerId)';
-
-  String get accessMethod {
-    final methods = [primaryAuth, if (twoFactor.isNotEmpty) twoFactor]
-        .where((method) => method.isNotEmpty);
-    return methods.isEmpty ? '-' : methods.join(' + ');
-  }
-
-  String statusLabel() =>
-      closed ? translate('Ended') : translate('Not closed');
-}
 
 class ClantoSessionReport extends StatefulWidget {
   const ClantoSessionReport({Key? key, this.enabled = true}) : super(key: key);
@@ -163,7 +26,10 @@ class ClantoSessionReport extends StatefulWidget {
 
 class _ClantoSessionReportState extends State<ClantoSessionReport> {
   _ReportPeriod _period = _ReportPeriod.week;
-  List<_SessionRecord> _records = const [];
+  ClantoSessionOutcomeFilter _outcome = ClantoSessionOutcomeFilter.all;
+  String _connectionType = '';
+  final _search = TextEditingController();
+  List<ClantoSessionRecord> _records = const [];
   String? _error;
   bool _loading = true;
 
@@ -171,6 +37,12 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
 
   int _fromMs() {
@@ -195,20 +67,22 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
     try {
       final raw = await bind.mainGetSessionReport(
           fromMs: _fromMs(), toMs: DateTime.now().millisecondsSinceEpoch);
-      final decoded = jsonDecode(raw);
-      final List<dynamic> values = decoded is List
-          ? decoded
-          : decoded is Map && decoded['records'] is List
-              ? decoded['records'] as List<dynamic>
-              : const [];
-      final records = values
-          .whereType<Map>()
-          .map((value) => _SessionRecord.fromJson(
-              value.map((key, item) => MapEntry(key.toString(), item))))
-          .toList(growable: false);
-      if (mounted) setState(() => _records = records);
+      final records = clantoParseSessionRecords(raw);
+      if (mounted) {
+        setState(() {
+          _records = records;
+          if (_connectionType.isNotEmpty &&
+              !records.any(
+                  (record) => record.connectionType == _connectionType)) {
+            _connectionType = '';
+          }
+        });
+      }
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      debugPrint('Unable to load session report: $error');
+      if (mounted) {
+        setState(() => _error = translate('Unable to load session report'));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -246,7 +120,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
         '${value.minute.toString().padLeft(2, '0')}';
   }
 
-  List<Widget> _permissionIcons(_SessionRecord record) {
+  List<Widget> _permissionIcons(ClantoSessionRecord record) {
     const icons = <String, IconData>{
       'input': Icons.keyboard,
       'keyboard_mouse': Icons.keyboard,
@@ -268,58 +142,23 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
         .toList(growable: false);
   }
 
-  String _csv() {
-    String quote(String value) => '"${value.replaceAll('"', '""')}"';
-    final rows = <List<String>>[
-      [
-        'Started at',
-        'Ended at',
-        'Ended',
-        'Duration seconds',
-        'Session code',
-        'Peer ID',
-        'Peer name',
-        'IP',
-        'Connection type',
-        'Access method',
-        'Posture result',
-        'Bypassed rules',
-        'Permissions used',
-        'File transfers',
-        'Close reason',
-        'Rejected',
-      ],
-      ..._records.map((record) => [
-            _date(record.startedAt),
-            _date(record.endedAt),
-            record.statusLabel(),
-            record.closed ? '${record.durationSecs}' : '',
-            record.sessionCode,
-            record.peerId,
-            record.peerName,
-            record.ip,
-            record.connectionType,
-            record.accessMethod,
-            record.postureResult,
-            record.postureBypasses.join(', '),
-            record.permissions.join(', '),
-            record.files
-                .map((file) => [file['direction'], file['name'], file['size']]
-                    .where((value) => value != null)
-                    .join(' · '))
-                .join('; '),
-            record.closeReason,
-            record.rejected ? 'yes' : 'no',
-          ]),
-    ];
-    return '${rows.map((row) => row.map(quote).join(',')).join('\r\n')}\r\n';
-  }
+  List<ClantoSessionRecord> get _filteredRecords =>
+      clantoFilterSessionRecords(
+        _records,
+        outcome: _outcome,
+        connectionType: _connectionType,
+        query: _search.text,
+      );
 
   Future<void> _exportCsv() async {
     if (!widget.enabled) return;
     final name = 'clantodesk-session-report-'
         '${DateTime.now().toIso8601String().substring(0, 10)}.csv';
-    final csv = _csv();
+    final csv = clantoSessionRecordsCsv(
+      _filteredRecords,
+      formatDate: _date,
+      translate: translate,
+    );
     try {
       if (isMobile) {
         final file = File('${Directory.systemTemp.path}${Platform.pathSeparator}$name');
@@ -342,7 +181,55 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
     }
   }
 
-  void _showDetail(_SessionRecord record) {
+  String _outcomeFilterLabel(ClantoSessionOutcomeFilter outcome) {
+    switch (outcome) {
+      case ClantoSessionOutcomeFilter.all:
+        return translate('All outcomes');
+      case ClantoSessionOutcomeFilter.successful:
+        return translate('Successful sessions');
+      case ClantoSessionOutcomeFilter.rejected:
+        return translate('Rejected sessions');
+      case ClantoSessionOutcomeFilter.inProgress:
+        return translate('Sessions in progress');
+    }
+  }
+
+  String _outcomeLabel(ClantoSessionRecord record) {
+    switch (record.outcome) {
+      case ClantoSessionOutcome.successful:
+        return translate('Session successful');
+      case ClantoSessionOutcome.rejected:
+        return translate('Session rejected');
+      case ClantoSessionOutcome.inProgress:
+        return translate('Session in progress');
+    }
+  }
+
+  Color _outcomeColor(ClantoSessionRecord record) {
+    switch (record.outcome) {
+      case ClantoSessionOutcome.successful:
+        return Colors.green;
+      case ClantoSessionOutcome.rejected:
+        return Colors.red;
+      case ClantoSessionOutcome.inProgress:
+        return Colors.orange;
+    }
+  }
+
+  Widget _outcomeBadge(ClantoSessionRecord record) {
+    final color = _outcomeColor(record);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(_outcomeLabel(record),
+          style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  void _showDetail(ClantoSessionRecord record) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -352,14 +239,15 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
         content: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _detail('Date', _date(record.startedAt)),
-            _detail('Ended',
-                record.closed ? _date(record.endedAt) : record.statusLabel()),
+            _detail('Ended', record.closed
+                ? _date(record.endedAt)
+                : record.statusLabel(translate)),
             if (record.closed) _detail('Duration', _duration(record.durationSecs)),
             _detail('Session code', record.sessionCode),
             _detail('Peer', record.peer),
             _detail('IP', record.ip),
             _detail('Connection type', record.connectionType),
-            _detail('Access method', record.accessMethod),
+            _detail('Access method', record.accessMethod(translate)),
             _detail('Posture result', record.postureResult),
             if (record.postureBypasses.isNotEmpty)
               _detail('Bypassed rules', record.postureBypasses.join(', ')),
@@ -393,11 +281,28 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
         child: Text('${translate(label)}: ${value.isEmpty ? '-' : value}'),
       );
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(
+  Widget _filters(BuildContext context) {
+    final connectionTypes = _records
+        .map((record) => record.connectionType)
+        .where((type) => type.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    final selectedType = connectionTypes.contains(_connectionType)
+        ? _connectionType
+        : '';
+    final searchWidth = isMobile
+        ? (MediaQuery.sizeOf(context).width - 128)
+            .clamp(160.0, 280.0)
+            .toDouble()
+        : 220.0;
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SizedBox(
+          width: 145,
           child: DropdownButton<_ReportPeriod>(
             isExpanded: true,
             value: _period,
@@ -412,14 +317,148 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
             },
           ),
         ),
-        IconButton(
-            tooltip: translate('Refresh'), icon: const Icon(Icons.refresh), onPressed: _load),
-        TextButton.icon(
+        SizedBox(
+          width: 170,
+          child: DropdownButton<ClantoSessionOutcomeFilter>(
+            isExpanded: true,
+            value: _outcome,
+            items: ClantoSessionOutcomeFilter.values
+                .map((outcome) => DropdownMenuItem(
+                    value: outcome,
+                    child: Text(_outcomeFilterLabel(outcome))))
+                .toList(growable: false),
+            onChanged: (outcome) {
+              if (outcome != null) setState(() => _outcome = outcome);
+            },
+          ),
+        ),
+        if (!isMobile)
+          SizedBox(
+            width: 165,
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: selectedType,
+              items: [
+                DropdownMenuItem(
+                    value: '', child: Text(translate('All connection types'))),
+                ...connectionTypes.map(
+                    (type) => DropdownMenuItem(value: type, child: Text(type))),
+              ],
+              onChanged: (type) =>
+                  setState(() => _connectionType = type ?? ''),
+            ),
+          ),
+        SizedBox(
+          width: searchWidth,
+          child: TextField(
+            controller: _search,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              isDense: true,
+              labelText: translate('Search sessions'),
+              prefixIcon: const Icon(Icons.search),
+            ),
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: _loading ? null : _load,
+          icon: const Icon(Icons.refresh),
+          label: Text(translate('Refresh')),
+        ),
+        ElevatedButton.icon(
           onPressed: widget.enabled && !_loading ? _exportCsv : null,
           icon: const Icon(Icons.file_download_outlined),
           label: Text(translate('Export CSV')),
         ),
-      ]),
+      ],
+    );
+  }
+
+  Widget _desktopTable(List<ClantoSessionRecord> records) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        showCheckboxColumn: false,
+        columns: [
+          DataColumn(label: Text(translate('Date and time'))),
+          DataColumn(label: Text(translate('Outcome'))),
+          DataColumn(label: Text(translate('Device'))),
+          DataColumn(label: Text(translate('Type'))),
+          DataColumn(label: Text(translate('Access'))),
+          DataColumn(label: Text(translate('Duration'))),
+          DataColumn(label: Text(translate('Files'))),
+        ],
+        rows: records
+            .map((record) => DataRow(
+                  onSelectChanged: (selected) {
+                    if (selected == true) _showDetail(record);
+                  },
+                  cells: [
+                    DataCell(Text(_date(record.startedAt))),
+                    DataCell(_outcomeBadge(record)),
+                    DataCell(Text(record.peerName.isEmpty
+                        ? record.peerId
+                        : record.peerId.isEmpty
+                            ? record.peerName
+                            : '${record.peerName}\n${record.peerId}')),
+                    DataCell(Text(record.connectionType.isEmpty
+                        ? '-'
+                        : record.connectionType)),
+                    DataCell(Text(record.accessMethod(translate))),
+                    DataCell(Text(record.closed
+                        ? _duration(record.durationSecs)
+                        : '-')),
+                    DataCell(Text('${record.files.length}')),
+                  ],
+                ))
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _mobileCards(List<ClantoSessionRecord> records) {
+    return Column(
+      children: records
+          .map((record) => Card(
+                child: InkWell(
+                  onTap: () => _showDetail(record),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Expanded(child: Text(record.peer)),
+                          _outcomeBadge(record),
+                        ]),
+                        const SizedBox(height: 8),
+                        Text(_date(record.startedAt)),
+                        Text(
+                            '${record.connectionType.isEmpty ? '-' : record.connectionType} · ${record.accessMethod(translate)}'),
+                        Row(children: [
+                          ..._permissionIcons(record),
+                          const Icon(Icons.folder, size: 17),
+                          const SizedBox(width: 4),
+                          Text('${record.files.length}'),
+                          const Spacer(),
+                          Text(record.closed
+                              ? _duration(record.durationSecs)
+                              : '-'),
+                        ]),
+                      ],
+                    ),
+                  ),
+                ),
+              ))
+          .toList(growable: false),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final records = _filteredRecords;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _filters(context),
       if (_loading)
         const Padding(
             padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()))
@@ -428,41 +467,15 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
           padding: const EdgeInsets.all(12),
           child: Text(_error!, style: const TextStyle(color: Colors.red)),
         )
-      else if (_records.isEmpty)
+      else if (records.isEmpty)
         Padding(
           padding: const EdgeInsets.all(18),
           child: Text(translate('No sessions found')),
         )
+      else if (isMobile)
+        _mobileCards(records)
       else
-        ..._records.map((record) => ListTile(
-              dense: true,
-              leading: Icon(record.rejected ? Icons.block : Icons.computer),
-              title: Text(record.rejected
-                  ? translate('Rejected connection attempt')
-                  : record.peer),
-              subtitle: Text('${_date(record.startedAt)} · '
-                  '${record.connectionType.isEmpty ? '-' : record.connectionType} · '
-                  '${record.accessMethod} · ${record.statusLabel()}'),
-              trailing: SizedBox(
-                width: 170,
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 4,
-                  children: [
-                    ..._permissionIcons(record),
-                    const Icon(Icons.folder, size: 17),
-                    Text('${record.files.length}',
-                        style: Theme.of(context).textTheme.bodySmall),
-                    Text(record.closed
-                        ? _duration(record.durationSecs)
-                        : record.statusLabel(),
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              onTap: () => _showDetail(record),
-            )),
+        _desktopTable(records),
     ]);
   }
 }
@@ -474,6 +487,7 @@ SettingsTile clantoSessionReportTile() {
     onPressed: (context) => showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        title: Text(translate('Report sessions')),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 680, maxHeight: 650),
           child: SingleChildScrollView(

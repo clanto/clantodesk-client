@@ -23,6 +23,8 @@ const String kOptClantoSyslogHost = 'clanto-syslog-host';
 const String kOptClantoSyslogPort = 'clanto-syslog-port';
 const String kOptClantoSyslogProtocol = 'clanto-syslog-protocol';
 const String kOptClantoSyslogFacility = 'clanto-syslog-facility';
+const String kOptClantoSyslogTlsCa = 'clanto-syslog-tls-ca';
+const String kOptClantoSyslogFormat = 'clanto-syslog-format';
 const String kOptClantoEventLogEnabled = 'clanto-eventlog-enabled';
 
 /// Default RFC 5424: local0. Deve restare allineato a DEFAULT_FACILITY in
@@ -46,9 +48,11 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
   late bool _syslogOn;
   late bool _eventLogOn;
   late String _protocol;
+  late String _format;
   final _host = TextEditingController();
   final _port = TextEditingController();
   final _facility = TextEditingController();
+  final _tlsCa = TextEditingController();
 
   bool _isOn(String key) => bind.mainGetOptionSync(key: key) == 'Y';
 
@@ -62,12 +66,20 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
     _syslogOn = _isOn(kOptClantoSyslogEnabled);
     _eventLogOn = _isOn(kOptClantoEventLogEnabled);
     _host.text = bind.mainGetOptionSync(key: kOptClantoSyslogHost);
-    final port = bind.mainGetOptionSync(key: kOptClantoSyslogPort);
-    _port.text = port.isEmpty ? '514' : port;
     final proto = bind.mainGetOptionSync(key: kOptClantoSyslogProtocol);
-    _protocol = proto.toLowerCase() == 'tcp' ? 'tcp' : 'udp';
+    _protocol = const {'udp', 'tcp', 'tls'}.contains(proto.toLowerCase())
+        ? proto.toLowerCase()
+        : 'udp';
+    final port = bind.mainGetOptionSync(key: kOptClantoSyslogPort);
+    _port.text =
+        port.isEmpty ? (_protocol == 'tls' ? '6514' : '514') : port;
+    final format = bind.mainGetOptionSync(key: kOptClantoSyslogFormat);
+    _format = const {'rfc5424', 'cef'}.contains(format.toLowerCase())
+        ? format.toLowerCase()
+        : 'rfc5424';
     final fac = bind.mainGetOptionSync(key: kOptClantoSyslogFacility);
     _facility.text = fac.isEmpty ? kDefaultSyslogFacility : fac;
+    _tlsCa.text = bind.mainGetOptionSync(key: kOptClantoSyslogTlsCa);
   }
 
   @override
@@ -75,6 +87,7 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
     _host.dispose();
     _port.dispose();
     _facility.dispose();
+    _tlsCa.dispose();
     super.dispose();
   }
 
@@ -113,7 +126,7 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
     final canEdit = widget.enabled;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _checkbox(
-        'Send audit events to syslog',
+        'Send audit events to SIEM',
         _syslogOn,
         canEdit && !isOptionFixed(kOptClantoSyslogEnabled)
             ? (v) async {
@@ -149,9 +162,33 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
                     setState(() => _protocol = v);
                   }
                 : null,
-            items: const [
-              DropdownMenuItem(value: 'udp', child: Text('UDP')),
-              DropdownMenuItem(value: 'tcp', child: Text('TCP')),
+            items: [
+              DropdownMenuItem(
+                  value: 'udp', child: Text(translate('UDP'))),
+              DropdownMenuItem(
+                  value: 'tcp', child: Text(translate('TCP'))),
+              DropdownMenuItem(
+                  value: 'tls', child: Text(translate('TLS'))),
+            ],
+          ),
+        ]).marginOnly(left: 25, top: 8),
+        Row(children: [
+          SizedBox(width: 90, child: Text(translate('Format'))),
+          DropdownButton<String>(
+            value: _format,
+            onChanged: canEdit && !isOptionFixed(kOptClantoSyslogFormat)
+                ? (v) async {
+                    if (v == null) return;
+                    await bind.mainSetOption(
+                        key: kOptClantoSyslogFormat, value: v);
+                    setState(() => _format = v);
+                  }
+                : null,
+            items: [
+              DropdownMenuItem(
+                  value: 'rfc5424', child: Text(translate('RFC 5424'))),
+              DropdownMenuItem(
+                  value: 'cef', child: Text(translate('CEF'))),
             ],
           ),
         ]).marginOnly(left: 25, top: 8),
@@ -167,11 +204,16 @@ class _ClantoAuditSettingsState extends State<ClantoAuditSettings> {
                   ? '$f'
                   : kDefaultSyslogFacility);
         }),
-        Text(
-          translate(
-              'UDP sends events in clear text. Prefer TCP to a local collector.'),
-          style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
-        ).marginOnly(left: 25, top: 4),
+        if (_protocol == 'tls')
+          _field('CA certificate path', _tlsCa,
+              optionKey: kOptClantoSyslogTlsCa,
+              onDone: (v) => bind.mainSetOption(
+                  key: kOptClantoSyslogTlsCa, value: v.trim())),
+        if (_protocol == 'udp')
+          Text(
+            translate('UDP sends audit events without encryption.'),
+            style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+          ).marginOnly(left: 25, top: 4),
       ],
       if (isWindows)
         _checkbox(

@@ -14,7 +14,7 @@ const String kOptClantoOutgoingRemotePrinter =
     'clanto-outgoing-remote-printer';
 const String kOptClantoOutgoingRecord = 'clanto-outgoing-record';
 
-const Map<String, String> _restrictions = {
+const Map<String, String> clantoOutgoingRestrictions = {
   kOptClantoOutgoingFileTransfer: 'Allow file transfer and file copy and paste',
   kOptClantoOutgoingClipboard: 'Allow clipboard sharing',
   kOptClantoOutgoingTunnel: 'Allow port forwarding and RDP',
@@ -42,7 +42,7 @@ class _ClantoOutgoingSecuritySettingState
   void initState() {
     super.initState();
     _allowed = {
-      for (final key in _restrictions.keys)
+      for (final key in clantoOutgoingRestrictions.keys)
         key: bind.mainGetOptionSync(key: key) != 'N',
     };
   }
@@ -60,7 +60,7 @@ class _ClantoOutgoingSecuritySettingState
           style: Theme.of(context).textTheme.titleMedium),
       Text(translate('Choose what this PC may do in sessions it opens.'),
           style: Theme.of(context).textTheme.bodySmall),
-      ..._restrictions.entries.map((entry) => CheckboxListTile(
+      ...clantoOutgoingRestrictions.entries.map((entry) => CheckboxListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 10),
             value: _allowed[entry.key],
             onChanged: widget.enabled && !isOptionFixed(entry.key)

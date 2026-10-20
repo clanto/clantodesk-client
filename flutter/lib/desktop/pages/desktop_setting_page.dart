@@ -8,9 +8,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/clanto/about_links.dart';
 import 'package:flutter_hbb/clanto/audit_settings.dart';
+import 'package:flutter_hbb/clanto/file_transfer_security.dart';
 import 'package:flutter_hbb/clanto/privacy_prompt.dart';
 import 'package:flutter_hbb/clanto/inbound_security.dart';
 import 'package:flutter_hbb/clanto/outgoing_security.dart';
+import 'package:flutter_hbb/clanto/protected_device.dart';
 import 'package:flutter_hbb/clanto/session_report.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
@@ -1001,6 +1003,71 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
   bool get wantKeepAlive => true;
   bool locked = bind.mainIsInstalled();
   final scrollController = ScrollController();
+  final _syslogHost = TextEditingController();
+  final _syslogPort = TextEditingController();
+  final _syslogFacility = TextEditingController();
+  final _syslogTlsCa = TextEditingController();
+  final _clamdEndpoint = TextEditingController();
+  final _fileScanMaxMb = TextEditingController();
+  final _blockedExtensions = TextEditingController();
+  late String _syslogProtocol;
+  late String _syslogFormat;
+  late String _fileScanMode;
+  late String _fileDirection;
+
+  @override
+  void initState() {
+    super.initState();
+    _syslogHost.text =
+        bind.mainGetOptionSync(key: kOptClantoSyslogHost);
+    final protocol =
+        bind.mainGetOptionSync(key: kOptClantoSyslogProtocol).toLowerCase();
+    _syslogProtocol = const {'udp', 'tcp', 'tls'}.contains(protocol)
+        ? protocol
+        : 'udp';
+    final port = bind.mainGetOptionSync(key: kOptClantoSyslogPort);
+    _syslogPort.text =
+        port.isEmpty ? (_syslogProtocol == 'tls' ? '6514' : '514') : port;
+    final format =
+        bind.mainGetOptionSync(key: kOptClantoSyslogFormat).toLowerCase();
+    _syslogFormat = const {'rfc5424', 'cef'}.contains(format)
+        ? format
+        : 'rfc5424';
+    final facility = bind.mainGetOptionSync(key: kOptClantoSyslogFacility);
+    _syslogFacility.text =
+        facility.isEmpty ? kDefaultSyslogFacility : facility;
+    _syslogTlsCa.text =
+        bind.mainGetOptionSync(key: kOptClantoSyslogTlsCa);
+
+    final scanMode = bind.mainGetOptionSync(key: kOptClantoFileScan);
+    _fileScanMode = const {'warn', 'block'}.contains(scanMode)
+        ? scanMode
+        : 'off';
+    _clamdEndpoint.text =
+        bind.mainGetOptionSync(key: kOptClantoFileScanClamd);
+    final maxMb = bind.mainGetOptionSync(key: kOptClantoFileScanMaxMb);
+    _fileScanMaxMb.text = maxMb.isEmpty ? '512' : maxMb;
+    final direction = bind.mainGetOptionSync(key: kOptClantoFileDirection);
+    _fileDirection =
+        const {'both', 'to-host', 'from-host', 'none'}.contains(direction)
+            ? direction
+            : 'both';
+    _blockedExtensions.text =
+        bind.mainGetOptionSync(key: kOptClantoFileBlockedExt);
+  }
+
+  @override
+  void dispose() {
+    scrollController.dispose();
+    _syslogHost.dispose();
+    _syslogPort.dispose();
+    _syslogFacility.dispose();
+    _syslogTlsCa.dispose();
+    _clamdEndpoint.dispose();
+    _fileScanMaxMb.dispose();
+    _blockedExtensions.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1019,12 +1086,12 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                 permissions(context),
                 password(context),
                 _Card(title: '2FA', children: [tfa()]),
-                _Card(
-                    title: 'Audit',
-                    children: clantoAuditRows(context, enabled: !locked)),
+                audit(context),
                 if (!isChangeIdDisabled())
                   _Card(title: 'ID', children: [changeId()]),
                 more(context),
+                incomingSecurity(context),
+                outgoingSecurity(context),
               ]),
             ),
           ],
@@ -1412,6 +1479,351 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
         })));
   }
 
+  bool _isOptionOn(String key) =>
+      bind.mainGetOptionSync(key: key) == 'Y';
+
+  Future<void> _setOptionOn(String key, bool on) =>
+      bind.mainSetOption(key: key, value: on ? 'Y' : 'N');
+
+  Widget _subTextField(
+    BuildContext context,
+    String label,
+    TextEditingController controller,
+    String optionKey,
+    Future<void> Function(String value) onSaved, {
+    double width = 220,
+    bool numeric = false,
+  }) {
+    final enabled = !locked && !isOptionFixed(optionKey);
+    return _SubLabeledWidget(
+      context,
+      label,
+      SizedBox(
+        width: width,
+        child: TextField(
+          controller: controller,
+          enabled: enabled,
+          keyboardType: numeric ? TextInputType.number : TextInputType.text,
+          inputFormatters:
+              numeric ? [FilteringTextInputFormatter.digitsOnly] : null,
+          decoration: const InputDecoration(
+            contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+          ),
+          onSubmitted: onSaved,
+          onTapOutside: (_) => onSaved(controller.text),
+        ).workaroundFreezeLinuxMint(),
+      ),
+      enabled: enabled,
+    );
+  }
+
+  Widget _subDropdown(
+    BuildContext context,
+    String label,
+    String value,
+    String optionKey,
+    List<DropdownMenuItem<String>> items,
+    ValueChanged<String?> onChanged,
+  ) {
+    final enabled = !locked && !isOptionFixed(optionKey);
+    return _SubLabeledWidget(
+      context,
+      label,
+      SizedBox(
+        width: 220,
+        child: DropdownButton<String>(
+          isExpanded: true,
+          value: value,
+          onChanged: enabled ? onChanged : null,
+          items: items,
+        ),
+      ),
+      enabled: enabled,
+    );
+  }
+
+  Widget audit(BuildContext context) {
+    final syslogOn = _isOptionOn(kOptClantoSyslogEnabled);
+    return _Card(title: 'Audit', children: [
+      _OptionCheckBox(
+        context,
+        'Send audit events to SIEM',
+        kOptClantoSyslogEnabled,
+        enabled: !locked,
+        optGetter: () => _isOptionOn(kOptClantoSyslogEnabled),
+        optSetter: _setOptionOn,
+        update: (_) => setState(() {}),
+      ),
+      if (syslogOn) ...[
+        _subTextField(
+          context,
+          'Host',
+          _syslogHost,
+          kOptClantoSyslogHost,
+          (value) => bind.mainSetOption(
+              key: kOptClantoSyslogHost, value: value.trim()),
+        ),
+        _subTextField(
+          context,
+          'Port',
+          _syslogPort,
+          kOptClantoSyslogPort,
+          (value) async {
+            final port = int.tryParse(value.trim());
+            final normalized = port != null && port > 0 && port < 65536
+                ? '$port'
+                : _syslogProtocol == 'tls'
+                    ? '6514'
+                    : '514';
+            _syslogPort.text = normalized;
+            await bind.mainSetOption(
+                key: kOptClantoSyslogPort, value: normalized);
+          },
+          width: 95,
+          numeric: true,
+        ),
+        _subDropdown(
+          context,
+          'Protocol',
+          _syslogProtocol,
+          kOptClantoSyslogProtocol,
+          [
+            DropdownMenuItem(value: 'udp', child: Text(translate('UDP'))),
+            DropdownMenuItem(value: 'tcp', child: Text(translate('TCP'))),
+            DropdownMenuItem(value: 'tls', child: Text(translate('TLS'))),
+          ],
+          (value) async {
+            if (value == null) return;
+            await bind.mainSetOption(
+                key: kOptClantoSyslogProtocol, value: value);
+            if (mounted) setState(() => _syslogProtocol = value);
+          },
+        ),
+        _subDropdown(
+          context,
+          'Format',
+          _syslogFormat,
+          kOptClantoSyslogFormat,
+          [
+            DropdownMenuItem(
+                value: 'rfc5424', child: Text(translate('RFC 5424'))),
+            DropdownMenuItem(value: 'cef', child: Text(translate('CEF'))),
+          ],
+          (value) async {
+            if (value == null) return;
+            await bind.mainSetOption(
+                key: kOptClantoSyslogFormat, value: value);
+            if (mounted) setState(() => _syslogFormat = value);
+          },
+        ),
+        _subTextField(
+          context,
+          'Facility',
+          _syslogFacility,
+          kOptClantoSyslogFacility,
+          (value) async {
+            final facility = int.tryParse(value.trim());
+            final normalized = facility != null &&
+                    facility >= 0 &&
+                    facility <= 23
+                ? '$facility'
+                : kDefaultSyslogFacility;
+            _syslogFacility.text = normalized;
+            await bind.mainSetOption(
+                key: kOptClantoSyslogFacility, value: normalized);
+          },
+          width: 95,
+          numeric: true,
+        ),
+        if (_syslogProtocol == 'tls')
+          _subTextField(
+            context,
+            'CA certificate path',
+            _syslogTlsCa,
+            kOptClantoSyslogTlsCa,
+            (value) => bind.mainSetOption(
+                key: kOptClantoSyslogTlsCa, value: value.trim()),
+          ),
+        if (_syslogProtocol == 'udp')
+          Text(
+            translate('UDP sends audit events without encryption.'),
+            style: TextStyle(
+                fontSize: 12, color: Theme.of(context).hintColor),
+          ).marginOnly(left: _kContentHSubMargin),
+      ],
+      if (isWindows)
+        _OptionCheckBox(
+          context,
+          'Write audit events to Windows Event Log',
+          kOptClantoEventLogEnabled,
+          enabled: !locked,
+          optGetter: () => _isOptionOn(kOptClantoEventLogEnabled),
+          optSetter: _setOptionOn,
+        ),
+    ]);
+  }
+
+  Widget incomingSecurity(BuildContext context) {
+    final requireProtected =
+        _isOptionOn(kOptClantoRequireProtectedDevice);
+    final scanEnabled = _fileScanMode != 'off';
+    return _Card(title: 'Incoming security', children: [
+      Row(children: [
+        Expanded(
+          child: _OptionCheckBox(
+            context,
+            'Accept connections only from updated and protected devices',
+            kOptClantoRequireProtectedDevice,
+            enabled: !locked,
+            optGetter: () =>
+                _isOptionOn(kOptClantoRequireProtectedDevice),
+            optSetter: _setOptionOn,
+            update: (_) => setState(() {}),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: requireProtected &&
+                  !locked &&
+                  !isOptionFixed(kOptClantoPostureBypass)
+              ? () => showClantoPostureRulesDialog(context, enabled: !locked)
+              : null,
+          child: Text(translate('Modify')),
+        ),
+      ]),
+      _OptionCheckBox(
+        context,
+        'Require controller watermark',
+        kOptClantoControllerWatermark,
+        enabled: !locked,
+        optGetter: () => _isOptionOn(kOptClantoControllerWatermark),
+        optSetter: _setOptionOn,
+      ),
+      _OptionCheckBox(
+        context,
+        'Show host watermark',
+        kOptClantoHostWatermark,
+        enabled: !locked,
+        optGetter: () => _isOptionOn(kOptClantoHostWatermark),
+        optSetter: (key, on) async {
+          if (on &&
+              isAndroid &&
+              !await AndroidPermissionManager.check(kSystemAlertWindow) &&
+              !await AndroidPermissionManager.request(kSystemAlertWindow)) {
+            return;
+          }
+          await _setOptionOn(key, on);
+        },
+      ),
+      _OptionCheckBox(
+        context,
+        'Scan received files for malware',
+        kOptClantoFileScan,
+        enabled: !locked,
+        optGetter: () => _fileScanMode != 'off',
+        optSetter: (key, on) async {
+          final value = on ? 'block' : 'off';
+          await bind.mainSetOption(key: key, value: value);
+          _fileScanMode = value;
+        },
+        update: (_) => setState(() {}),
+      ),
+      if (scanEnabled) ...[
+        _subDropdown(
+          context,
+          'Scan mode',
+          _fileScanMode,
+          kOptClantoFileScan,
+          [
+            DropdownMenuItem(
+                value: 'warn', child: Text(translate('Warn and deliver'))),
+            DropdownMenuItem(
+                value: 'block',
+                child: Text(translate('Block unsafe files'))),
+          ],
+          (value) async {
+            if (value == null) return;
+            await bind.mainSetOption(key: kOptClantoFileScan, value: value);
+            if (mounted) setState(() => _fileScanMode = value);
+          },
+        ),
+        if (!isWindows)
+          _subTextField(
+            context,
+            'ClamAV endpoint',
+            _clamdEndpoint,
+            kOptClantoFileScanClamd,
+            (value) => bind.mainSetOption(
+                key: kOptClantoFileScanClamd, value: value.trim()),
+          ),
+        _subTextField(
+          context,
+          'Maximum file size (MB)',
+          _fileScanMaxMb,
+          kOptClantoFileScanMaxMb,
+          (value) async {
+            final size = int.tryParse(value.trim());
+            final normalized = size != null && size > 0 ? '$size' : '512';
+            _fileScanMaxMb.text = normalized;
+            await bind.mainSetOption(
+                key: kOptClantoFileScanMaxMb, value: normalized);
+          },
+          width: 95,
+          numeric: true,
+        ),
+      ],
+      _subDropdown(
+        context,
+        'File transfer direction',
+        _fileDirection,
+        kOptClantoFileDirection,
+        [
+          DropdownMenuItem(
+              value: 'both', child: Text(translate('Both directions'))),
+          DropdownMenuItem(
+              value: 'to-host',
+              child: Text(translate('Only to this device'))),
+          DropdownMenuItem(
+              value: 'from-host',
+              child: Text(translate('Only from this device'))),
+          DropdownMenuItem(
+              value: 'none', child: Text(translate('No file transfers'))),
+        ],
+        (value) async {
+          if (value == null) return;
+          await bind.mainSetOption(
+              key: kOptClantoFileDirection, value: value);
+          if (mounted) setState(() => _fileDirection = value);
+        },
+      ),
+      _subTextField(
+        context,
+        'Blocked file extensions',
+        _blockedExtensions,
+        kOptClantoFileBlockedExt,
+        (value) => bind.mainSetOption(
+            key: kOptClantoFileBlockedExt, value: value.trim()),
+      ),
+    ]);
+  }
+
+  Widget outgoingSecurity(BuildContext context) {
+    return _Card(
+      title: 'Outgoing security',
+      children: clantoOutgoingRestrictions.entries
+          .map((entry) => _OptionCheckBox(
+                context,
+                entry.value,
+                entry.key,
+                enabled: !locked,
+                optGetter: () =>
+                    bind.mainGetOptionSync(key: entry.key) != 'N',
+                optSetter: (key, on) => bind.mainSetOption(
+                    key: key, value: on ? 'Y' : 'N'),
+              ))
+          .toList(growable: false),
+    );
+  }
+
   Widget more(BuildContext context) {
     bool enabled = !locked;
     return _Card(title: 'Security', children: [
@@ -1422,8 +1834,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
       whitelist(),
       idWhitelist(),
       ...autoDisconnect(context),
-      ClantoInboundSecuritySetting(enabled: enabled),
-      ClantoOutgoingSecuritySetting(enabled: enabled),
       _OptionCheckBox(context, 'keep-awake-during-incoming-sessions-label',
           kOptionKeepAwakeDuringIncomingSessions,
           reverse: false, enabled: enabled),
@@ -1791,6 +2201,7 @@ class _SessionReportState extends State<_SessionReport>
               ClantoSessionReport(
                   enabled:
                       !locked && !isOptionFixed(kOptClantoSessionLogDays))
+                  .marginOnly(left: _kContentHMargin),
             ],
           ),
         ),

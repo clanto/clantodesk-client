@@ -17,6 +17,8 @@ import 'watermark.dart';
 
 const String kOptClantoPostureBypass = 'clanto-posture-bypass';
 const String kOptClantoHostWatermark = 'clanto-host-watermark';
+const String kOptClantoControllerWatermark =
+    kOptClantoRequireControllerWatermark;
 const String _postureRulesUrl =
     'https://clanto.it/api/clantodesk-posture.php?rules';
 
@@ -46,6 +48,133 @@ class _PostureRule {
   }
 }
 
+Future<void> showClantoPostureRulesDialog(BuildContext context,
+    {bool enabled = true}) async {
+  await showDialog<void>(
+    context: context,
+    builder: (context) => _PostureRulesDialog(enabled: enabled),
+  );
+}
+
+class _PostureRulesDialog extends StatefulWidget {
+  const _PostureRulesDialog({required this.enabled});
+
+  final bool enabled;
+
+  @override
+  State<_PostureRulesDialog> createState() => _PostureRulesDialogState();
+}
+
+class _PostureRulesDialogState extends State<_PostureRulesDialog> {
+  final Set<String> _bypass = bind
+      .mainGetOptionSync(key: kOptClantoPostureBypass)
+      .split(',')
+      .map((id) => id.trim())
+      .where((id) => id.isNotEmpty)
+      .toSet();
+  List<_PostureRule> _rules = const [];
+  bool _loading = true;
+  bool _loadFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRules();
+  }
+
+  Future<void> _loadRules() async {
+    try {
+      final response = await http.get(Uri.parse(_postureRulesUrl));
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic> || body['rules'] is! List) {
+        throw const FormatException();
+      }
+      final rules = (body['rules'] as List)
+          .whereType<Map<String, dynamic>>()
+          .map(_PostureRule.fromJson)
+          .toList(growable: false);
+      if (mounted) {
+        setState(() {
+          _rules = rules;
+          _loading = false;
+        });
+      }
+    } catch (error) {
+      debugPrint('Unable to load security rules: $error');
+      if (mounted) {
+        setState(() {
+          _loadFailed = true;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _setBypass(_PostureRule rule, bool value) async {
+    if (!widget.enabled ||
+        isOptionFixed(kOptClantoPostureBypass) ||
+        !rule.bypassable) {
+      return;
+    }
+    setState(() {
+      if (value) {
+        _bypass.add(rule.id);
+      } else {
+        _bypass.remove(rule.id);
+      }
+    });
+    final bypass = _bypass.toList()..sort();
+    await bind.mainSetOption(
+        key: kOptClantoPostureBypass, value: bypass.join(','));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(translate('Device posture rules')),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _loadFailed
+                ? Text(translate('Unable to load security rules'),
+                    style: const TextStyle(color: Colors.red))
+                : SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: _rules
+                          .map((rule) => CheckboxListTile(
+                                contentPadding: EdgeInsets.zero,
+                                value: _bypass.contains(rule.id),
+                                onChanged: widget.enabled &&
+                                        !isOptionFixed(
+                                            kOptClantoPostureBypass) &&
+                                        rule.bypassable
+                                    ? (value) =>
+                                        _setBypass(rule, value ?? false)
+                                    : null,
+                                title: Text(rule.message),
+                                subtitle: Text(rule.bypassable
+                                    ? translate('Ignore this rule on this PC')
+                                    : '${translate('Applies to:')} ${rule.platforms.join(', ')}'),
+                              ))
+                          .toList(growable: false),
+                    ),
+                  ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(translate('Close')),
+        ),
+      ],
+    );
+  }
+}
+
 class ClantoInboundSecuritySetting extends StatefulWidget {
   final bool enabled;
 
@@ -59,66 +188,12 @@ class ClantoInboundSecuritySetting extends StatefulWidget {
 
 class _ClantoInboundSecuritySettingState
     extends State<ClantoInboundSecuritySetting> {
-  final Set<String> _bypass = bind
-      .mainGetOptionSync(key: kOptClantoPostureBypass)
-      .split(',')
-      .map((id) => id.trim())
-      .where((id) => id.isNotEmpty)
-      .toSet();
-  List<_PostureRule> _rules = const [];
-  String? _error;
-  bool _loading = true;
   bool _hasIdWhitelist = idWhitelistNotEmpty();
   bool _requireControllerWatermark = bind.mainGetOptionSync(
           key: kOptClantoRequireControllerWatermark) ==
       'Y';
   bool _hostWatermark =
       bind.mainGetOptionSync(key: kOptClantoHostWatermark) == 'Y';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadRules();
-  }
-
-  Future<void> _loadRules() async {
-    try {
-      final response = await http.get(Uri.parse(_postureRulesUrl));
-      if (response.statusCode != 200) throw Exception('HTTP ${response.statusCode}');
-      final body = jsonDecode(response.body);
-      if (body is! Map<String, dynamic> || body['rules'] is! List) {
-        throw const FormatException();
-      }
-      final rules = (body['rules'] as List)
-          .whereType<Map<String, dynamic>>()
-          .map(_PostureRule.fromJson)
-          .toList(growable: false);
-      if (mounted) setState(() {
-        _rules = rules;
-        _loading = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() {
-        _error = translate('Unable to load security rules');
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _setBypass(_PostureRule rule, bool value) async {
-    if (!widget.enabled ||
-        isOptionFixed(kOptClantoPostureBypass) ||
-        !rule.bypassable) return;
-    setState(() {
-      if (value) {
-        _bypass.add(rule.id);
-      } else {
-        _bypass.remove(rule.id);
-      }
-    });
-    final bypass = _bypass.toList()..sort();
-    await bind.mainSetOption(key: kOptClantoPostureBypass, value: bypass.join(','));
-  }
 
   void _changeIdWhitelist() {
     changeIdWhiteList(callback: () {
@@ -163,7 +238,11 @@ class _ClantoInboundSecuritySettingState
           title: Text(translate('Use ID whitelisting')),
           subtitle: Text(translate('id_whitelist_tip')),
         ),
-      ClantoProtectedDeviceSetting(enabled: widget.enabled),
+      ClantoProtectedDeviceSetting(
+        enabled: widget.enabled,
+        onModify: () => showClantoPostureRulesDialog(context,
+            enabled: widget.enabled),
+      ),
       CheckboxListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 10),
         value: _requireControllerWatermark,
@@ -186,26 +265,6 @@ class _ClantoInboundSecuritySettingState
             'Show session code, access type, active permissions, controller identity, start time, and active session count on this device.')),
       ),
       ClantoFileTransferSecuritySetting(enabled: widget.enabled),
-      if (_loading)
-        const Padding(
-            padding: EdgeInsets.all(12), child: CircularProgressIndicator()),
-      if (_error != null)
-        Padding(
-            padding: const EdgeInsets.all(10),
-            child: Text(_error!, style: const TextStyle(color: Colors.red))),
-      ..._rules.map((rule) => CheckboxListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-            value: _bypass.contains(rule.id),
-            onChanged: widget.enabled &&
-                    !isOptionFixed(kOptClantoPostureBypass) &&
-                    rule.bypassable
-                ? (value) => _setBypass(rule, value ?? false)
-                : null,
-            title: Text(rule.message),
-            subtitle: Text(rule.bypassable
-                ? translate('Ignore this rule on this PC')
-                : '${translate('Applies to:')} ${rule.platforms.join(', ')}'),
-          )),
     ]);
   }
 }
