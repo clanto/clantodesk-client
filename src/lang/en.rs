@@ -290,7 +290,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Show host watermark", "Show host watermark"),
         ("Show session code, access type, active permissions, controller identity, start time, and active session count on this device.", "Show session code, access type, active permissions, controller identity, start time, and active session count on this device."),
         ("Session code", "Session code"),
-        ("Remote session", ""),
+        ("Remote session", "Remote session"),
         ("Full control", ""),
         ("View only", ""),
         ("Camera", ""),

@@ -546,11 +546,12 @@ visualizzazione fotocamera; non compare per trasferimento file, terminale o
 port forwarding/RDP. È un widget Flutter separato dalla texture, non intercetta
 l'input e resta sopra l'immagine durante zoom, scorrimento e cambio monitor.
 
-Le righe diagonali si alternano. La prima identifica il controller con ID
-ClantoDesk, utente dell'account, utente di sistema (con dominio su Windows) e
-nome del PC. La seconda identifica host e utente controllati, mostra data e ora
-locali nel formato italiano `dd/MM/yyyy HH:mm` e il codice della sessione. Le
-parti non disponibili e il relativo separatore vengono omessi.
+Le righe diagonali si alternano. La prima è `<nome> · ID <id> · <codice
+sessione>`: il nome è l'utente dell'account oppure, se manca, l'utente di
+sistema senza dominio (`DOMINIO\utente` e `utente@dominio` diventano `utente`).
+La seconda è `→ <hostname> · dd/MM/yyyy HH:mm`. Le parti non disponibili e il
+relativo separatore vengono omessi. Testo bianco al 12% con contorno al 12%,
+volutamente rado: deve restare leggibile in una foto senza coprire il lavoro.
 
 La filigrana lato controller è un deterrente applicato dal client: rende
 riconoscibile chi osserva la sessione negli screenshot e nelle fotografie, ma
@@ -560,13 +561,12 @@ effettuate con software o dispositivi esterni.
 
 L'opzione host `clanto-host-watermark` (predefinita `N`) mostra invece sul PC
 controllato una fascia semitrasparente su ogni schermo per tutta la durata di
-almeno una sessione desktop o fotocamera autorizzata. Riporta nome o ID del
-controller, codice sessione, tipo di accesso (controllo completo, sola
-visualizzazione o fotocamera), permessi effettivamente attivi, utente
-dell'account, utente di sistema, PC del controller, ora di inizio e numero di
-sessioni attive. Mostra una riga per sessione, fino a tre, e poi `+N altre`; si
-aggiorna anche quando cambiano i permessi e scompare alla chiusura dell'ultima
-sessione. Non si attiva per sessioni di solo trasferimento file, terminale o
+almeno una sessione desktop o fotocamera autorizzata. È sempre una sola riga,
+centrata in una fascia alta una riga, con opacità circa 55%:
+`● Sessione remota · <tecnico> (<ID>) · <codice sessione> · dalle HH:MM`,
+riferita alla sessione più recente; con più sessioni aggiunge ` · +N`. Tipo di
+accesso, permessi, utenti e PC del controller restano nel report sessioni e
+nell'audit, non nella fascia. Scompare alla chiusura dell'ultima sessione. Non si attiva per sessioni di solo trasferimento file, terminale o
 port forwarding/RDP. Il valore resta separato da
 `clanto-require-controller-watermark`, viene applicato anche tramite GPO e il
 controllo nell'interfaccia è bloccato quando la policy è configurata.

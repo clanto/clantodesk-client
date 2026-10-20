@@ -14,7 +14,7 @@ use objc::{class, msg_send, sel, sel_impl};
 use std::cell::RefCell;
 
 const WATERMARK_LINE_HEIGHT: f64 = 24.0;
-const WATERMARK_VERTICAL_PADDING: f64 = 16.0;
+const WATERMARK_VERTICAL_PADDING: f64 = 8.0;
 const NS_WINDOW_SHARING_NONE: usize = 0;
 const CG_SCREEN_SAVER_WINDOW_LEVEL_KEY: i32 = 13;
 
@@ -46,8 +46,7 @@ unsafe fn apply(text: Option<&str>) {
         let Some(text) = text else {
             return;
         };
-        let height = text.lines().count().clamp(1, 4) as f64 * WATERMARK_LINE_HEIGHT
-            + WATERMARK_VERTICAL_PADDING;
+        let height = WATERMARK_LINE_HEIGHT + WATERMARK_VERTICAL_PADDING;
         let screens = NSScreen::screens(nil);
         for index in 0..screens.count() {
             let screen = screens.objectAtIndex(index);
@@ -73,8 +72,9 @@ unsafe fn apply(text: Option<&str>) {
             window.setHidesOnDeactivate_(NO);
             window.setIgnoresMouseEvents_(YES);
             window.setBackgroundColor_(NSColor::colorWithCalibratedRed_green_blue_alpha_(
-                nil, 0.08, 0.08, 0.08, 0.78,
+                nil, 0.08, 0.08, 0.08, 1.0,
             ));
+            window.setAlphaValue_(0.55);
             window.setLevel_(
                 (cg_window_level_for_key(CG_SCREEN_SAVER_WINDOW_LEVEL_KEY) + 1) as NSInteger,
             );
@@ -87,8 +87,8 @@ unsafe fn apply(text: Option<&str>) {
             let _: () = msg_send![window, setSharingType: NS_WINDOW_SHARING_NONE];
 
             let label_frame = NSRect::new(
-                NSPoint::new(12.0, 0.0),
-                NSSize::new(frame.size.width - 24.0, height),
+                NSPoint::new(12.0, (height - 20.0) / 2.0),
+                NSSize::new(frame.size.width - 24.0, 20.0),
             );
             let label = NSTextField::initWithFrame_(NSTextField::alloc(nil), label_frame);
             label.setEditable_(NO);
@@ -98,7 +98,7 @@ unsafe fn apply(text: Option<&str>) {
             let _: () = msg_send![label, setSelectable: NO];
             let _: () = msg_send![label, setBezeled: NO];
             let _: () = msg_send![label, setDrawsBackground: NO];
-            let _: () = msg_send![label, setUsesSingleLineMode: NO];
+            let _: () = msg_send![label, setUsesSingleLineMode: YES];
             let text_color =
                 NSColor::colorWithCalibratedRed_green_blue_alpha_(nil, 1.0, 1.0, 1.0, 1.0);
             let _: () = msg_send![label, setTextColor: text_color];

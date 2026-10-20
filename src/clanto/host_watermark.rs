@@ -159,93 +159,40 @@ fn translate(key: &str) -> String {
     crate::lang::translate_locale(key.to_owned(), "")
 }
 
-fn nonempty(value: Option<&str>) -> Option<&str> {
-    value.map(str::trim).filter(|value| !value.is_empty())
+fn one_line(value: &str) -> String {
+    value.trim().replace('\r', " ").replace('\n', " ")
+}
+
+fn optional_one_line(value: &str) -> Option<String> {
+    let value = one_line(value);
+    (!value.is_empty()).then_some(value)
 }
 
 fn technician(session: &WatermarkSession) -> String {
-    match (
-        nonempty(Some(&session.controller_name)),
-        nonempty(Some(&session.controller_id)),
-    ) {
-        (Some(name), Some(id)) if name != id => format!("{name} ({id})"),
-        (Some(name), _) => name.to_owned(),
-        (_, Some(id)) => id.to_owned(),
+    let name = one_line(&session.controller_name);
+    let id = one_line(&session.controller_id);
+    match (name.as_str(), id.as_str()) {
+        (name, id) if !name.is_empty() && !id.is_empty() && name != id => {
+            format!("{name} ({id})")
+        }
+        (name, _) if !name.is_empty() => name.to_owned(),
+        (_, id) if !id.is_empty() => id.to_owned(),
         _ => String::new(),
     }
 }
 
-fn access_type(access_type: WatermarkAccessType, translate: &impl Fn(&str) -> String) -> String {
-    translate(match access_type {
-        WatermarkAccessType::FullControl => "Full control",
-        WatermarkAccessType::ViewOnly => "View only",
-        WatermarkAccessType::Camera => "Camera",
-    })
-}
-
-fn permission_name(permission: WatermarkPermission, translate: &impl Fn(&str) -> String) -> String {
-    translate(match permission {
-        WatermarkPermission::Keyboard => "Keyboard permission",
-        WatermarkPermission::Clipboard => "Clipboard permission",
-        WatermarkPermission::File => "File permission",
-        WatermarkPermission::Audio => "Audio permission",
-        WatermarkPermission::Restart => "Remote restart permission",
-        WatermarkPermission::Recording => "Recording permission",
-        WatermarkPermission::BlockInput => "Block input permission",
-        WatermarkPermission::PrivacyMode => "Privacy mode permission",
-    })
-}
-
-fn watermark_line(
-    session: &WatermarkSession,
-    active_sessions: usize,
-    translate: &impl Fn(&str) -> String,
-) -> String {
-    let mut parts = Vec::new();
-    let code = session.session_code.trim();
-    if !code.is_empty() {
-        parts.push(format!("{} {code}", translate("Remote session")));
-    }
-    parts.push(access_type(session.access_type, translate));
-    if !session.permissions.is_empty() {
-        parts.push(
-            session
-                .permissions
-                .iter()
-                .copied()
-                .map(|permission| permission_name(permission, translate))
-                .collect::<Vec<_>>()
-                .join(", "),
-        );
-    }
+fn watermark_line(session: &WatermarkSession, translate: &impl Fn(&str) -> String) -> String {
+    let mut parts = vec![format!("● {}", translate("Remote session"))];
     let technician = technician(session);
     if !technician.is_empty() {
-        parts.push(format!("{}: {technician}", translate("Technician")));
+        parts.push(technician);
     }
-    if let Some(account) = nonempty(session.account_user.as_deref()) {
-        parts.push(format!("{} {account}", translate("Account label")));
-    }
-    match (
-        nonempty(session.os_user.as_deref()),
-        nonempty(session.pc_name.as_deref()),
-    ) {
-        (Some(os_user), Some(pc_name)) => {
-            parts.push(format!("{os_user} {} {pc_name}", translate("On label")))
-        }
-        (Some(os_user), None) => parts.push(os_user.to_owned()),
-        (None, Some(pc_name)) => parts.push(pc_name.to_owned()),
-        _ => {}
+    let code = one_line(&session.session_code);
+    if !code.is_empty() {
+        parts.push(code);
     }
     let started = session.started_at.format("%H:%M").to_string();
     parts.push(format!("{} {started}", translate("Since label")));
-    parts.push(format!(
-        "{active_sessions} {}",
-        translate(if active_sessions == 1 {
-            "Active session label"
-        } else {
-            "Active sessions label"
-        })
-    ));
     parts.join(" · ")
 }
 
@@ -260,22 +207,14 @@ fn watermark_text_with(
     if sessions.is_empty() {
         return None;
     }
-    let mut sessions = sessions.iter().collect::<Vec<_>>();
-    sessions.sort_by_key(|session| (session.started_at, session.controller_id.as_str()));
-    let count = sessions.len();
-    let mut lines = sessions
-        .into_iter()
-        .take(3)
-        .map(|session| watermark_line(session, count, translate))
-        .collect::<Vec<_>>();
-    if count > 3 {
-        lines.push(format!(
-            "+{} {}",
-            count - 3,
-            translate("More sessions label")
-        ));
+    let session = sessions
+        .iter()
+        .max_by_key(|session| (session.started_at, session.controller_id.as_str()))?;
+    let mut text = watermark_line(session, translate);
+    if sessions.len() > 1 {
+        text.push_str(&format!(" · +{}", sessions.len() - 1));
     }
-    Some(lines.join("\n"))
+    Some(text)
 }
 
 pub fn connection_added(client: &crate::ui_cm_interface::Client) {
@@ -348,9 +287,9 @@ pub fn connection_authorized(id: i32) {
 pub fn connection_identity(id: i32, identity: ClantoControllerIdentity) {
     let mut sessions = SESSIONS.lock().unwrap();
     if let Some(session) = sessions.get_mut(&id) {
-        session.account_user = nonempty(Some(&identity.account_user)).map(str::to_owned);
-        session.os_user = nonempty(Some(&identity.os_user)).map(str::to_owned);
-        session.pc_name = nonempty(Some(&identity.pc_name)).map(str::to_owned);
+        session.account_user = optional_one_line(&identity.account_user);
+        session.os_user = optional_one_line(&identity.os_user);
+        session.pc_name = optional_one_line(&identity.pc_name);
     }
     drop(sessions);
     refresh_if_enabled();
@@ -546,12 +485,7 @@ mod tests {
 
     fn english(key: &str) -> String {
         match key {
-            "Account label" => "account",
-            "On label" => "on",
             "Since label" => "since",
-            "Active session label" => "active session",
-            "Active sessions label" => "active sessions",
-            "More sessions label" => "more",
             _ => key,
         }
         .to_owned()
@@ -562,52 +496,43 @@ mod tests {
     }
 
     #[test]
-    fn formats_access_permissions_identity_and_active_count() {
-        let sessions = vec![
-            session(
-                "111",
-                "Alice laptop",
-                Some("alice@example.test"),
-                Some("ACME\\alice"),
-                Some("PC-ALICE"),
-                "S-0123-4567",
-                WatermarkAccessType::FullControl,
-                vec![
-                    WatermarkPermission::Keyboard,
-                    WatermarkPermission::Clipboard,
-                ],
-                1_704_110_400,
-            ),
-            session(
-                "222",
-                "",
-                None,
-                None,
-                None,
-                "S-89AB-CDEF",
-                WatermarkAccessType::Camera,
-                vec![WatermarkPermission::Audio],
-                1_704_114_000,
-            ),
-        ];
+    fn optional_identity_fields_trim_values_and_omit_whitespace() {
+        assert_eq!(optional_one_line("  Alice  ").as_deref(), Some("Alice"));
+        assert_eq!(optional_one_line(" \r\n\t"), None);
+    }
+
+    #[test]
+    fn formats_one_line_without_access_permissions_or_extended_identity() {
+        let sessions = vec![session(
+            "111",
+            "Alice laptop",
+            Some("alice@example.test"),
+            Some("ACME\\alice"),
+            Some("PC-ALICE"),
+            "S-0123-4567",
+            WatermarkAccessType::FullControl,
+            vec![
+                WatermarkPermission::Keyboard,
+                WatermarkPermission::Clipboard,
+            ],
+            1_704_110_400,
+        )];
 
         assert_eq!(
             watermark_text_with(&sessions, &english).as_deref(),
-            Some(
-                "Remote session S-0123-4567 · Full control · Keyboard permission, Clipboard permission · Technician: Alice laptop (111) · account alice@example.test · ACME\\alice on PC-ALICE · since 12:00 · 2 active sessions\nRemote session S-89AB-CDEF · Camera · Audio permission · Technician: 222 · since 13:00 · 2 active sessions"
-            )
+            Some("● Remote session · Alice laptop (111) · S-0123-4567 · since 12:00")
         );
     }
 
     #[test]
-    fn formats_view_only_and_omits_missing_identity_parts() {
+    fn omits_empty_fields_without_duplicate_separators() {
         let sessions = vec![session(
             "",
-            "Technician",
-            None,
-            Some("alice"),
-            None,
-            "S-0123-4567",
+            "\r\n",
+            Some("account"),
+            Some("ACME\\alice"),
+            Some("PC-ALICE"),
+            "\n",
             WatermarkAccessType::ViewOnly,
             Vec::new(),
             1_704_110_400,
@@ -615,9 +540,7 @@ mod tests {
 
         assert_eq!(
             watermark_text_with(&sessions, &english).as_deref(),
-            Some(
-                "Remote session S-0123-4567 · View only · Technician: Technician · alice · since 12:00 · 1 active session"
-            )
+            Some("● Remote session · since 12:00")
         );
     }
 
@@ -640,32 +563,53 @@ mod tests {
 
         assert_eq!(
             watermark_text_with(&sessions, &italian).as_deref(),
-            Some(
-                "Sessione remota S-0123-4567 · Controllo completo · tastiera, appunti · Tecnico: Alice (111) · account account · ACME\\alice su PC-ALICE · dalle 12:00 · 1 sessione attiva"
-            )
+            Some("● Sessione remota · Alice (111) · S-0123-4567 · dalle 12:00")
         );
     }
 
     #[test]
-    fn limits_visible_sessions_to_three_and_reports_the_rest() {
-        let sessions = (0..5)
-            .map(|index| {
-                session(
-                    &index.to_string(),
-                    "",
-                    None,
-                    None,
-                    None,
-                    "S-0123-4567",
-                    WatermarkAccessType::ViewOnly,
-                    Vec::new(),
-                    1_704_110_400 + index,
-                )
-            })
-            .collect::<Vec<_>>();
+    fn shows_only_the_most_recent_session_and_additional_count() {
+        let sessions = vec![
+            session(
+                "111",
+                "Old",
+                None,
+                None,
+                None,
+                "S-OLD0-0000",
+                WatermarkAccessType::ViewOnly,
+                Vec::new(),
+                1_704_110_400,
+            ),
+            session(
+                "222",
+                "New",
+                None,
+                None,
+                None,
+                "S-NEW0-0000",
+                WatermarkAccessType::Camera,
+                vec![WatermarkPermission::Audio],
+                1_704_114_000,
+            ),
+            session(
+                "333",
+                "Older",
+                None,
+                None,
+                None,
+                "S-OLD1-0000",
+                WatermarkAccessType::FullControl,
+                Vec::new(),
+                1_704_106_800,
+            ),
+        ];
         let text = watermark_text_with(&sessions, &english).unwrap();
-        assert_eq!(text.lines().count(), 4);
-        assert!(text.ends_with("+2 more"));
+        assert_eq!(
+            text,
+            "● Remote session · New (222) · S-NEW0-0000 · since 13:00 · +2"
+        );
+        assert!(!text.contains('\n'));
     }
 
     #[test]

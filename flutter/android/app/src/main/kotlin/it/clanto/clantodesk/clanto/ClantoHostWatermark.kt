@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.TextUtils
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -54,8 +55,7 @@ object ClantoHostWatermark {
 
         watermarkView?.let {
             it.text = text
-            it.maxLines = lineCount(text)
-            it.layoutParams.height = watermarkHeight(context, text)
+            it.layoutParams.height = watermarkHeight(context)
             windowManager?.updateViewLayout(it, it.layoutParams)
             return
         }
@@ -63,14 +63,15 @@ object ClantoHostWatermark {
         val manager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val view = TextView(context).apply {
             this.text = text
-            setTextColor(Color.argb(235, 255, 255, 255))
+            setTextColor(Color.WHITE)
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
             setTypeface(Typeface.DEFAULT, Typeface.BOLD)
             gravity = Gravity.CENTER
-            setPadding(dp(context, 16), dp(context, 10), dp(context, 16), dp(context, 10))
-            maxLines = lineCount(text)
+            setPadding(dp(context, 16), dp(context, 4), dp(context, 16), dp(context, 4))
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
             background = GradientDrawable().apply {
-                setColor(Color.argb(170, 116, 0, 0))
+                setColor(Color.rgb(116, 0, 0))
             }
             isClickable = false
             isFocusable = false
@@ -85,14 +86,14 @@ object ClantoHostWatermark {
         }
         val params = WindowManager.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            watermarkHeight(context, text),
+            watermarkHeight(context),
             windowType,
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            alpha = 0.75f
+            alpha = 0.55f
         }
 
         try {
@@ -128,9 +129,5 @@ object ClantoHostWatermark {
     private fun dp(context: Context, value: Int): Int =
         (value * context.resources.displayMetrics.density).toInt()
 
-    private fun lineCount(text: String): Int =
-        text.lineSequence().count().coerceIn(1, 4)
-
-    private fun watermarkHeight(context: Context, text: String): Int =
-        dp(context, lineCount(text) * 24 + 16)
+    private fun watermarkHeight(context: Context): Int = dp(context, 24 + 8)
 }

@@ -57,11 +57,11 @@ mod wayland {
                 window.set_skip_taskbar_hint(true);
                 window.set_skip_pager_hint(true);
                 window.set_type_hint(gdk::WindowTypeHint::Notification);
-                let height = text.lines().count().clamp(1, 4) as i32 * 24 + 16;
+                let height = 24 + 8;
                 window.set_default_size(geometry.width(), height);
                 window.move_(geometry.x(), geometry.y());
                 window.stick();
-                window.set_opacity(0.86);
+                window.set_opacity(0.55);
                 // The local user must not be able to close it (e.g. Alt+F4).
                 window.connect_delete_event(|_, _| glib::Propagation::Stop);
 
@@ -92,7 +92,7 @@ mod x11_overlay {
     const SHAPE_SET: c_int = 0;
     const UNSORTED: c_int = 0;
     const WATERMARK_LINE_HEIGHT: c_uint = 24;
-    const WATERMARK_VERTICAL_PADDING: c_uint = 16;
+    const WATERMARK_VERTICAL_PADDING: c_uint = 8;
 
     #[link(name = "Xext")]
     extern "C" {
@@ -200,11 +200,11 @@ mod x11_overlay {
                 for &window in &windows {
                     xlib::XRaiseWindow(display, window);
                     xlib::XClearWindow(display, window);
-                    for (index, line) in text.lines().take(4).enumerate() {
+                    if let Some(line) = text.lines().next() {
                         let fallback = font_set.is_null().then(|| ascii_fallback(line));
                         let bytes = fallback.as_deref().unwrap_or(line).as_bytes();
                         let length = bytes.len().min(c_int::MAX as usize) as c_int;
-                        let baseline = 24 + index as c_int * WATERMARK_LINE_HEIGHT as c_int;
+                        let baseline = 20;
                         if font_set.is_null() {
                             xlib::XDrawString(
                                 display,
@@ -253,9 +253,8 @@ mod x11_overlay {
             .collect()
     }
 
-    fn watermark_height(text: &str) -> c_uint {
-        text.lines().count().clamp(1, 4) as c_uint * WATERMARK_LINE_HEIGHT
-            + WATERMARK_VERTICAL_PADDING
+    fn watermark_height(_text: &str) -> c_uint {
+        WATERMARK_LINE_HEIGHT + WATERMARK_VERTICAL_PADDING
     }
 
     unsafe fn recreate_windows(
@@ -346,7 +345,7 @@ mod x11_overlay {
         };
         let property = xlib::XInternAtom(display, name.as_ptr(), xlib::False);
         let cardinal = xlib::XInternAtom(display, cardinal_name.as_ptr(), xlib::False);
-        let opacity: c_ulong = 0xC000_0000;
+        let opacity: c_ulong = 0x8CCC_CCCC;
         xlib::XChangeProperty(
             display,
             window,

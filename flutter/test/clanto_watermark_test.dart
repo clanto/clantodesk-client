@@ -9,9 +9,30 @@ void main() {
           controllerId: '123 456 789',
           accountUser: 'm.rossi',
           osUser: r'ACME\mrossi',
-          controllerPcName: 'PC-UFFICIO',
+          sessionCode: 'S-0123-4567',
         ),
-        r'ID 123 456 789 · m.rossi · ACME\mrossi su PC-UFFICIO',
+        'm.rossi · ID 123 456 789 · S-0123-4567',
+      );
+    });
+
+    test('removes Windows and email domains from the OS user fallback', () {
+      expect(
+        buildClantoControllerIdentityLine(
+          controllerId: '42',
+          accountUser: ' ',
+          osUser: r'BURBACCHIOTTO\Antonio',
+          sessionCode: 'S-AAAA-BBBB',
+        ),
+        'Antonio · ID 42 · S-AAAA-BBBB',
+      );
+      expect(
+        buildClantoControllerIdentityLine(
+          controllerId: '',
+          accountUser: '',
+          osUser: 'utente@dominio',
+          sessionCode: '',
+        ),
+        'utente',
       );
     });
 
@@ -21,42 +42,29 @@ void main() {
           controllerId: '42',
           accountUser: ' ',
           osUser: '',
-          controllerPcName: 'PC-UFFICIO',
+          sessionCode: ' ',
         ),
-        'ID 42 · PC-UFFICIO',
-      );
-      expect(
-        buildClantoControllerIdentityLine(
-          controllerId: '',
-          accountUser: 'account',
-          osUser: 'alice',
-          controllerPcName: '',
-        ),
-        'account · alice',
+        'ID 42',
       );
     });
 
-    test('formats the host, Italian local date, and session code line', () {
+    test('formats the host and Italian local date line', () {
       expect(
         buildClantoHostSessionLine(
           hostName: 'HOST-01',
-          hostUser: 'mario',
-          sessionCode: 'S-0123-4567',
           now: DateTime(2026, 10, 19, 7, 5),
         ),
-        '→ HOST-01 (mario) · 19/10/2026 07:05 · S-0123-4567',
+        '→ HOST-01 · 19/10/2026 07:05',
       );
     });
 
-    test('omits missing host identity parts', () {
+    test('omits an empty host without leaving an arrow or separator', () {
       expect(
         buildClantoHostSessionLine(
           hostName: '',
-          hostUser: 'mario',
-          sessionCode: '',
           now: DateTime(2026, 1, 2, 3, 4),
         ),
-        '→ mario · 02/01/2026 03:04',
+        '02/01/2026 03:04',
       );
     });
 
