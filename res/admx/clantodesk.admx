@@ -66,6 +66,9 @@
     <policy name="IdWhitelist" class="Machine" displayName="$(string.IdWhitelist)" explainText="$(string.IdWhitelist_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.IdWhitelist)">
       <parentCategory ref="InboundSecurity" />
       <supportedOn ref="ClantoDesk150" /><elements><text id="IdWhitelistValue" valueName="id-whitelist" /></elements></policy>
+    <policy name="IdPermissions" class="Machine" displayName="$(string.IdPermissions)" explainText="$(string.IdPermissions_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.IdPermissions)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="IdPermissionsValue" valueName="clanto-id-permissions" /></elements></policy>
     <policy name="TemporaryPasswordRotation" class="Machine" displayName="$(string.TemporaryPasswordRotation)" explainText="$(string.TemporaryPasswordRotation_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.TemporaryPasswordRotation)">
       <parentCategory ref="InboundSecurity" />
       <supportedOn ref="ClantoDesk150" /><elements><decimal id="TemporaryPasswordRotationValue" valueName="clanto-temp-password-rotate-minutes" minValue="0" maxValue="1440" /></elements></policy>

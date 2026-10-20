@@ -861,5 +861,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("CEF", ""),
         ("TOTP", ""),
         ("IP", ""),
+        ("Authorized IDs", ""),
+        ("ID or pattern", ""),
+        ("Profile", ""),
+        ("Support", ""),
+        ("ID profile", ""),
+        ("Duplicate ID or pattern", ""),
+        ("ID or pattern is required", ""),
     ].iter().cloned().collect();
 }

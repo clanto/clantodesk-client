@@ -17,6 +17,7 @@ class ClantoSessionRecord {
     required this.peerName,
     required this.ip,
     required this.connectionType,
+    required this.idProfile,
     required this.primaryAuth,
     required this.twoFactor,
     required this.postureResult,
@@ -36,6 +37,7 @@ class ClantoSessionRecord {
   final String peerName;
   final String ip;
   final String connectionType;
+  final String idProfile;
   final String primaryAuth;
   final String twoFactor;
   final String postureResult;
@@ -67,6 +69,7 @@ class ClantoSessionRecord {
       peerName: _string(json['peer_name']),
       ip: _string(json['ip']),
       connectionType: _string(json['connection_type'] ?? json['type']),
+      idProfile: _string(json['id_profile']),
       primaryAuth: _primaryAuth(json['primary_auth']),
       twoFactor: _twoFactor(json['two_factor']),
       postureResult: _string(json['posture_result']),
@@ -212,6 +215,7 @@ String clantoSessionRecordsCsv(
       'Peer name',
       'IP',
       'Connection type',
+      translate('ID profile'),
       'Access method',
       'Posture result',
       'Bypassed rules',
@@ -230,6 +234,7 @@ String clantoSessionRecordsCsv(
           record.peerName,
           record.ip,
           record.connectionType,
+          record.idProfile,
           record.accessMethod(translate),
           record.postureResult,
           record.postureBypasses.join(', '),

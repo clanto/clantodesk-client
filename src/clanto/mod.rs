@@ -12,6 +12,7 @@ pub mod config;
 pub mod file_scan;
 pub mod gpo;
 pub mod host_watermark;
+pub mod id_permissions;
 pub mod keystore;
 pub mod outgoing;
 pub mod posture;

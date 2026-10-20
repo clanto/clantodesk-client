@@ -382,6 +382,11 @@ pub struct Connection {
     recording: bool,
     block_input: bool,
     privacy_mode: bool,
+    camera: bool,
+    terminal_permission: bool,
+    tunnel: bool,
+    remote_printer: bool,
+    id_profile: String,
     control_permissions: Option<ControlPermissions>,
     last_test_delay: Option<Instant>,
     network_delay: u32,
@@ -601,6 +606,17 @@ impl Connection {
             recording: Self::permission(keys::OPTION_ENABLE_RECORD_SESSION, &control_permissions),
             block_input: Self::permission(keys::OPTION_ENABLE_BLOCK_INPUT, &control_permissions),
             privacy_mode: Self::permission(keys::OPTION_ENABLE_PRIVACY_MODE, &control_permissions),
+            camera: Self::permission(keys::OPTION_ENABLE_CAMERA, &control_permissions),
+            terminal_permission: Self::permission(
+                keys::OPTION_ENABLE_TERMINAL,
+                &control_permissions,
+            ),
+            tunnel: Self::permission(keys::OPTION_ENABLE_TUNNEL, &control_permissions),
+            remote_printer: Self::permission(
+                keys::OPTION_ENABLE_REMOTE_PRINTER,
+                &control_permissions,
+            ),
+            id_profile: String::new(),
             control_permissions,
             last_test_delay: None,
             network_delay: 0,
@@ -1162,7 +1178,10 @@ impl Connection {
                     match data {
                         #[cfg(all(target_os = "windows", feature = "flutter"))]
                         ipc::Data::PrinterData(data) => {
-                            if Self::permission(keys::OPTION_ENABLE_REMOTE_PRINTER, &conn.control_permissions) {
+                            if conn.profiled_permission(
+                                keys::OPTION_ENABLE_REMOTE_PRINTER,
+                                conn.remote_printer,
+                            ) {
                                 conn.send_printer_request(data).await;
                             } else {
                                 conn.send_remote_printing_disallowed().await;
@@ -1976,6 +1995,7 @@ impl Connection {
             self.session_key(),
             self.tx_from_authed.clone(),
             self.lr.clone(),
+            self.profiled_permission(keys::OPTION_ENABLE_REMOTE_PRINTER, self.remote_printer),
         ));
         self.session_last_recv_time = SESSIONS
             .lock()
@@ -1990,6 +2010,9 @@ impl Connection {
         }
         if self.conn_audit_two_factor != ConnAuditTwoFactor::None {
             audit["two_factor"] = json!(self.conn_audit_two_factor.as_i64());
+        }
+        if !self.id_profile.is_empty() {
+            audit["id_profile"] = json!(&self.id_profile);
         }
         self.post_conn_audit(audit);
         #[allow(unused_mut)]
@@ -2487,13 +2510,12 @@ impl Connection {
     }
 
     fn handle_port_forward_channel(&mut self, ch: PortForwardChannel) {
+        let tunnel_allowed = self.profiled_permission(keys::OPTION_ENABLE_TUNNEL, self.tunnel);
         let Some(mux) = self.port_forward_mux.as_mut() else {
             log::debug!("port forward channel frame on a non-multiplexed connection");
             return;
         };
-        mux.handle(ch, || {
-            Self::permission(keys::OPTION_ENABLE_TUNNEL, &self.control_permissions)
-        });
+        mux.handle(ch, || tunnel_allowed);
     }
 
     #[inline]
@@ -2793,6 +2815,84 @@ impl Connection {
         Self::is_permission_enabled_locally(enable_prefix_option)
     }
 
+    async fn apply_id_permissions(&mut self) {
+        use crate::clanto::id_permissions::{self, Permission as IdPermission};
+
+        let id_whitelist: Vec<String> = Config::get_option(keys::OPTION_ID_WHITELIST)
+            .split(',')
+            .map(|entry| entry.trim().to_owned())
+            .filter(|entry| !entry.is_empty())
+            .collect();
+        let profile = id_permissions::resolve_profile_logged(
+            &id_whitelist,
+            &Config::get_option(id_permissions::OPTION_ID_PERMISSIONS),
+            &self.lr.my_id,
+        );
+
+        self.id_profile.clear();
+        self.restore_global_permissions();
+        if let Some(profile) = profile {
+            self.id_profile = profile.profile.as_str().to_owned();
+            self.keyboard &= profile.allows(IdPermission::Keyboard);
+            self.clipboard &= profile.allows(IdPermission::Clipboard);
+            self.file &= profile.allows(IdPermission::File);
+            self.audio &= profile.allows(IdPermission::Audio);
+            self.camera &= profile.allows(IdPermission::Camera);
+            self.terminal_permission &= profile.allows(IdPermission::Terminal);
+            self.tunnel &= profile.allows(IdPermission::Tunnel);
+            self.restart &= profile.allows(IdPermission::Restart);
+            self.recording &= profile.allows(IdPermission::Recording);
+            self.block_input &= profile.allows(IdPermission::BlockInput);
+            self.privacy_mode &= profile.allows(IdPermission::PrivacyMode);
+            self.remote_printer &= profile.allows(IdPermission::RemotePrinter);
+        }
+
+        for (permission, enabled) in [
+            (Permission::Keyboard, self.keyboard),
+            (Permission::Clipboard, self.clipboard),
+            (Permission::File, self.file),
+            (Permission::Audio, self.audio),
+            (Permission::Restart, self.restart),
+            (Permission::Recording, self.recording),
+            (Permission::BlockInput, self.block_input),
+            (Permission::PrivacyMode, self.privacy_mode),
+        ] {
+            self.send_permission(permission, enabled).await;
+        }
+    }
+
+    fn restore_global_permissions(&mut self) {
+        self.keyboard = Self::permission(keys::OPTION_ENABLE_KEYBOARD, &self.control_permissions);
+        self.clipboard = Self::permission(keys::OPTION_ENABLE_CLIPBOARD, &self.control_permissions);
+        self.file = Self::permission(keys::OPTION_ENABLE_FILE_TRANSFER, &self.control_permissions);
+        self.audio = Self::permission(keys::OPTION_ENABLE_AUDIO, &self.control_permissions);
+        self.camera = Self::permission(keys::OPTION_ENABLE_CAMERA, &self.control_permissions);
+        self.terminal_permission =
+            Self::permission(keys::OPTION_ENABLE_TERMINAL, &self.control_permissions);
+        self.tunnel = Self::permission(keys::OPTION_ENABLE_TUNNEL, &self.control_permissions);
+        self.restart = Self::permission(
+            keys::OPTION_ENABLE_REMOTE_RESTART,
+            &self.control_permissions,
+        );
+        self.recording = Self::permission(
+            keys::OPTION_ENABLE_RECORD_SESSION,
+            &self.control_permissions,
+        );
+        self.block_input =
+            Self::permission(keys::OPTION_ENABLE_BLOCK_INPUT, &self.control_permissions);
+        self.privacy_mode =
+            Self::permission(keys::OPTION_ENABLE_PRIVACY_MODE, &self.control_permissions);
+        self.remote_printer = Self::permission(
+            keys::OPTION_ENABLE_REMOTE_PRINTER,
+            &self.control_permissions,
+        );
+    }
+
+    fn profiled_permission(&self, option: &str, profiled: bool) -> bool {
+        Self::permission(option, &self.control_permissions)
+            && (self.id_profile.is_empty() || profiled)
+    }
+
     fn update_codec_on_login(&self) {
         use scrap::codec::{Encoder, EncodingUpdate::*};
         if let Some(o) = self.lr.clone().option.as_ref() {
@@ -3052,6 +3152,7 @@ impl Connection {
             if !self.check_id_whitelist().await {
                 return false;
             }
+            self.apply_id_permissions().await;
             if Config::get_option(crate::clanto::posture::OPT_REQUIRE_PROTECTED_DEVICE) == "Y" {
                 if let Err(reason) = self.verify_clanto_posture(&lr).await {
                     self.post_alarm_audit(
@@ -3066,10 +3167,7 @@ impl Connection {
             }
             match lr.union {
                 Some(login_request::Union::FileTransfer(ft)) => {
-                    if !Self::permission(
-                        keys::OPTION_ENABLE_FILE_TRANSFER,
-                        &self.control_permissions,
-                    ) {
+                    if !self.profiled_permission(keys::OPTION_ENABLE_FILE_TRANSFER, self.file) {
                         self.send_login_error("No permission of file transfer")
                             .await;
                         self.remember_close_reason("No permission of file transfer");
@@ -3079,7 +3177,7 @@ impl Connection {
                     self.file_transfer = Some((ft.dir, ft.show_hidden));
                 }
                 Some(login_request::Union::ViewCamera(_vc)) => {
-                    if !Self::permission(keys::OPTION_ENABLE_CAMERA, &self.control_permissions) {
+                    if !self.profiled_permission(keys::OPTION_ENABLE_CAMERA, self.camera) {
                         self.send_login_error("No permission of viewing camera")
                             .await;
                         self.remember_close_reason("No permission of viewing camera");
@@ -3089,7 +3187,9 @@ impl Connection {
                     self.view_camera = true;
                 }
                 Some(login_request::Union::Terminal(terminal)) => {
-                    if !Self::permission(keys::OPTION_ENABLE_TERMINAL, &self.control_permissions) {
+                    if !self
+                        .profiled_permission(keys::OPTION_ENABLE_TERMINAL, self.terminal_permission)
+                    {
                         self.send_login_error("No permission of terminal").await;
                         self.remember_close_reason("No permission of terminal");
                         sleep(1.).await;
@@ -3112,7 +3212,7 @@ impl Connection {
                     self.terminal_service_id = terminal.service_id;
                 }
                 Some(login_request::Union::PortForward(mut pf)) => {
-                    if !Self::permission(keys::OPTION_ENABLE_TUNNEL, &self.control_permissions) {
+                    if !self.profiled_permission(keys::OPTION_ENABLE_TUNNEL, self.tunnel) {
                         self.send_login_error("No permission of IP tunneling").await;
                         self.remember_close_reason("No permission of IP tunneling");
                         sleep(1.).await;
@@ -3335,6 +3435,7 @@ impl Connection {
                             if !self.check_id_whitelist().await {
                                 return false;
                             }
+                            self.apply_id_permissions().await;
                             self.from_switch = true;
                             self.set_conn_audit_primary_auth(ConnAuditPrimaryAuth::SwitchSides);
                             if !self.send_logon_response_and_keep_alive().await {
@@ -3679,7 +3780,12 @@ impl Connection {
                     let mut handle_fa = self.file_transfer.is_some();
                     if !handle_fa {
                         if let Some(file_action::Union::Send(s)) = fa.union.as_ref() {
-                            if JobType::from_proto(s.file_type) == JobType::Printer {
+                            if JobType::from_proto(s.file_type) == JobType::Printer
+                                && self.profiled_permission(
+                                    keys::OPTION_ENABLE_REMOTE_PRINTER,
+                                    self.remote_printer,
+                                )
+                            {
                                 handle_fa = true;
                             }
                         }
@@ -3881,6 +3987,12 @@ impl Connection {
                                         }
                                     }
                                     JobType::Printer => {
+                                        if !self.profiled_permission(
+                                            keys::OPTION_ENABLE_REMOTE_PRINTER,
+                                            self.remote_printer,
+                                        ) {
+                                            return true;
+                                        }
                                         if let Some((_, _, data)) = self
                                             .printer_data
                                             .iter()
@@ -7119,10 +7231,12 @@ mod raii {
             session_key: SessionKey,
             sender: mpsc::UnboundedSender<Data>,
             lr: LoginRequest,
+            remote_printer: bool,
         ) -> Self {
             let printer = conn_type == crate::server::AuthConnType::Remote
                 && crate::is_support_remote_print(&lr.version)
-                && lr.my_platform == hbb_common::whoami::Platform::Windows.to_string();
+                && lr.my_platform == hbb_common::whoami::Platform::Windows.to_string()
+                && remote_printer;
             AUTHED_CONNS.lock().unwrap().push(AuthedConn {
                 conn_id,
                 conn_type,

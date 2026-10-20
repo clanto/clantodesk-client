@@ -39,6 +39,7 @@ struct SessionRecord {
     pc_name: String,
     ip: String,
     connection_type: String,
+    id_profile: String,
     primary_auth: Option<i64>,
     two_factor: Option<i64>,
     posture_result: String,
@@ -214,6 +215,7 @@ fn apply_connection(registry: &mut Registry, value: &Value) -> Option<SessionRec
         let mut metadata_changed = false;
         for (key, target) in [
             ("session_code", &mut record.session_code),
+            ("id_profile", &mut record.id_profile),
             ("account_user", &mut record.account_user),
             ("os_user", &mut record.os_user),
             ("pc_name", &mut record.pc_name),
@@ -581,10 +583,11 @@ mod tests {
         apply_connection(&mut registry, &new);
         let active = apply_connection(
             &mut registry,
-            &json!({"conn_id": 7, "peer": ["peer", "Peer"], "type": 0, "primary_auth": 2, "session_code": "S-0123-4567"}),
+            &json!({"conn_id": 7, "peer": ["peer", "Peer"], "type": 0, "primary_auth": 2, "session_code": "S-0123-4567", "id_profile": "support"}),
         )
         .unwrap();
         assert_eq!(active.session_code, "S-0123-4567");
+        assert_eq!(active.id_profile, "support");
         assert!(!active.closed);
         assert!(registry.active_by_conn.contains_key(&7));
         let record = apply_connection(

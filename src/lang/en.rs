@@ -409,5 +409,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("RFC 5424", "RFC 5424"),
         ("CEF", "CEF"),
         ("TOTP", "TOTP"),
+        ("Authorized IDs", "Authorized IDs"),
+        ("ID or pattern", "ID or pattern"),
+        ("Profile", "Profile"),
+        ("Support", "Support"),
+        ("ID profile", "ID profile"),
+        ("Duplicate ID or pattern", "Duplicate ID or pattern"),
+        ("ID or pattern is required", "ID or pattern is required"),
     ].iter().cloned().collect();
 }

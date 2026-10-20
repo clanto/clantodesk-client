@@ -6,12 +6,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
-import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/utils/http_service.dart' as http;
 import 'package:settings_ui/settings_ui.dart';
 
 import 'file_transfer_security.dart';
+import 'id_permissions.dart';
 import 'protected_device.dart';
 import 'watermark.dart';
 
@@ -195,10 +195,14 @@ class _ClantoInboundSecuritySettingState
   bool _hostWatermark =
       bind.mainGetOptionSync(key: kOptClantoHostWatermark) == 'Y';
 
-  void _changeIdWhitelist() {
-    changeIdWhiteList(callback: () {
-      if (mounted) setState(() => _hasIdWhitelist = idWhitelistNotEmpty());
-    });
+  Future<void> _changeIdWhitelist() async {
+    final saved = await showClantoIdPermissionsDialog(
+      context,
+      enabled: widget.enabled,
+    );
+    if (saved && mounted) {
+      setState(() => _hasIdWhitelist = idWhitelistNotEmpty());
+    }
   }
 
   Future<void> _setRequireControllerWatermark(bool value) async {
@@ -229,14 +233,21 @@ class _ClantoInboundSecuritySettingState
       Text(translate('Incoming security'),
           style: Theme.of(context).textTheme.titleMedium),
       if (isMobile)
-        CheckboxListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-          value: _hasIdWhitelist,
-          onChanged: widget.enabled && !isOptionFixed(kOptionIdWhitelist)
-              ? (_) => _changeIdWhitelist()
-              : null,
-          title: Text(translate('Use ID whitelisting')),
-          subtitle: Text(translate('id_whitelist_tip')),
+        InkWell(
+          onTap: _changeIdWhitelist,
+          child: IgnorePointer(
+            child: CheckboxListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+              value: _hasIdWhitelist,
+              onChanged: widget.enabled &&
+                      !isOptionFixed(kOptionIdWhitelist) &&
+                      !isOptionFixed(kOptClantoIdPermissions)
+                  ? (_) {}
+                  : null,
+              title: Text(translate('Use ID whitelisting')),
+              subtitle: Text(translate('id_whitelist_tip')),
+            ),
+          ),
         ),
       ClantoProtectedDeviceSetting(
         enabled: widget.enabled,

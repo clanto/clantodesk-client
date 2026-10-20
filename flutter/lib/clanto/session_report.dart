@@ -194,6 +194,16 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
     }
   }
 
+  String _idProfileLabel(String profile) {
+    return switch (profile) {
+      'view' => translate('View only'),
+      'support' => translate('Support'),
+      'full' => translate('Full control'),
+      'custom' => translate('Custom'),
+      _ => profile.isEmpty ? '-' : profile,
+    };
+  }
+
   String _outcomeLabel(ClantoSessionRecord record) {
     switch (record.outcome) {
       case ClantoSessionOutcome.successful:
@@ -247,6 +257,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
             _detail('Peer', record.peer),
             _detail('IP', record.ip),
             _detail('Connection type', record.connectionType),
+            _detail('ID profile', _idProfileLabel(record.idProfile)),
             _detail('Access method', record.accessMethod(translate)),
             _detail('Posture result', record.postureResult),
             if (record.postureBypasses.isNotEmpty)
@@ -384,6 +395,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
           DataColumn(label: Text(translate('Outcome'))),
           DataColumn(label: Text(translate('Device'))),
           DataColumn(label: Text(translate('Type'))),
+          DataColumn(label: Text(translate('ID profile'))),
           DataColumn(label: Text(translate('Access'))),
           DataColumn(label: Text(translate('Duration'))),
           DataColumn(label: Text(translate('Files'))),
@@ -404,6 +416,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
                     DataCell(Text(record.connectionType.isEmpty
                         ? '-'
                         : record.connectionType)),
+                    DataCell(Text(_idProfileLabel(record.idProfile))),
                     DataCell(Text(record.accessMethod(translate))),
                     DataCell(Text(record.closed
                         ? _duration(record.durationSecs)
@@ -435,6 +448,8 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
                         Text(_date(record.startedAt)),
                         Text(
                             '${record.connectionType.isEmpty ? '-' : record.connectionType} · ${record.accessMethod(translate)}'),
+                        Text(
+                            '${translate('ID profile')}: ${_idProfileLabel(record.idProfile)}'),
                         Row(children: [
                           ..._permissionIcons(record),
                           const Icon(Icons.folder, size: 17),

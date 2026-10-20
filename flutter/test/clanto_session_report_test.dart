@@ -19,6 +19,7 @@ ClantoSessionRecord record({
     peerName: peerName,
     ip: ip,
     connectionType: connectionType,
+    idProfile: 'support',
     primaryAuth: '',
     twoFactor: '',
     postureResult: '',
@@ -91,6 +92,12 @@ void main() {
     expect(clantoFilterSessionRecords(records, query: 'cccc-dddd'), [records[1]]);
   });
 
+  test('parses the authorized ID profile', () {
+    final parsed = clantoParseSessionRecords('[{"id_profile":"custom"}]');
+
+    expect(parsed.single.idProfile, 'custom');
+  });
+
   test('exports only filtered session records as CSV', () {
     final filtered = clantoFilterSessionRecords(
       records,
@@ -104,6 +111,7 @@ void main() {
 
     expect(csv, contains('"300-400"'));
     expect(csv, contains('"S-CCCC-DDDD"'));
+    expect(csv, contains('"support"'));
     expect(csv, isNot(contains('"100-200"')));
     expect(csv, isNot(contains('"500-600"')));
     expect(csv.split('\r\n').where((line) => line.isNotEmpty), hasLength(2));

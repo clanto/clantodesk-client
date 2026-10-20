@@ -9,6 +9,7 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/clanto/about_links.dart';
 import 'package:flutter_hbb/clanto/audit_settings.dart';
 import 'package:flutter_hbb/clanto/file_transfer_security.dart';
+import 'package:flutter_hbb/clanto/id_permissions.dart';
 import 'package:flutter_hbb/clanto/privacy_prompt.dart';
 import 'package:flutter_hbb/clanto/inbound_security.dart';
 import 'package:flutter_hbb/clanto/outgoing_security.dart';
@@ -1998,10 +1999,13 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
     }
 
     onChanged(bool? checked) async {
-      changeIdWhiteList(callback: update);
+      if (await showClantoIdPermissionsDialog(context, enabled: enabled)) {
+        update();
+      }
     }
 
-    final isOptFixed = isOptionFixed(kOptionIdWhitelist);
+    final isOptFixed = isOptionFixed(kOptionIdWhitelist) ||
+        isOptionFixed(kOptClantoIdPermissions);
     return GestureDetector(
       child: Tooltip(
         message: translate('id_whitelist_tip'),
@@ -2028,11 +2032,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
               ],
             )),
       ),
-      onTap: enabled
-          ? () {
-              onChanged(!hasIdWhitelist.value);
-            }
-          : null,
+      onTap: () => onChanged(!hasIdWhitelist.value),
     ).marginOnly(left: _kCheckBoxLeftMargin);
   }
 

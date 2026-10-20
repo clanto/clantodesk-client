@@ -287,6 +287,22 @@ perché `defaultOptionYes` è esplicito (vedi sopra): con `''` non si potrebbero
 L'opzione host `clanto-temp-password-rotate-minutes` ruota la password temporanea dopo 1-1440
 minuti; assente o `0` lascia invariato il comportamento senza rotazione.
 
+## Permessi per ID autorizzato
+
+`id-whitelist` continua a stabilire quali ID possono entrare e accetta i caratteri jolly `*` e
+`?`. L'opzione host `clanto-id-permissions` associa a ciascuna voce dell'elenco un oggetto JSON con
+un'etichetta facoltativa `name`, un `profile` (`view`, `support`, `full` o `custom`) e, soltanto per
+`custom`, le caselle abilitate in `perms`. Una voce senza configurazione mantiene `full`, per
+compatibilità con le installazioni esistenti; un JSON non valido applica invece `view` a tutti gli
+ID dell'elenco. Se l'elenco è vuoto, nessun profilo viene applicato.
+
+`view` consente soltanto la visione; `support` abilita tastiera, appunti, file, audio, riavvio,
+blocco input, modalità privacy e stampante remota; `full` abilita tutti i dodici permessi. In
+`custom` ogni permesso assente vale spento. In caso di più corrispondenze prevale l'ID esatto,
+anche nella forma `id@server`, poi il pattern con più caratteri non jolly e infine `*`. Il profilo
+viene sempre combinato in AND con i permessi globali dell'host e non può ampliarli; durante una
+sessione l'operatore presente può ancora modificarne i permessi dalla finestra di connessione.
+
 ## Controllo dei file ricevuti dall'host
 
 Il controllo si applica sul lato host ai file ricevuti dal controller, compresi quelli contenuti
@@ -418,9 +434,10 @@ in Intune si importa lo stesso ADMX. I criteri vengono letti da
 riavviare il servizio ClantoDesk. Il profilo `restrittivo` dello script RMM scrive le stesse
 chiavi in `HKLM\SOFTWARE\Policies\Clanto\ClantoDesk` e riavvia il servizio solo se cambiano,
 quindi blocca le impostazioni anche fuori dominio; su una chiave gestita dal dominio prevale il
-GPO, perciò usare un solo canale. L'elenco `id-whitelist` e le cinque opzioni del controllo file
-sono gestibili via GPO. Nel profilo RMM `restrittivo`, impostare `clanto-file-scan=block` e bloccare
-le estensioni eseguibili e di script indicate nella sezione precedente. Le chiavi dei server
+GPO, perciò usare un solo canale. L'elenco `id-whitelist`, i relativi profili
+`clanto-id-permissions` e le cinque opzioni del controllo file sono gestibili via GPO. Nel profilo
+RMM `restrittivo`, impostare `clanto-file-scan=block` e bloccare le estensioni eseguibili e di script
+indicate nella sezione precedente. Le chiavi dei server
 (`custom-rendezvous-server`, `key`, `api-server`, `relay-server`) non sono mai gestibili via GPO.
 
 ## Accesso solo da dispositivi protetti
