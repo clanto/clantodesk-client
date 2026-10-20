@@ -283,10 +283,24 @@ implementazione se ce n'è più di una). Se la lista è vuota il popup è solo i
 
 ## Predefiniti del PC controllato
 
-`apply_host_defaults()` in `src/clanto/config.rs` mette in `DEFAULT_SETTINGS` (modificabili
-dalle impostazioni, un valore già salvato vince): disconnessione per inattività attiva con
-timeout 10 **minuti** (`get_auto_disconenct_timer`, `connection.rs`), scoperta LAN, tunnel TCP,
-riavvio remoto e terminale spenti. Per le chiavi `enable-*` la UI scrive `'Y'` per «acceso» solo
+`apply_host_defaults()` in `src/clanto/config.rs` mette in `HOST_DEFAULTS` → `DEFAULT_SETTINGS`
+(modificabili dalle impostazioni, un valore già salvato vince; mai in `OVERWRITE_SETTINGS`). Sono
+dieci:
+
+| Chiave | Default |
+| --- | --- |
+| `allow-auto-disconnect` | `Y` |
+| `auto-disconnect-timeout` | `10` (**minuti**, `get_auto_disconenct_timer` in `connection.rs`) |
+| `enable-lan-discovery` | `N` |
+| `enable-tunnel` | `N` |
+| `enable-remote-restart` | `N` |
+| `enable-terminal` | `N` |
+| `clanto-require-protected-device` | `N` |
+| `clanto-posture-bypass` | vuoto |
+| `clanto-session-log-days` | `180` |
+| `clanto-host-watermark` | `N` |
+
+Per le chiavi `enable-*` la UI scrive `'Y'` per «acceso» solo
 perché `defaultOptionYes` è esplicito (vedi sopra): con `''` non si potrebbero riaccendere.
 L'opzione host `clanto-temp-password-rotate-minutes` ruota la password temporanea dopo 1-1440
 minuti; assente o `0` lascia invariato il comportamento senza rotazione.
@@ -435,14 +449,19 @@ I template sono in `res/admx/clantodesk.admx`, con le risorse `en-US` e `it-IT`.
 Copiarli nella cartella locale `PolicyDefinitions` oppure nel Central Store del dominio;
 in Intune si importa lo stesso ADMX. I criteri vengono letti da
 `HKLM\Software\Policies\Clanto\ClantoDesk` una sola volta all'avvio: dopo `gpupdate`,
-riavviare il servizio ClantoDesk. Il profilo `restrittivo` dello script RMM scrive le stesse
-chiavi in `HKLM\SOFTWARE\Policies\Clanto\ClantoDesk` e riavvia il servizio solo se cambiano,
-quindi blocca le impostazioni anche fuori dominio; su una chiave gestita dal dominio prevale il
-GPO, perciò usare un solo canale. L'elenco `id-whitelist`, i relativi profili
-`clanto-id-permissions` e le cinque opzioni del controllo file sono gestibili via GPO. Nel profilo
-RMM `restrittivo`, impostare `clanto-file-scan=block` e bloccare le estensioni eseguibili e di script
-indicate nella sezione precedente. Le chiavi dei server
+riavviare il servizio ClantoDesk.
+
+**Solo Windows.** `gpo::apply()` in `src/clanto/gpo.rs` è `#[cfg(windows)]`: legge il registro e
+copia i valori in `OVERWRITE_SETTINGS`. Sulle altre piattaforme è una funzione vuota, quindi un
+criterio non ha effetto e le opzioni si impostano da interfaccia o con
+`clantodesk --option <chiave> <valore>`.
+
+L'elenco `id-whitelist`, i relativi profili `clanto-id-permissions` e le cinque opzioni del
+controllo file sono gestibili via GPO. Per una policy restrittiva impostare `clanto-file-scan=block`
+e bloccare le estensioni eseguibili e di script con `clanto-file-blocked-ext`. Le chiavi dei server
 (`custom-rendezvous-server`, `key`, `api-server`, `relay-server`) non sono mai gestibili via GPO.
+L'elenco completo delle chiavi gestibili è `GPO_KEYS`; la tabella con valori e predefiniti è nel
+[README](README.md#opzioni-di-configurazione).
 
 ## Accesso solo da dispositivi protetti
 
@@ -477,7 +496,7 @@ non viene eseguita alcuna richiesta.
 - **Bypass.** La PHP restituisce le regole fallite con `bypassable`. L'opzione host
   `clanto-posture-bypass` (id separati da virgola) le ignora su quel PC; `decide()` non lascia mai
   passare un id `core:` (firma, coerenza, versione revocata). Ogni accesso entrato con un bypass va
-  nell'audit. Lo script RMM, profilo `restrittivo`, svuota i bypass.
+  nell'audit.
 - **Policy.** Vive sul server, in `posture-policy.json` accanto alla PHP: regole, tabella EOL per
   edizione, gruppi di host, fasce orarie. Si cambia senza rilasciare il client. Una regola malformata
   blocca tutti gli accessi (`core:policy:<id>`): provarla prima di pubblicarla.
@@ -644,14 +663,12 @@ Le garanzie della filigrana host dipendono dalla piattaforma:
   `SYSTEM_ALERT_WINDOW` già presente nel manifest principale. Il manifest
   ridotto della build solo controller non viene modificato. L'interfaccia
   richiede l'autorizzazione overlay prima di abilitare l'opzione; se la policy
-  viene distribuita via GPO/RMM, l'amministratore deve anche preautorizzare
+  viene impostata senza passare dall'interfaccia, l'amministratore deve anche preautorizzare
   l'app-op overlay Android, altrimenti il sistema non permette di mostrarla.
 
 Il collegamento o la rimozione di un monitor mentre una sessione è già attiva
 viene recepito al successivo ingresso/uscita di sessione (o al riavvio del CM):
 la filigrana non mantiene un ulteriore watcher permanente dei display.
-
-RMM (profilo restrittivo): `clanto-host-watermark=Y`.
 
 ## Password locale delle impostazioni
 

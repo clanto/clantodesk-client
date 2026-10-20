@@ -333,15 +333,14 @@ la relativa chiave li rende indecifrabili.
 L'opzione host `clanto-temp-password-rotate-minutes` ruota la password temporanea
 ogni 1-1440 minuti; assente o `0`, nessuna rotazione.
 
-### Criteri di gruppo e RMM
+### Criteri di gruppo
 
-I template ADMX/ADML (`en-US` e `it-IT`) sono in `res/admx`: si copiano in
-`PolicyDefinitions`, nel Central Store del dominio o si importano in Intune. I
-criteri sono letti da `HKLM\Software\Policies\Clanto\ClantoDesk` **una sola volta
-all'avvio**: dopo `gpupdate` riavviare il servizio. Le chiavi dei server non sono mai
-gestibili via GPO. Il profilo `restrittivo` dello script RMM
-(`clantodesk-impostazioni-sicure.ps1`, distribuito a parte) scrive le stesse chiavi;
-usare un solo canale, perché su una chiave gestita dal dominio prevale il GPO.
+I criteri di gruppo (GPO/ADMX) si applicano **solo su Windows**: sulle altre
+piattaforme `gpo::apply()` non fa nulla. I template ADMX/ADML (`en-US` e `it-IT`) sono
+in `res/admx`: si copiano in `PolicyDefinitions`, nel Central Store del dominio o si
+importano in Intune. I criteri sono letti da
+`HKLM\Software\Policies\Clanto\ClantoDesk` **una sola volta all'avvio**: dopo
+`gpupdate` riavviare il servizio. Le chiavi dei server non sono mai gestibili via GPO.
 
 ### Predefiniti più sicuri
 
@@ -351,6 +350,125 @@ usare un solo canale, perché su una chiave gestita dal dominio prevale il GPO.
   copia/incolla di file non consentito, cursore remoto visibile.
 
 Un valore salvato dall'utente prevale sul predefinito.
+
+### Opzioni di configurazione
+
+Riferimento delle opzioni `clanto-*` e delle opzioni upstream con predefinito
+modificato. Colonne: **Interfaccia** è l'etichetta italiana (sezione delle
+impostazioni desktop tra parentesi), oppure «solo GPO o `--option`» se l'opzione non
+ha controlli; **GPO** è il nome del criterio in `res/admx/clantodesk.admx`, «no» se la
+chiave non è in `GPO_KEYS`. Dove non è indicato un valore predefinito esplicito,
+«assente» significa che l'opzione non è impostata e vale il comportamento descritto.
+
+**Impostarle senza interfaccia.** Su un'installazione, da amministratore:
+`clantodesk --option <chiave> <valore>` scrive il valore, `clantodesk --option <chiave>`
+lo legge. Senza installazione o senza privilegi risponde
+`Installation and administrative privileges required!`; con le impostazioni
+disabilitate risponde `Settings are disabled!`. Su Windows si può usare la GPO
+(solo Windows): una chiave gestita da GPO non è sovrascrivibile dalle altre vie.
+
+#### Ingresso e postura
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-require-protected-device` | `Y`, `N` | `N` | «Accetta connessioni solo da dispositivi aggiornati e protetti» (Sicurezza in ingresso) | `RequireProtectedDevice` |
+| `clanto-posture-bypass` | ID di regole separati da virgola | vuoto | «Regole di postura del dispositivo» → «Ignora questa regola su questo PC», pulsante «Modifica» attivo solo con la postura richiesta (Sicurezza in ingresso) | `PostureBypass` |
+
+#### Filigrane
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-require-controller-watermark` | `Y`, `N` | assente (disattivata) | «Forza la filigrana del controller» (Sicurezza in ingresso) | `RequireControllerWatermark` |
+| `clanto-host-watermark` | `Y`, `N` | `N` | «Mostra la filigrana sull'host» (Sicurezza in ingresso) | `HostWatermark` |
+
+#### File
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-file-scan` | `off`, `warn`, `block` (altro valore = `off`) | `off` | «Scansione antivirus dei file ricevuti» (spunta = `block`) e «Modalità»: «Avvisa e consegna», «Blocca i file non sicuri» (Sicurezza in ingresso) | `FileScan` |
+| `clanto-file-scan-clamd` | percorso socket Unix oppure `host:porta` | vuoto | «Endpoint ClamAV», non mostrato su Windows (Sicurezza in ingresso) | `FileScanClamd` |
+| `clanto-file-scan-max-mb` | intero positivo, MB (GPO: 1-1048576) | `512` | «Dimensione massima file (MB)» (Sicurezza in ingresso) | `FileScanMaxMb` |
+| `clanto-file-direction` | `both`, `to-host`, `from-host`, `none` | `both` | «Direzione trasferimento file» (Sicurezza in ingresso) | `FileDirection` |
+| `clanto-file-blocked-ext` | estensioni separate da virgola, senza punti | vuoto | «Estensioni file bloccate» (Sicurezza in ingresso) | `FileBlockedExt` |
+
+Le opzioni di scansione compaiono nell'interfaccia solo con la scansione attiva.
+
+#### Uscita
+
+Un valore diverso da `N` consente l'operazione.
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-outgoing-file-transfer` | `Y`, `N` | assente (consentito) | «Consenti trasferimento file e copia e incolla di file» (Sicurezza in uscita) | `OutgoingFileTransfer` |
+| `clanto-outgoing-clipboard` | `Y`, `N` | assente (consentito) | «Consenti condivisione appunti» (Sicurezza in uscita) | `OutgoingClipboard` |
+| `clanto-outgoing-tunnel` | `Y`, `N` | assente (consentito) | «Consenti port forwarding e RDP» (Sicurezza in uscita) | `OutgoingTunnel` |
+| `clanto-outgoing-terminal` | `Y`, `N` | assente (consentito) | «Consenti terminale» (Sicurezza in uscita) | `OutgoingTerminal` |
+| `clanto-outgoing-remote-printer` | `Y`, `N` | assente (consentito) | «Consenti stampante remota» (Sicurezza in uscita) | `OutgoingRemotePrinter` |
+| `clanto-outgoing-record` | `Y`, `N` | assente (consentito) | «Consenti registrazione sessione» (Sicurezza in uscita) | `OutgoingRecord` |
+
+#### Permessi per ID
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-id-permissions` | JSON: per voce `name`, `profile` (`view`, `support`, `full`, `custom`) e, per `custom`, `perms` | assente (ogni voce dell'elenco vale `full`; JSON non valido = `view`) | finestra «ID autorizzati» (Sicurezza) | `IdPermissions` |
+
+L'elenco degli ID è l'opzione upstream `id-whitelist` (GPO `IdWhitelist`).
+
+#### Report
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-session-log-days` | intero 0-3650 (`0` disabilita ed elimina i file; valore non numerico = 180) | `180` | solo GPO o `--option` (la sezione «Report sessioni» consulta ed esporta, non imposta la durata) | `SessionLogDays` |
+
+#### Audit e SIEM
+
+L'interfaccia di questi controlli è nella sezione «Audit» delle impostazioni desktop.
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-syslog-enabled` | `Y` (altro valore = spento) | assente (spento) | «Invia gli eventi al SIEM» | `SyslogEnabled` |
+| `clanto-syslog-host` | nome DNS o indirizzo del collettore | vuoto (senza host non si invia nulla) | «Host» | `SyslogHost` |
+| `clanto-syslog-port` | 1-65535 | assente: `514` (UDP/TCP), `6514` (TLS) | «Porta» | `SyslogPort` |
+| `clanto-syslog-protocol` | `udp`, `tcp`, `tls` | `udp` | «Protocollo» | `SyslogProtocol` |
+| `clanto-syslog-facility` | 0-23 | `16` (`local0`) | «Facility» | `SyslogFacility` |
+| `clanto-syslog-tls-ca` | percorso di un file PEM | vuoto (con TLS l'invio non parte) | «Percorso del certificato CA», solo con protocollo TLS | `SyslogTlsCa` |
+| `clanto-syslog-format` | `rfc5424`, `cef` | `rfc5424` | «Formato» | `SyslogFormat` |
+| `clanto-eventlog-enabled` | `Y` (altro valore = spento) | assente (spento) | «Scrivi gli eventi di audit nel registro eventi di Windows», solo su Windows | `EventLogEnabled` |
+
+#### Password temporanea
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-temp-password-rotate-minutes` | intero 1-1440; `0` o vuoto = nessuna rotazione; altro valore = rotazione disattivata con avviso nel log | assente (nessuna rotazione) | solo GPO o `--option` | `TemporaryPasswordRotation` |
+
+#### Interfaccia
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-privacy-prompt` | `Y`, `N` (`N` = mai il popup) | assente (popup attivo) | «Chiedi di attivare la modalità privacy all'inizio di ogni sessione» (Altre opzioni predefinite, desktop e mobile) | `PrivacyPrompt` |
+
+#### Default dell'host
+
+Valori applicati da `apply_host_defaults()`: un valore salvato dall'utente prevale. Le
+prime sei sono opzioni upstream il cui **default è cambiato** nel fork. Le ultime
+quattro sono descritte nelle tabelle delle rispettive aree.
+
+| Chiave | Valori | Default ClantoDesk | Default upstream | Interfaccia | GPO |
+| --- | --- | --- | --- | --- | --- |
+| `allow-auto-disconnect` | `Y`, `N` | `Y` | `N` (solo `Y` attiva) | «Chiudi automaticamente sessioni in entrata per inattività utente» (Sicurezza) | `AllowAutoDisconnect` |
+| `auto-disconnect-timeout` | minuti (GPO: 1-65535) | `10` | assente, che in `connection.rs` vale 10 minuti: effetto invariato | «Timeout in minuti» (Sicurezza) | `AutoDisconnectTimeout` |
+| `enable-lan-discovery` | `Y`, `N` | `N` | assente (abilitato) | «Non effettuare rilevamento LAN», casella invertita (Sicurezza) | `EnableLanDiscovery` |
+| `enable-tunnel` | `Y`, `N` | `N` | assente (abilitato) | «Abilita tunnel TCP» (Permessi) | `EnableTunnel` |
+| `enable-remote-restart` | `Y`, `N` | `N` | assente (abilitato) | «Abilita riavvio da remoto» (Permessi) | `EnableRemoteRestart` |
+| `enable-terminal` | `Y`, `N` | `N` | assente (abilitato) | «Abilita terminale» (Permessi) | `EnableTerminal` |
+| `clanto-require-protected-device` | `Y`, `N` | `N` | — | vedi Ingresso e postura | `RequireProtectedDevice` |
+| `clanto-posture-bypass` | ID separati da virgola | vuoto | — | vedi Ingresso e postura | `PostureBypass` |
+| `clanto-session-log-days` | 0-3650 | `180` | — | vedi Report | `SessionLogDays` |
+| `clanto-host-watermark` | `Y`, `N` | `N` | — | vedi Filigrane | `HostWatermark` |
+
+Le opzioni `clanto-local-password`, `clanto-local-password-scope` e
+`clanto-skip-privacy-prompt` (per singolo dispositivo) si impostano solo
+dall'interfaccia e non sono gestibili via GPO.
 
 ### Requisiti di rete per le funzioni `clanto.it`
 
