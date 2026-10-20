@@ -47,7 +47,10 @@ include, tra le altre, queste personalizzazioni:
   RustDesk;
 - aggiornamenti applicativi tramite il servizio Clanto senza inviare il
   fingerprint hardware stabile del dispositivo;
-- audit aggiuntivo verso syslog RFC 5424, via UDP o TCP, e Windows Event Log;
+- funzioni di sicurezza e amministrazione aggiuntive: accesso solo da
+  dispositivi protetti, filigrane, controllo dei file ricevuti, permessi per ID,
+  report sessioni, audit verso SIEM e criteri di gruppo (vedi
+  [Sicurezza e amministrazione](#sicurezza-e-amministrazione));
 - trasferimento file mobile tramite picker di sistema, scoped storage e
   MediaStore su Android, ed esportazione documenti tramite app File su iOS;
 - informativa e consenso espliciti prima dell'attivazione del servizio Android
@@ -215,17 +218,147 @@ I principali valori iniettati durante la compilazione sono:
 
 Non inserire secret, chiavi private o credenziali direttamente nel repository.
 
-## Audit
+## Sicurezza e amministrazione
 
-Gli eventi di connessione e trasferimento file possono essere duplicati verso
-destinazioni amministrative indipendenti dall'API server:
+Le opzioni descritte qui riguardano soprattutto il PC **controllato** (host) e si
+trovano nelle impostazioni di ClantoDesk. Il riferimento completo, con chiavi,
+valori e limiti noti, è in [CLANTO.md](CLANTO.md).
 
-- syslog RFC 5424 su UDP o TCP;
+### Sicurezza in ingresso
+
+Con «Accetta connessioni solo da dispositivi aggiornati e protetti» (predefinito:
+spento) l'host invia la postura dichiarata dal controller a
+`https://clanto.it/api/clantodesk-posture.php` e rifiuta l'accesso se la risposta
+non è `ok`. La verifica è **fail-closed**: API irraggiungibile, timeout di 5
+secondi o risposta non valida valgono rifiuto.
+
+- Le regole sono definite sul server e si modificano senza rilasciare il client.
+- «Ignora questa regola su questo PC» aggira una singola regola su un singolo PC;
+  ogni accesso entrato con un bypass viene registrato nell'audit.
+- Con l'opzione attiva l'accesso diretto via IP è di fatto escluso.
+- È una misura contro i dispositivi trascurati, non contro chi ricompila il client.
+
+### Filigrane
+
+- **«Forza la filigrana del controller»**: l'host chiede al controller una filigrana
+  diagonale con nome, ID, codice sessione, host e data. Con questa opzione l'host
+  accetta solo il client ClantoDesk ufficiale, verificato da `clanto.it`, e disattiva
+  il permesso di registrazione della sessione.
+- **«Mostra la filigrana sull'host»**: una barra su ogni schermo del PC controllato con
+  tecnico, ID, codice sessione e ora di inizio.
+
+Limite residuo: resta possibile modificare un binario ufficiale conservandone la
+chiave incorporata. La filigrana è un deterrente, non una protezione tecnica
+contro la modifica del binario o contro acquisizioni con software o dispositivi
+esterni. Le garanzie della barra sull'host variano per piattaforma (su Linux X11 può
+comparire nell'immagine trasmessa; su Wayland il compositor può ignorarne
+posizione e livello).
+
+### Controllo dei file ricevuti
+
+L'host può esaminare i file ricevuti dal controller, comprese le cartelle, con tre
+modalità: scansione disattivata (predefinita), «Avvisa e consegna» e «Blocca i file
+non sicuri». Nel blocco, file con malware e file non scansionabili vengono messi in
+quarantena e il controller riceve un errore.
+
+- **Windows:** AMSI, tramite qualunque antimalware registrato come provider.
+- **macOS e Linux:** demone ClamAV `clamd`, via socket Unix o `host:porta`.
+- **Android, iOS o motore non disponibile:** il file risulta non scansionabile.
+- «Direzione trasferimento file» limita i trasferimenti a entrambe le direzioni, solo
+  verso l'host, solo dall'host o nessuno; «Estensioni file bloccate» rifiuta i file in
+  ingresso con le estensioni indicate.
+
+Archivi protetti da password e contenuti non ispezionabili dal motore non sono
+riconosciuti: per non consegnare file non verificati usare la modalità di blocco.
+
+### Sicurezza in uscita
+
+Le opzioni «Sicurezza in uscita» regolano cosa può fare **questo PC** quando
+controlla altri dispositivi: trasferimento file e copia/incolla di file, appunti,
+port forwarding e RDP, terminale, stampante remota e registrazione. Valgono solo
+per ClantoDesk su questo PC e non impediscono di usare un altro programma.
+
+### Permessi per ID autorizzato
+
+Insieme all'elenco degli ID autorizzati, ogni ID o pattern (`*`, `?`) può avere un
+profilo:
+
+| Profilo | Effetto |
+| --- | --- |
+| Sola visualizzazione | Solo visione |
+| Assistenza | Tastiera, appunti, file, audio, riavvio, blocco input, modalità privacy, stampante remota |
+| Controllo completo | Tutti i permessi (profilo di una voce senza configurazione) |
+| Personalizzato | Solo i permessi scelti |
+
+Il profilo è sempre in AND con i permessi globali dell'host e non può ampliarli.
+Una configurazione non valida applica la sola visualizzazione.
+
+### Report sessioni
+
+L'host conserva localmente uno storico delle sessioni in entrata, compresi i
+tentativi rifiutati: orari, peer, IP, metodo di accesso, esito della postura,
+permessi usati e metadati dei file. Non salva appunti, input da tastiera né altri
+contenuti. Il report si filtra per periodo, esito, tipo di connessione e testo
+(ID, nome, IP, codice sessione) ed è esportabile in CSV.
+
+La conservazione predefinita è di 180 giorni; `0` disabilita il registro ed elimina
+i file esistenti. I record contengono dati personali dei peer: conservarli per il
+tempo strettamente necessario.
+
+### Audit verso SIEM
+
+Gli eventi di connessione, trasferimento file, allarmi, postura e controllo dei file
+possono essere duplicati verso destinazioni indipendenti dall'API server.
+
+- Syslog su UDP, TCP o TLS, con formato RFC 5424 o CEF. Il TLS usa solo la CA indicata
+  nel file PEM configurato e, senza CA valida, non apre la connessione.
 - Windows Event Log, canale Application.
+- ID evento stabili, uguali in tutte le destinazioni: la tabella è in
+  [CLANTO.md](CLANTO.md#integrazione-siem-dellaudit-host).
 
-Le destinazioni sono disattivate per impostazione predefinita. Gli errori di
-invio vengono registrati ma non interrompono né rallentano intenzionalmente la
-sessione remota.
+Le destinazioni sono disattivate per impostazione predefinita. UDP non è cifrato e
+non ritenta; TCP e TLS usano una coda limitata a 1000 record. Gli errori di invio
+vengono registrati e non interrompono la sessione remota.
+
+### Credenziali e password temporanea
+
+Segreti e credenziali locali sono cifrati con due chiavi indipendenti: **utente**
+(password dei peer, rubrica, token dell'account), custodita in DPAPI, Keychain,
+Secret Service o Android Keystore secondo la piattaforma; **macchina** (ID, password
+permanente, chiave privata, dispositivi attendibili), in DPAPI macchina su Windows e
+in un file con permessi ristretti altrove. La protezione macchina non difende da un
+processo locale con privilegi amministrativi. Copiare i file di configurazione senza
+la relativa chiave li rende indecifrabili.
+
+L'opzione host `clanto-temp-password-rotate-minutes` ruota la password temporanea
+ogni 1-1440 minuti; assente o `0`, nessuna rotazione.
+
+### Criteri di gruppo e RMM
+
+I template ADMX/ADML (`en-US` e `it-IT`) sono in `res/admx`: si copiano in
+`PolicyDefinitions`, nel Central Store del dominio o si importano in Intune. I
+criteri sono letti da `HKLM\Software\Policies\Clanto\ClantoDesk` **una sola volta
+all'avvio**: dopo `gpupdate` riavviare il servizio. Le chiavi dei server non sono mai
+gestibili via GPO. Il profilo `restrittivo` dello script RMM
+(`clantodesk-impostazioni-sicure.ps1`, distribuito a parte) scrive le stesse chiavi;
+usare un solo canale, perché su una chiave gestita dal dominio prevale il GPO.
+
+### Predefiniti più sicuri
+
+- **PC controllato:** disconnessione per inattività dopo 10 minuti, scoperta LAN,
+  tunnel TCP, riavvio remoto e terminale disattivati.
+- **Dispositivi a cui ci si collega per la prima volta:** scala adattiva, appunti e audio disattivati,
+  copia/incolla di file non consentito, cursore remoto visibile.
+
+Un valore salvato dall'utente prevale sul predefinito.
+
+### Requisiti di rete per le funzioni `clanto.it`
+
+Postura e filigrana del controller richiedono che l'**host** raggiunga
+`https://clanto.it/api/` e che i file della cartella `api/` del repository
+(`clantodesk-posture.php`, `posture-policy.json`) siano pubblicati lì, con il
+segreto di firma configurato sul server. Senza questi requisiti i login protetti
+vengono rifiutati.
 
 ## Contributi e aggiornamenti upstream
 
