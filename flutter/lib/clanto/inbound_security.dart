@@ -263,7 +263,7 @@ class _ClantoInboundSecuritySettingState
             : null,
         title: Text(translate('Require controller watermark')),
         subtitle: Text(translate(
-            'Require connecting controllers to show controller identity, host identity, time, and session code.')),
+            'Controller watermark requires the official ClantoDesk client verified through clanto.it and disables session recording.')),
       ),
       CheckboxListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 10),

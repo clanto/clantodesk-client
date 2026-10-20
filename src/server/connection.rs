@@ -886,8 +886,9 @@ impl Connection {
                                 conn.restart = enabled;
                                 conn.send_permission(Permission::Restart, enabled).await;
                             } else if &name == "recording" {
-                                conn.recording = enabled;
-                                conn.send_permission(Permission::Recording, enabled).await;
+                                conn.recording =
+                                    crate::clanto::watermark::configured_recording_allowed(enabled);
+                                conn.send_permission(Permission::Recording, conn.recording).await;
                             } else if &name == "block_input" {
                                 conn.block_input = enabled;
                                 conn.send_permission(Permission::BlockInput, enabled).await;
@@ -2846,6 +2847,7 @@ impl Connection {
             self.privacy_mode &= profile.allows(IdPermission::PrivacyMode);
             self.remote_printer &= profile.allows(IdPermission::RemotePrinter);
         }
+        self.recording = crate::clanto::watermark::configured_recording_allowed(self.recording);
 
         for (permission, enabled) in [
             (Permission::Keyboard, self.keyboard),
@@ -3032,19 +3034,26 @@ impl Connection {
         self.video_ack_required = lr.video_ack_required;
     }
 
-    async fn verify_clanto_posture(&self, lr: &LoginRequest) -> Result<(), String> {
+    async fn verify_clanto_posture(
+        &self,
+        lr: &LoginRequest,
+        mode: crate::clanto::posture::VerificationMode,
+    ) -> Result<(), String> {
         if lr.clanto_posture.is_empty() || lr.clanto_posture_mac.is_empty() {
             return Err("requisiti di sicurezza mancanti".to_owned());
         }
-        let body = json!({
+        let mut body = json!({
             "posture": &lr.clanto_posture,
             "mac": crate::encode64(&lr.clanto_posture_mac),
             "challenge": &self.hash.challenge,
             "host_id": Config::get_id(),
             "peer_platform": &lr.my_platform,
             "peer_version": &lr.version,
-        })
-        .to_string();
+        });
+        if mode == crate::clanto::posture::VerificationMode::Signature {
+            body["mode"] = json!("signature");
+        }
+        let body = body.to_string();
         let response = timeout(
             5000,
             crate::post_request(
@@ -3153,13 +3162,19 @@ impl Connection {
                 return false;
             }
             self.apply_id_permissions().await;
-            if Config::get_option(crate::clanto::posture::OPT_REQUIRE_PROTECTED_DEVICE) == "Y" {
-                if let Err(reason) = self.verify_clanto_posture(&lr).await {
+            let posture_mode = crate::clanto::posture::configured_verification_mode();
+            if posture_mode != crate::clanto::posture::VerificationMode::None {
+                if let Err(reason) = self.verify_clanto_posture(&lr, posture_mode).await {
                     self.post_alarm_audit(
                         AlarmAuditType::PostureRejected,
                         json!({"id": &lr.my_id, "name": &lr.my_name, "ip": &self.ip, "reason": &reason}),
                     );
-                    let reason = format!("Dispositivo non protetto: {reason}");
+                    let reason =
+                        if posture_mode == crate::clanto::posture::VerificationMode::Signature {
+                            crate::clanto::posture::LOGIN_ERROR_OFFICIAL_CLIENT_REQUIRED.to_owned()
+                        } else {
+                            format!("Dispositivo non protetto: {reason}")
+                        };
                     self.send_login_error(&reason).await;
                     self.remember_close_reason(&reason);
                     return false;

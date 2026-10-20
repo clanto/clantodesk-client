@@ -416,5 +416,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("ID profile", "ID profile"),
         ("Duplicate ID or pattern", "Duplicate ID or pattern"),
         ("ID or pattern is required", "ID or pattern is required"),
+        ("Controller watermark requires the official ClantoDesk client verified through clanto.it and disables session recording.", "Controller watermark requires the official ClantoDesk client verified through clanto.it and disables session recording."),
+        ("The official ClantoDesk client is required by the remote device.", "The official ClantoDesk client is required by the remote device."),
     ].iter().cloned().collect();
 }

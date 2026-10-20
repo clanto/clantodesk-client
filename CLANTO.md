@@ -447,12 +447,19 @@ indicate nella sezione precedente. Le chiavi dei server
 ## Accesso solo da dispositivi protetti
 
 Opzione host `clanto-require-protected-device` (default `N`), nella sezione «Sicurezza in ingresso»
-delle impostazioni. Con `N` il login è identico a upstream: l'host non chiede nulla e non fa
-chiamate di rete. Con `Y`, dopo l'allowlist per ID e prima di qualunque verifica della password,
-l'host manda la postura
+delle impostazioni. Con `N`, se non è richiesta nemmeno la filigrana del controller, il login è
+identico a upstream: l'host non chiede nulla e non fa chiamate di rete. Con `Y`, dopo l'allowlist per
+ID e prima di qualunque verifica della password, l'host manda la postura
 dichiarata dal controller a `https://clanto.it/api/clantodesk-posture.php` e rifiuta se la risposta
 non è `ok`. **Fail-closed**: API irraggiungibile, timeout di 5 s, JSON non valido, postura o firma
 mancanti valgono rifiuto. Il PC host deve quindi raggiungere `clanto.it`.
+
+Se `clanto-require-controller-watermark=Y` ma il dispositivo protetto non è richiesto, nello stesso
+punto del login l'host usa la modalità `signature`: verifica richiesta, configurazione, firma,
+coerenza e versione revocata, ma non applica le regole della policy di postura. Serve a riconoscere
+il client ClantoDesk ufficiale senza imporre la postura completa ed è ugualmente fail-closed. Con
+entrambe le opzioni attive viene eseguita una sola richiesta, quella completa; con entrambe spente
+non viene eseguita alcuna richiesta.
 
 - **Controller.** `src/clanto/posture.rs`: `collect()` raccoglie le chiavi di `POSTURE_KEYS` (sistema,
   patch, antivirus, firewall, firmware, rete...), `unknown` dove non arriva senza privilegi o entro il
@@ -574,11 +581,14 @@ La seconda è `→ <hostname> · dd/MM/yyyy HH:mm`. Le parti non disponibili e i
 relativo separatore vengono omessi. Testo bianco al 12% con contorno al 12%,
 volutamente rado: deve restare leggibile in una foto senza coprire il lavoro.
 
-La filigrana lato controller è un deterrente applicato dal client: rende
-riconoscibile chi osserva la sessione negli screenshot e nelle fotografie, ma
-un client modificato può ignorare il requisito comunicato dall'host. Non è una
-protezione tecnica contro acquisizioni
-effettuate con software o dispositivi esterni.
+Quando la filigrana è richiesta, l'host accetta soltanto un controller con la firma HMAC della
+release ufficiale, verificata da `clanto.it` prima della password. Un client semplicemente
+ricompilato non possiede la chiave di release e viene rifiutato. Resta possibile modificare un
+binario ufficiale conservandone la chiave incorporata: la filigrana è quindi un deterrente che
+rende riconoscibile chi osserva la sessione negli screenshot e nelle fotografie, non una protezione
+tecnica contro la modifica del binario o acquisizioni effettuate con software o dispositivi esterni.
+Con questa opzione l'host forza inoltre a `false` il permesso di registrazione e ignora i tentativi
+di riattivarlo dalla finestra della connessione; il controller ufficiale nasconde il relativo comando.
 
 L'opzione host `clanto-host-watermark` (predefinita `N`) mostra invece sul PC
 controllato una fascia semitrasparente su ogni schermo per tutta la durata di

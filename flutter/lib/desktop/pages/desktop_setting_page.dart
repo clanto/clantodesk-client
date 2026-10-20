@@ -1699,6 +1699,11 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
         optGetter: () => _isOptionOn(kOptClantoControllerWatermark),
         optSetter: _setOptionOn,
       ),
+      Text(
+        translate(
+            'Controller watermark requires the official ClantoDesk client verified through clanto.it and disables session recording.'),
+        style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+      ).marginOnly(left: _kContentHSubMargin),
       _OptionCheckBox(
         context,
         'Show host watermark',

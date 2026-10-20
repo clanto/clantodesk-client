@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
+use hbb_common::config::Config;
 use serde_derive::Deserialize;
 use sha2::{Digest, Sha256};
 #[cfg(any(
@@ -40,6 +41,35 @@ impl Drop for CollectingGuard {
 pub const OPT_REQUIRE_PROTECTED_DEVICE: &str = "clanto-require-protected-device";
 pub const OPT_POSTURE_BYPASS: &str = "clanto-posture-bypass";
 pub const POSTURE_API_URL: &str = "https://clanto.it/api/clantodesk-posture.php";
+pub const LOGIN_ERROR_OFFICIAL_CLIENT_REQUIRED: &str =
+    "The official ClantoDesk client is required by the remote device.";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VerificationMode {
+    None,
+    Signature,
+    Full,
+}
+
+pub fn verification_mode(
+    require_protected_device: bool,
+    require_controller_watermark: bool,
+) -> VerificationMode {
+    if require_protected_device {
+        VerificationMode::Full
+    } else if require_controller_watermark {
+        VerificationMode::Signature
+    } else {
+        VerificationMode::None
+    }
+}
+
+pub fn configured_verification_mode() -> VerificationMode {
+    verification_mode(
+        Config::get_option(OPT_REQUIRE_PROTECTED_DEVICE) == "Y",
+        Config::get_option(crate::clanto::watermark::OPT_REQUIRE_CONTROLLER_WATERMARK) == "Y",
+    )
+}
 
 const UNKNOWN: &str = "unknown";
 pub const POSTURE_KEYS: &[&str] = &[
@@ -538,7 +568,8 @@ fn apply_lines(posture: &mut HashMap<String, String>, output: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_lines, collect, complete_lines, decide, release_key, sign, FailedRule, POSTURE_KEYS,
+        apply_lines, collect, complete_lines, decide, release_key, sign, verification_mode,
+        FailedRule, VerificationMode, POSTURE_KEYS,
     };
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
@@ -557,6 +588,14 @@ mod tests {
         expected.update(expected_message);
         let expected = expected.finalize().into_bytes().to_vec();
         assert_eq!(sign(&posture, "host-1", "challenge-1", "1.5.0"), expected);
+    }
+
+    #[test]
+    fn verification_mode_uses_full_before_signature() {
+        assert_eq!(verification_mode(false, false), VerificationMode::None);
+        assert_eq!(verification_mode(false, true), VerificationMode::Signature);
+        assert_eq!(verification_mode(true, false), VerificationMode::Full);
+        assert_eq!(verification_mode(true, true), VerificationMode::Full);
     }
 
     #[test]

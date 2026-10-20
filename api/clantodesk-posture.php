@@ -9,6 +9,7 @@ declare(strict_types=1);
  * RICHIESTA: POST application/json (max 16 KB)
  *   {"posture":{"platform":..,"os_build":..,"av_enabled":"true",..},"mac":"<base64>",
  *    "challenge":"..","host_id":"..","peer_platform":"..","peer_version":".."}
+ *   mode="signature" limita la verifica ai controlli core; assente o diverso esegue la policy.
  *   I valori della postura sono sempre stringhe; max 64 chiavi.
  * RISPOSTA: sempre HTTP 200, {"ok":bool,"reasons":[string],
  *   "failed":[{"id":string,"message":string,"bypassable":bool}]}; reasons = message di failed.
@@ -477,6 +478,7 @@ try {
         $peerVersion = str_field($req, 'peer_version', MAX_ID_LEN);
         $peerPlatform = str_field($req, 'peer_platform', MAX_ID_LEN);
         $mac = str_field($req, 'mac', MAX_MAC_LEN);
+        $signatureOnly = ($req['mode'] ?? null) === 'signature';
         $posture = [];
         foreach ($req['posture'] as $k => $v) {
             $k = (string)$k;
@@ -519,6 +521,11 @@ try {
     if (in_array($peerVersion, $revoked, true)) {
         error_log("clanto-posture host_id=$hostForLog esito=ko versione_revocata");
         respond_core('core:revoked', 'versione di ClantoDesk non più ammessa, aggiornare');
+    }
+
+    if ($signatureOnly) {
+        error_log("clanto-posture host_id=$hostForLog esito=ok modalita=firma");
+        respond([]);
     }
 
     $policyErrors = [];
