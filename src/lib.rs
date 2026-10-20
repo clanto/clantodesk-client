@@ -37,6 +37,7 @@ mod bridge_generated;
 pub mod flutter;
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
 pub mod flutter_ffi;
+/// cbindgen:ignore
 pub mod clanto;
 use common::*;
 mod auth_2fa;
