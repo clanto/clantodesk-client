@@ -1,4 +1,4 @@
-import 'package:flutter_hbb/clanto/watermark.dart';
+import 'package:flutter_hbb/clanto/watermark_data.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -12,70 +12,10 @@ import '../common.dart';
 import '../common/formatter/id_formatter.dart';
 import '../models/model.dart';
 import '../models/platform_model.dart';
+import 'watermark_data.dart';
 
-const String kOptClantoRequireControllerWatermark =
-    'clanto-require-controller-watermark';
-const String kPeerInfoClantoRequireControllerWatermark =
-    'clanto-require-controller-watermark';
+export 'watermark_data.dart';
 
-enum ClantoWatermarkSessionType {
-  remoteDesktop,
-  viewCamera,
-  fileTransfer,
-  terminal,
-  portForward,
-  other,
-}
-
-bool shouldShowClantoWatermark({
-  required bool hostRequired,
-  required ClantoWatermarkSessionType sessionType,
-}) {
-  return (sessionType == ClantoWatermarkSessionType.remoteDesktop ||
-          sessionType == ClantoWatermarkSessionType.viewCamera) &&
-      hostRequired;
-}
-
-String _oneLine(String value) =>
-    value.trim().replaceAll('\r', ' ').replaceAll('\n', ' ');
-
-String buildClantoControllerIdentityLine({
-  required String controllerId,
-  required String accountUser,
-  required String osUser,
-  required String sessionCode,
-}) {
-  final account = _oneLine(accountUser);
-  final os = _oneLine(osUser);
-  final id = _oneLine(controllerId);
-  final code = _oneLine(sessionCode);
-  final withoutWindowsDomain = os.contains('\\') ? os.split('\\').last : os;
-  final withoutDomain = withoutWindowsDomain.contains('@')
-      ? withoutWindowsDomain.split('@').first
-      : withoutWindowsDomain;
-  final name = account.isNotEmpty ? account : withoutDomain.trim();
-  final parts = <String>[
-    if (name.isNotEmpty) name,
-    if (id.isNotEmpty) '${translate('ID')} $id',
-    if (code.isNotEmpty) code,
-  ];
-  return parts.join(' · ');
-}
-
-String buildClantoHostSessionLine({
-  required String hostName,
-  required DateTime now,
-}) {
-  final host = _oneLine(hostName);
-  final local = now.toLocal();
-  String twoDigits(int value) => value.toString().padLeft(2, '0');
-  final dateTime = '${twoDigits(local.day)}/${twoDigits(local.month)}/${local.year} '
-      '${twoDigits(local.hour)}:${twoDigits(local.minute)}';
-  return [
-    if (host.isNotEmpty) '→ $host',
-    dateTime,
-  ].join(' · ');
-}
 
 ClantoWatermarkSessionType _sessionType(ConnType connType) {
   switch (connType) {
@@ -185,6 +125,7 @@ class _ClantoControllerWatermarkState
                 accountUser: gFFI.userModel.userName.value,
                 osUser: _osUser,
                 sessionCode: widget.ffi.ffiModel.pi.clantoSessionCode,
+                idLabel: translate('ID'),
               ),
               buildClantoHostSessionLine(
                 hostName: widget.ffi.ffiModel.pi.hostname,
