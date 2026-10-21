@@ -500,7 +500,14 @@ fn collect_platform(_posture: &mut HashMap<String, String>, _deadline: Instant) 
 ))]
 fn command_output(deadline: Instant, command: &str, args: &[&str]) -> Option<String> {
     use std::{io::Read, sync::Arc};
-    let mut child = Command::new(command)
+    let mut command = Command::new(command);
+    // Senza CREATE_NO_WINDOW ogni sonda apre per un istante una console PowerShell.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let mut child = command
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
