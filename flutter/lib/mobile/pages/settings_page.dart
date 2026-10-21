@@ -15,7 +15,9 @@ import '../../clanto/privacy_prompt.dart';
 import '../../clanto/inbound_security.dart';
 import '../../clanto/outgoing_security.dart';
 import '../../clanto/session_report.dart';
+import '../../clanto/settings_lock.dart';
 import '../../clanto/settings_password.dart';
+import '../../clanto/temp_password_rotation.dart';
 import '../../common.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/login.dart';
@@ -295,6 +297,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
     Provider.of<FfiModel>(context);
     final outgoingOnly = bind.isOutgoingOnly();
     final incomingOnly = bind.isIncomingOnly();
+    final settingsLocked = clantoSettingsLocked();
     final customClientSection = CustomSettingsSection(
         child: Column(
       children: [
@@ -315,7 +318,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
       SettingsTile.switchTile(
         title: Text(translate('enable-2fa-title')),
         initialValue: enable2fa,
-        onToggle: (v) async {
+        onToggle: settingsLocked ? null : (v) async {
           update() async {
             setState(() {});
           }
@@ -334,7 +337,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         SettingsTile.switchTile(
           title: Text(translate('Telegram bot')),
           initialValue: bind.mainHasValidBotSync(),
-          onToggle: (v) async {
+          onToggle: settingsLocked ? null : (v) async {
             update() async {
               setState(() {});
             }
@@ -360,7 +363,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             ],
           ),
           initialValue: _enableTrustedDevices,
-          onToggle: isOptionFixed(kOptionEnableTrustedDevices)
+          onToggle: settingsLocked || isOptionFixed(kOptionEnableTrustedDevices)
               ? null
               : (v) async {
                   mainSetBoolOption(kOptionEnableTrustedDevices, v);
@@ -373,7 +376,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         SettingsTile(
             title: Text(translate('Manage trusted devices')),
             trailing: Icon(Icons.arrow_forward_ios),
-            onPressed: (context) {
+            onPressed: settingsLocked ? null : (context) {
               Navigator.push(context, MaterialPageRoute(builder: (context) {
                 return _ManageTrustedDevices();
               }));
@@ -406,7 +409,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
               .marginOnly(left: 5)
         ]),
         initialValue: _onlyWhiteList,
-        onToggle: (_) async {
+        onToggle: settingsLocked ? null : (_) async {
           update() async {
             final onlyWhiteList = whitelistNotEmpty();
             if (onlyWhiteList != _onlyWhiteList) {
@@ -553,7 +556,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                     Text('* ${translate('Ignore Battery Optimizations')}',
                         style: Theme.of(context).textTheme.bodySmall),
                   ]),
-              onToggle: (v) async {
+              onToggle: settingsLocked ? null : (v) async {
                 if (v) {
                   await AndroidPermissionManager.request(
                       kRequestIgnoreBatteryOptimizations);
@@ -587,7 +590,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
               '* ${translate('Start the screen sharing service on boot, requires special permissions')}',
               style: Theme.of(context).textTheme.bodySmall),
         ]),
-        onToggle: (toValue) async {
+        onToggle: settingsLocked ? null : (toValue) async {
           if (toValue) {
             // 1. request kIgnoreBatteryOptimizations
             if (!await AndroidPermissionManager.check(
@@ -620,7 +623,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(translate('Check for software update on startup')),
           ]),
-          onToggle: (bool toValue) async {
+          onToggle: settingsLocked ? null : (bool toValue) async {
             await mainSetLocalBoolOption(kOptionEnableCheckUpdate, toValue);
             setState(() => _checkUpdateOnStartup = toValue);
           },
@@ -634,7 +637,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(translate('Show terminal extra keys')),
         ]),
-        onToggle: (bool v) async {
+        onToggle: settingsLocked ? null : (bool v) async {
           await mainSetLocalBoolOption(kOptionEnableShowTerminalExtraKeys, v);
           final newValue =
               mainGetLocalBoolOptionSync(kOptionEnableShowTerminalExtraKeys);
@@ -668,7 +671,8 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
           Text('* ${translate('floating_window_tip')}',
               style: Theme.of(context).textTheme.bodySmall),
         ]),
-        onToggle: bind.mainIsOptionFixed(key: kOptionDisableFloatingWindow)
+        onToggle: settingsLocked ||
+                bind.mainIsOptionFixed(key: kOptionDisableFloatingWindow)
             ? null
             : onFloatingWindowChanged));
 
@@ -685,7 +689,9 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
           ? KeepScreenOn.never
           : optionToKeepScreenOn(
               bind.mainGetLocalOption(key: kOptionKeepScreenOn))),
-      asyncSetter: isOptionFixed(kOptionKeepScreenOn) || _floatingWindowDisabled
+      asyncSetter: settingsLocked ||
+              isOptionFixed(kOptionKeepScreenOn) ||
+              _floatingWindowDisabled
           ? null
           : (value) async {
               await bind.mainSetLocalOption(
@@ -700,6 +706,9 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) == 'Y';
     final settings = SettingsList(
       sections: [
+        if (settingsLocked)
+          CustomSettingsSection(
+              child: const ClantoManagedSettingsBanner()),
         customClientSection,
         if (!bind.isDisableAccount())
           SettingsSection(
@@ -720,7 +729,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                       ) ??
                       Icon(Icons.person);
                 }),
-                onPressed: (context) {
+                onPressed: settingsLocked ? null : (context) {
                   if (gFFI.userModel.userName.value.isEmpty) {
                     loginDialog();
                   } else {
@@ -737,15 +746,21 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             title: Text(translate('Security')),
             tiles: [
               if (isAndroid && !outgoingOnly)
-                clantoInboundSecurityTile(),
-              if (!incomingOnly) clantoOutgoingSecurityTile(),
+                clantoInboundSecurityTile(enabled: !settingsLocked),
+              if (isAndroid && !outgoingOnly && clantoTemporaryPasswordUsed())
+                clantoTempPasswordRotationTile(
+                    enabled: !settingsLocked,
+                    refresh: () => setState(() {})),
+              if (!incomingOnly)
+                clantoOutgoingSecurityTile(enabled: !settingsLocked),
             ],
           ),
         SettingsSection(title: Text(translate("Settings")), tiles: [
           // Alternativa a PIN e biometria per i dispositivi che non ne hanno,
           // e opzione per coprire anche la schermata host.
           if (isAndroid)
-            ...clantoLocalPasswordTiles(refresh: () => setState(() {})),
+            ...clantoLocalPasswordTiles(
+                refresh: () => setState(() {}), enabled: !settingsLocked),
           if (isMobile &&
               !outgoingOnly &&
               !disabledSettings &&
@@ -755,7 +770,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             SettingsTile(
                 title: Text(translate('ID/Relay Server')),
                 leading: Icon(Icons.cloud),
-                onPressed: (context) {
+                onPressed: settingsLocked ? null : (context) {
                   showServerSettings(gFFI.dialogManager, (callback) async {
                     _isUsingPublicServer = await bind.mainIsUsingPublicServer();
                     setState(callback);
@@ -765,7 +780,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             SettingsTile(
                 title: Text(translate('Socks5/Http(s) Proxy')),
                 leading: Icon(Icons.network_ping),
-                onPressed: (context) {
+                onPressed: settingsLocked ? null : (context) {
                   changeSocks5Proxy();
                 }),
           if (clantoDeploymentUiEnabled &&
@@ -774,7 +789,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             SettingsTile(
                 title: Text(translate('Deploy')),
                 leading: Icon(Icons.cloud_upload),
-                onPressed: (context) {
+                onPressed: settingsLocked ? null : (context) {
                   showDeployDialog();
                 }),
           if (!disabledSettings && !_hideNetwork && !_hideWebSocket)
@@ -906,7 +921,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             SettingsTile.switchTile(
               title: Text(translate('note-at-conn-end-tip')),
               initialValue: _allowAskForNoteAtEndOfConnection,
-              onToggle: (v) async {
+              onToggle: settingsLocked ? null : (v) async {
                 if (v && !gFFI.userModel.isLogin) {
                   final res = await loginDialog();
                   if (res != true) return;
@@ -925,7 +940,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
               title:
                   Text(translate('keep-awake-during-outgoing-sessions-label')),
               initialValue: _preventSleepWhileConnected,
-              onToggle: (v) async {
+              onToggle: settingsLocked ? null : (v) async {
                 await mainSetLocalBoolOption(
                     kOptionKeepAwakeDuringOutgoingSessions, v);
                 setState(() {

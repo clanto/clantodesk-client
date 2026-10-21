@@ -72,23 +72,27 @@ class _ClantoOutgoingSecuritySettingState
   }
 }
 
-SettingsTile clantoOutgoingSecurityTile() {
+SettingsTile clantoOutgoingSecurityTile({bool enabled = true}) {
   return SettingsTile(
     title: Text(translate('Outgoing security')),
     description: Text(translate('Choose what this PC may do in sessions it opens.')),
-    onPressed: (context) => showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 600),
-          child: SingleChildScrollView(child: ClantoOutgoingSecuritySetting()),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(translate('Close'))),
-        ],
-      ),
-    ),
+    onPressed: enabled
+        ? (context) => showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                content: ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(maxWidth: 480, maxHeight: 600),
+                  child: SingleChildScrollView(
+                      child: ClantoOutgoingSecuritySetting(enabled: enabled)),
+                ),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(translate('Close'))),
+                ],
+              ),
+            )
+        : null,
   );
 }

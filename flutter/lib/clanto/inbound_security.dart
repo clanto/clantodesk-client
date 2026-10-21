@@ -196,6 +196,11 @@ class _ClantoInboundSecuritySettingState
       bind.mainGetOptionSync(key: kOptClantoHostWatermark) == 'Y';
 
   Future<void> _changeIdWhitelist() async {
+    if (!widget.enabled ||
+        isOptionFixed(kOptionIdWhitelist) ||
+        isOptionFixed(kOptClantoIdPermissions)) {
+      return;
+    }
     final saved = await showClantoIdPermissionsDialog(
       context,
       enabled: widget.enabled,
@@ -234,7 +239,11 @@ class _ClantoInboundSecuritySettingState
           style: Theme.of(context).textTheme.titleMedium),
       if (isMobile)
         InkWell(
-          onTap: _changeIdWhitelist,
+          onTap: widget.enabled &&
+                  !isOptionFixed(kOptionIdWhitelist) &&
+                  !isOptionFixed(kOptClantoIdPermissions)
+              ? _changeIdWhitelist
+              : null,
           child: IgnorePointer(
             child: CheckboxListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 10),
@@ -280,24 +289,28 @@ class _ClantoInboundSecuritySettingState
   }
 }
 
-SettingsTile clantoInboundSecurityTile() {
+SettingsTile clantoInboundSecurityTile({bool enabled = true}) {
   return SettingsTile(
     title: Text(translate('Incoming security')),
     description: Text(translate(
         'Accept connections only from updated and protected devices')),
-    onPressed: (context) => showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 600),
-          child: SingleChildScrollView(child: ClantoInboundSecuritySetting()),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(translate('Close'))),
-        ],
-      ),
-    ),
+    onPressed: enabled
+        ? (context) => showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                content: ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(maxWidth: 480, maxHeight: 600),
+                  child: SingleChildScrollView(
+                      child: ClantoInboundSecuritySetting(enabled: enabled)),
+                ),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(translate('Close'))),
+                ],
+              ),
+            )
+        : null,
   );
 }

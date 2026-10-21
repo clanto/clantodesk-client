@@ -1019,7 +1019,20 @@ async fn handle(data: Data, stream: &mut Connection) {
             }
             Some(value) => {
                 let mut updated = true;
-                if name == "id" {
+                let policy_blocked =
+                    matches!(name.as_str(), "id" | "permanent-password" | "unlock-pin")
+                        && !crate::clanto::settings_lock::user_write_allowed_now();
+                if policy_blocked {
+                    log::trace!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+                    updated = false;
+                    if name == "permanent-password" {
+                        allow_err!(
+                            stream
+                                .send(&Data::Config((name.clone(), Some("N".to_owned()))))
+                                .await
+                        );
+                    }
+                } else if name == "id" {
                     // An empty id would wipe the local id and unconfirm the key (cf. #15626).
                     if value.is_empty() {
                         log::warn!("Ignoring empty id write over IPC");
@@ -1061,13 +1074,23 @@ async fn handle(data: Data, stream: &mut Connection) {
                 let v = Config::get_options();
                 allow_err!(stream.send(&Data::Options(Some(v))).await);
             }
-            Some(value) => {
-                let _chk = CheckIfRestart::new();
-                let _nat = CheckTestNatType::new();
-                if let Some(v) = value.get("privacy-mode-impl-key") {
-                    crate::privacy_mode::switch(v);
+            Some(mut value) => {
+                if !crate::clanto::settings_lock::user_write_allowed_now() {
+                    log::trace!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+                } else {
+                    value.remove(crate::clanto::settings_lock::OPT_LOCK_SETTINGS);
+                    let _chk = CheckIfRestart::new();
+                    let _nat = CheckTestNatType::new();
+                    if let Some(v) = value.get("privacy-mode-impl-key") {
+                        crate::privacy_mode::switch(v);
+                    }
+                    let retention_changed =
+                        value.contains_key(crate::clanto::session_log::OPT_SESSION_LOG_DAYS);
+                    Config::set_options(value);
+                    if retention_changed {
+                        crate::clanto::session_log::retention_changed();
+                    }
                 }
-                Config::set_options(value);
                 allow_err!(stream.send(&Data::Options(None)).await);
             }
         },
@@ -1762,6 +1785,9 @@ pub fn get_fingerprint() -> String {
 }
 
 pub fn set_permanent_password(v: String) -> ResultType<()> {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        bail!(crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+    }
     if Config::is_disable_change_permanent_password() {
         bail!("Changing permanent password is disabled");
     }
@@ -1774,6 +1800,9 @@ pub fn set_permanent_password(v: String) -> ResultType<()> {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn set_permanent_password_with_ack(v: String) -> ResultType<bool> {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        bail!(crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+    }
     set_permanent_password_with_ack_async(v).await
 }
 
@@ -1802,6 +1831,9 @@ async fn set_permanent_password_with_ack_async(v: String) -> ResultType<bool> {
 #[cfg(feature = "flutter")]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn set_unlock_pin(v: String, translate: bool) -> ResultType<()> {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        bail!(crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+    }
     let v = v.trim().to_owned();
     let min_len = 4;
     let max_len = crate::ui_interface::max_encrypt_len();
@@ -1922,6 +1954,10 @@ pub async fn get_option_async(key: &str) -> String {
 }
 
 pub fn set_option(key: &str, value: &str) {
+    if !crate::clanto::settings_lock::user_option_write_allowed(key) {
+        log::trace!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+        return;
+    }
     let mut options = get_options();
     if value.is_empty() {
         options.remove(key);
@@ -1932,14 +1968,22 @@ pub fn set_option(key: &str, value: &str) {
 }
 
 #[tokio::main(flavor = "current_thread")]
-pub async fn set_options(value: HashMap<String, String>) -> ResultType<()> {
+pub async fn set_options(mut value: HashMap<String, String>) -> ResultType<()> {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        bail!(crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+    }
+    value.remove(crate::clanto::settings_lock::OPT_LOCK_SETTINGS);
     let _nat = CheckTestNatType::new();
     if let Ok(mut c) = connect(1000, "").await {
         c.send(&Data::Options(Some(value.clone()))).await?;
         // do not put below before connect, because we need to check should_exit
         c.next_timeout(1000).await.ok();
     }
+    let retention_changed = value.contains_key(crate::clanto::session_log::OPT_SESSION_LOG_DAYS);
     Config::set_options(value);
+    if retention_changed {
+        crate::clanto::session_log::retention_changed();
+    }
     Ok(())
 }
 
@@ -1991,6 +2035,9 @@ pub async fn get_socks() -> Option<config::Socks5Server> {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn set_socks(value: config::Socks5Server) -> ResultType<()> {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        bail!(crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+    }
     let _nat = CheckTestNatType::new();
     Config::set_socks(if value.proxy.is_empty() {
         None

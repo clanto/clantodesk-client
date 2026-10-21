@@ -29,21 +29,94 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
   ClantoSessionOutcomeFilter _outcome = ClantoSessionOutcomeFilter.all;
   String _connectionType = '';
   final _search = TextEditingController();
+  final _retention = TextEditingController();
   List<ClantoSessionRecord> _records = const [];
   String? _error;
   bool _loading = true;
+  String? _retentionError;
 
   @override
   void initState() {
     super.initState();
+    final retention = bind.mainGetOptionSync(key: kOptClantoSessionLogDays);
+    _retention.text = retention.isEmpty ? '180' : retention;
     _load();
   }
 
   @override
   void dispose() {
     _search.dispose();
+    _retention.dispose();
     super.dispose();
   }
+
+  Future<void> _saveRetention() async {
+    final value = int.tryParse(_retention.text.trim());
+    if (value == null || value < 0 || value > 3650) {
+      setState(() =>
+          _retentionError = translate('Value must be between 0 and 3650'));
+      return;
+    }
+    if (value == 0) {
+      final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(translate('Disable session reports?')),
+              content: Text(translate(
+                  'Existing session reports will be deleted.')),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(translate('Cancel')),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(translate('Disable and delete')),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!confirmed) return;
+    }
+    await bind.mainSetOption(
+        key: kOptClantoSessionLogDays, value: '$value');
+    if (mounted) {
+      setState(() {
+        _retentionError = null;
+        if (value == 0) _records = const [];
+      });
+    }
+  }
+
+  Widget _retentionControl() => Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SizedBox(
+          width: 260,
+          child: TextField(
+            controller: _retention,
+            enabled: widget.enabled &&
+                !isOptionFixed(kOptClantoSessionLogDays),
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              isDense: true,
+              labelText: translate('Keep reports for (days)'),
+              errorText: _retentionError,
+            ),
+            onSubmitted: (_) => _saveRetention(),
+          ).workaroundFreezeLinuxMint(),
+        ),
+        ElevatedButton(
+          onPressed: widget.enabled &&
+                  !isOptionFixed(kOptClantoSessionLogDays)
+              ? _saveRetention
+              : null,
+          child: Text(translate('Apply')),
+        ),
+      ]);
 
   int _fromMs() {
     final now = DateTime.now();
@@ -473,6 +546,8 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
   Widget build(BuildContext context) {
     final records = _filteredRecords;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _retentionControl(),
+      const SizedBox(height: 12),
       _filters(context),
       if (_loading)
         const Padding(

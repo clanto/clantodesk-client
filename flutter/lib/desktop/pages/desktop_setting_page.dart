@@ -15,6 +15,8 @@ import 'package:flutter_hbb/clanto/inbound_security.dart';
 import 'package:flutter_hbb/clanto/outgoing_security.dart';
 import 'package:flutter_hbb/clanto/protected_device.dart';
 import 'package:flutter_hbb/clanto/session_report.dart';
+import 'package:flutter_hbb/clanto/settings_lock.dart';
+import 'package:flutter_hbb/clanto/temp_password_rotation.dart';
 import 'package:flutter_hbb/common/widgets/audio_input.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -295,32 +297,38 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final settingsLocked = clantoSettingsLocked();
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
-      body: _buildBlock(
-        children: <Widget>[
-          SizedBox(
-            width: _kTabWidth,
-            child: Column(
-              children: [
-                _header(context),
-                Flexible(child: _listView(tabs: _settingTabs())),
-              ],
-            ),
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(
-            child: Container(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: PageView(
-                controller: controller,
-                physics: NeverScrollableScrollPhysics(),
-                children: _children(),
+      body: Column(children: [
+        if (settingsLocked) const ClantoManagedSettingsBanner(),
+        Expanded(
+          child: _buildBlock(
+            children: <Widget>[
+              SizedBox(
+                width: _kTabWidth,
+                child: Column(
+                  children: [
+                    _header(context),
+                    Flexible(child: _listView(tabs: _settingTabs())),
+                  ],
+                ),
               ),
-            ),
-          )
-        ],
-      ),
+              const VerticalDivider(width: 1),
+              Expanded(
+                child: Container(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: PageView(
+                    controller: controller,
+                    physics: NeverScrollableScrollPhysics(),
+                    children: _children(),
+                  ),
+                ),
+              )
+            ],
+          ),
+        ),
+      ]),
     );
   }
 
@@ -496,7 +504,7 @@ class _GeneralState extends State<_General> {
               serviceBtnEnabled.value = true;
             });
           }();
-        }, enabled: serviceBtnEnabled.value)
+        }, enabled: serviceBtnEnabled.value && !clantoSettingsLocked())
       ]);
     });
   }
@@ -766,6 +774,7 @@ class _GeneralState extends State<_General> {
         keys: devices,
         values: devices,
         initialKey: currentDevice,
+        enabled: !clantoSettingsLocked(),
         onChanged: (key) async {
           setDevice(key);
           setState(() {});
@@ -1002,7 +1011,7 @@ class _Safety extends StatefulWidget {
 class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-  bool locked = bind.mainIsInstalled();
+  bool locked = bind.mainIsInstalled() || clantoSettingsLocked();
   final scrollController = ScrollController();
   final _syslogHost = TextEditingController();
   final _syslogPort = TextEditingController();
@@ -1138,9 +1147,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                 ],
               )),
         ),
-        onTap: () {
-          onChanged(!has2fa.value);
-        },
+        onTap: enabled ? () => onChanged(!has2fa.value) : null,
       ).marginOnly(left: _kCheckBoxLeftMargin);
       if (!has2fa.value) {
         return tfa;
@@ -1181,9 +1188,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                     ],
                   ))),
         ),
-        onTap: () {
-          onChangedBot(!hasBot.value);
-        },
+        onTap: enabled ? () => onChangedBot(!hasBot.value) : null,
       ).marginOnly(left: _kCheckBoxLeftMargin + 30);
 
       final trust = Row(
@@ -1347,7 +1352,8 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                     value: value,
                     groupValue: currentValue,
                     label: value,
-                    onChanged: locked
+                    onChanged: locked ||
+                            isOptionFixed(kOptionVerificationMethod)
                         ? null
                         : ((value) async {
                             callback() async {
@@ -1468,6 +1474,12 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                     ],
                   ),
                   enabled: tmpEnabled && !locked),
+            if (usePassword && tmpEnabled)
+              Padding(
+                padding: const EdgeInsets.only(
+                    left: _kContentHSubMargin, right: _kContentHMargin),
+                child: ClantoTempPasswordRotationSetting(enabled: !locked),
+              ),
             if (usePassword) numericOneTimePassword,
             if (usePassword) radios[1],
             if (usePassword && !isChangePermanentPasswordDisabled())
@@ -2042,7 +2054,9 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
               ],
             )),
       ),
-      onTap: () => onChanged(!hasIdWhitelist.value),
+      onTap: enabled && !isOptFixed
+          ? () => onChanged(!hasIdWhitelist.value)
+          : null,
     ).marginOnly(left: _kCheckBoxLeftMargin);
   }
 
@@ -2193,7 +2207,7 @@ class _SessionReportState extends State<_SessionReport>
   @override
   bool get wantKeepAlive => true;
 
-  bool locked = bind.mainIsInstalled();
+  bool locked = bind.mainIsInstalled() || clantoSettingsLocked();
 
   @override
   Widget build(BuildContext context) {
@@ -2230,7 +2244,7 @@ class _Network extends StatefulWidget {
 class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-  bool locked = !isWeb && bind.mainIsInstalled();
+  bool locked = (!isWeb && bind.mainIsInstalled()) || clantoSettingsLocked();
 
   final scrollController = ScrollController();
 
@@ -2560,9 +2574,12 @@ class _DisplayState extends State<_Display> {
     }
 
     return _Card(title: 'Default trackpad speed', children: [
-      TrackpadSpeedWidget(
-        value: curSpeed,
-        onDebouncer: onDebouncer,
+      IgnorePointer(
+        ignoring: clantoSettingsLocked(),
+        child: TrackpadSpeedWidget(
+          value: curSpeed,
+          onDebouncer: onDebouncer,
+        ),
       ),
     ]);
   }
@@ -2655,7 +2672,7 @@ class _DisplayState extends State<_Display> {
             value: d[0] as String,
             groupValue: groupValue,
             label: d[1] as String,
-            onChanged: onChanged);
+            onChanged: isOptionFixed(key) ? null : onChanged);
       }).toList(),
     );
   }
@@ -2722,7 +2739,8 @@ class _AccountState extends State<_Account> {
               gFFI.userModel.userName.value.isEmpty
                   ? loginDialog()
                   : logOutConfirmDialog()
-            }));
+            },
+        enabled: !clantoSettingsLocked()));
   }
 
   Widget useInfo() {
@@ -2908,7 +2926,7 @@ class __PrinterState extends State<_Printer> {
         _Button('Install {$appName} Printer', () {
           failedMsg.value = '';
           bind.mainSetCommon(key: 'install-printer', value: '');
-        })
+        }, enabled: !clantoSettingsLocked())
       ]).marginOnly(left: _kCardLeftMargin, bottom: 2.0);
     }
 
@@ -2951,23 +2969,24 @@ class __PrinterState extends State<_Printer> {
           value: kValuePrinterIncomingJobDismiss,
           groupValue: printerOptions.action,
           label: 'Dismiss',
-          onChanged: onRadioChanged),
+          onChanged: clantoSettingsLocked() ? null : onRadioChanged),
       _Radio(context,
           value: kValuePrinterIncomingJobDefault,
           groupValue: printerOptions.action,
           label: 'use-the-default-printer-tip',
-          onChanged: onRadioChanged),
+          onChanged: clantoSettingsLocked() ? null : onRadioChanged),
       _Radio(context,
           value: kValuePrinterIncomingJobSelected,
           groupValue: printerOptions.action,
           label: 'use-the-selected-printer-tip',
-          onChanged: onRadioChanged),
+          onChanged: clantoSettingsLocked() ? null : onRadioChanged),
       if (printerOptions.printerNames.isNotEmpty)
         ComboBox(
           initialKey: printerOptions.printerName,
           keys: printerOptions.printerNames,
           values: printerOptions.printerNames,
-          enabled: printerOptions.action == kValuePrinterIncomingJobSelected,
+          enabled: !clantoSettingsLocked() &&
+              printerOptions.action == kValuePrinterIncomingJobSelected,
           onChanged: (value) async {
             await bind.mainSetLocalOption(
                 key: kKeyPrinterSelected, value: value);
@@ -2979,7 +2998,8 @@ class __PrinterState extends State<_Printer> {
         'auto-print-tip',
         kKeyPrinterAllowAutoPrint,
         isServer: false,
-        enabled: printerOptions.action != kValuePrinterIncomingJobDismiss,
+        enabled: !clantoSettingsLocked() &&
+            printerOptions.action != kValuePrinterIncomingJobDismiss,
       )
     ]);
   }
@@ -3325,6 +3345,7 @@ class _WaylandCardState extends State<WaylandCard> {
     return _Button(
       'Clear Wayland screen selection',
       showConfirmMsgBox,
+      enabled: !clantoSettingsLocked(),
       tip: 'clear_Wayland_screen_selection_tip',
       style: ButtonStyle(
         backgroundColor: MaterialStateProperty.all<Color>(
@@ -3368,6 +3389,7 @@ class _WaylandCardState extends State<WaylandCard> {
       _Button(
         'Reset keyboard shortcuts permission',
         showConfirmMsgBox,
+        enabled: !clantoSettingsLocked(),
         tip: 'clear-shortcuts-inhibitor-permission-tip',
         style: ButtonStyle(
           backgroundColor: MaterialStateProperty.all<Color>(
@@ -3435,6 +3457,7 @@ Widget _lock(
   String label,
   Function() onUnlock,
 ) {
+  if (clantoSettingsLocked()) return const SizedBox.shrink();
   return Offstage(
       offstage: !locked,
       child: Row(

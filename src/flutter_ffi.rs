@@ -415,6 +415,11 @@ pub fn get_local_flutter_option(k: String) -> SyncReturn<String> {
 }
 
 pub fn set_local_flutter_option(k: String, v: String) {
+    if !crate::clanto::settings_lock::user_local_flutter_option_write_allowed_now(
+        &k,
+    ) {
+        return;
+    }
     ui_interface::set_local_flutter_option(k, v);
 }
 
@@ -992,6 +997,9 @@ pub fn main_get_clanto_controller_os_user() -> SyncReturn<String> {
 }
 
 pub fn main_change_id(new_id: String) {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return;
+    }
     change_id(new_id)
 }
 
@@ -1016,6 +1024,10 @@ pub fn main_get_error() -> String {
 }
 
 pub fn main_set_option(key: String, value: String) {
+    if !crate::clanto::settings_lock::user_option_write_allowed(&key) {
+        log::trace!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+        return;
+    }
     #[cfg(target_os = "android")]
     let is_host_watermark = key == crate::clanto::host_watermark::OPTION_HOST_WATERMARK;
     #[cfg(target_os = "android")]
@@ -1091,6 +1103,11 @@ pub fn main_get_options_sync() -> SyncReturn<String> {
 
 pub fn main_set_options(json: String) {
     let mut map: HashMap<String, String> = serde_json::from_str(&json).unwrap_or(HashMap::new());
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        log::trace!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+        return;
+    }
+    map.remove(crate::clanto::settings_lock::OPT_LOCK_SETTINGS);
     #[cfg(target_os = "android")]
     {
         let allow_perm_change_in_accept_window = config::option2bool(
@@ -1123,6 +1140,9 @@ pub fn main_test_if_valid_server(server: String, test_with_proxy: bool) -> Strin
 }
 
 pub fn main_set_socks(proxy: String, username: String, password: String) {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return;
+    }
     set_socks(proxy, username, password)
 }
 
@@ -1642,6 +1662,9 @@ pub fn main_video_save_directory(root: bool) -> SyncReturn<String> {
 }
 
 pub fn main_set_user_default_option(key: String, value: String) {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return;
+    }
     set_user_default_option(key, value);
 }
 
@@ -1654,7 +1677,10 @@ pub fn main_handle_relay_id(id: String) -> String {
 }
 
 pub fn main_is_option_fixed(key: String) -> SyncReturn<bool> {
-    SyncReturn(is_option_fixed(&key))
+    let fixed_by_settings_lock = !crate::clanto::settings_lock::user_write_allowed_now()
+        && key != keys::OPTION_THEME
+        && key != keys::OPTION_LANGUAGE;
+    SyncReturn(fixed_by_settings_lock || is_option_fixed(&key))
 }
 
 pub fn main_get_main_display() -> SyncReturn<String> {
@@ -1824,6 +1850,9 @@ pub fn main_get_temporary_password_rotation_next() -> u64 {
 }
 
 pub fn main_set_permanent_password_with_result(password: String) -> bool {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return false;
+    }
     ui_interface::set_permanent_password_with_result(password)
 }
 
@@ -2213,6 +2242,9 @@ pub fn main_get_unlock_pin() -> SyncReturn<String> {
 }
 
 pub fn main_set_unlock_pin(pin: String) -> SyncReturn<String> {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return SyncReturn(crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE.to_owned());
+    }
     SyncReturn(set_unlock_pin(pin))
 }
 
@@ -2640,10 +2672,16 @@ pub fn main_supported_input_source() -> SyncReturn<String> {
 }
 
 pub fn main_generate2fa() -> String {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return String::new();
+    }
     generate2fa()
 }
 
 pub fn main_verify2fa(code: String) -> bool {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return false;
+    }
     verify2fa(code)
 }
 
@@ -2652,6 +2690,9 @@ pub fn main_has_valid_2fa_sync() -> SyncReturn<bool> {
 }
 
 pub fn main_verify_bot(token: String) -> String {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE.to_owned();
+    }
     verify_bot(token)
 }
 

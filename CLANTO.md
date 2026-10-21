@@ -303,7 +303,9 @@ dieci:
 Per le chiavi `enable-*` la UI scrive `'Y'` per «acceso» solo
 perché `defaultOptionYes` è esplicito (vedi sopra): con `''` non si potrebbero riaccendere.
 L'opzione host `clanto-temp-password-rotate-minutes` ruota la password temporanea dopo 1-1440
-minuti; assente o `0` lascia invariato il comportamento senza rotazione.
+minuti; assente o `0` lascia invariato il comportamento senza rotazione. Si configura nella card
+Password delle impostazioni desktop e nella sezione Sicurezza dell'host Android quando il metodo
+di verifica usa la password temporanea.
 
 ## Permessi per ID autorizzato
 
@@ -378,7 +380,8 @@ contenuto o percorso del file.
 
 `clanto-session-log-days` stabilisce la conservazione, predefinita a 180 giorni; `0` disabilita
 il registro ed elimina i file esistenti. Il report è consultabile ed esportabile dalle impostazioni
-di ClantoDesk e rispetta il relativo blocco amministrativo. I record contengono metadati personali
+di ClantoDesk; nella stessa sezione si imposta la conservazione da 0 a 3650 giorni, con conferma
+esplicita prima di salvare `0`, e il controllo rispetta il relativo blocco amministrativo. I record contengono metadati personali
 dei peer: limitare la conservazione allo stretto necessario e proteggere l'accesso alle impostazioni.
 
 ## Integrazione SIEM dell'audit host
@@ -460,6 +463,11 @@ L'elenco `id-whitelist`, i relativi profili `clanto-id-permissions` e le cinque 
 controllo file sono gestibili via GPO. Per una policy restrittiva impostare `clanto-file-scan=block`
 e bloccare le estensioni eseguibili e di script con `clanto-file-blocked-ext`. Le chiavi dei server
 (`custom-rendezvous-server`, `key`, `api-server`, `relay-server`) non sono mai gestibili via GPO.
+La policy `LockSettings` imposta `clanto-lock-settings=Y` e rende tutte le impostazioni di sola
+lettura, amministratori compresi, lasciando modificabili soltanto tema e lingua. La chiave è
+accettata esclusivamente dal caricamento GPO: interfaccia, IPC e riga di comando non possono
+impostarla. Il backend rifiuta inoltre le altre scritture richieste dall'utente con il messaggio
+`Settings are managed by policy`; le scritture interne del programma restano consentite.
 L'elenco completo delle chiavi gestibili è `GPO_KEYS`; la tabella con valori e predefiniti è nel
 [README](README.md#opzioni-di-configurazione).
 

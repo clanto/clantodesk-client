@@ -187,6 +187,16 @@ pub fn initialize() {
     });
 }
 
+pub fn retention_changed() {
+    if enabled() {
+        DISABLED_CLEARED.store(false, Ordering::Release);
+        cleanup_if_due();
+    } else {
+        DISABLED_CLEARED.store(false, Ordering::Release);
+        clear_if_disabled();
+    }
+}
+
 fn on_connection(value: &Value) {
     let mut registry = registry().lock().unwrap_or_else(|e| e.into_inner());
     let to_write = apply_connection(&mut registry, value);

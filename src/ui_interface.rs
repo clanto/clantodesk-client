@@ -410,7 +410,14 @@ pub fn get_sound_inputs() -> Vec<String> {
 }
 
 #[inline]
-pub fn set_options(m: HashMap<String, String>) {
+pub fn set_options(mut m: HashMap<String, String>) {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        log::trace!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+        return;
+    }
+    m.remove(crate::clanto::settings_lock::OPT_LOCK_SETTINGS);
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let retention_changed = m.contains_key(crate::clanto::session_log::OPT_SESSION_LOG_DAYS);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         *OPTIONS.lock().unwrap() = m.clone();
@@ -418,10 +425,20 @@ pub fn set_options(m: HashMap<String, String>) {
     }
     #[cfg(any(target_os = "android", target_os = "ios"))]
     Config::set_options(m);
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    if retention_changed {
+        crate::clanto::session_log::retention_changed();
+    }
 }
 
 #[inline]
 pub fn set_option(key: String, value: String) {
+    if !crate::clanto::settings_lock::user_option_write_allowed(&key) {
+        log::trace!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+        return;
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let retention_changed = key == crate::clanto::session_log::OPT_SESSION_LOG_DAYS;
     if &key == "stop-service" {
         #[cfg(target_os = "macos")]
         {
@@ -464,6 +481,10 @@ pub fn set_option(key: String, value: String) {
         let _nat = crate::CheckTestNatType::new();
         Config::set_option(key, value);
     }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    if retention_changed {
+        crate::clanto::session_log::retention_changed();
+    }
 }
 
 #[inline]
@@ -502,6 +523,10 @@ pub fn get_socks() -> Vec<String> {
 
 #[inline]
 pub fn set_socks(proxy: String, username: String, password: String) {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        log::trace!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+        return;
+    }
     let socks = config::Socks5Server {
         proxy,
         username,
@@ -652,7 +677,9 @@ pub fn is_local_permanent_password_set() -> bool {
 }
 
 pub fn set_permanent_password_with_result(password: String) -> bool {
-    if config::Config::is_disable_change_permanent_password() {
+    if !crate::clanto::settings_lock::user_write_allowed_now()
+        || config::Config::is_disable_change_permanent_password()
+    {
         return false;
     }
     #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -856,6 +883,9 @@ pub fn reset_async_job_status() {
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
 #[inline]
 pub fn change_id(id: String) {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return;
+    }
     reset_async_job_status();
     let old_id = get_id();
     std::thread::spawn(move || {
@@ -1531,6 +1561,9 @@ pub async fn change_id_shared(id: String, old_id: String) -> String {
 }
 
 pub async fn change_id_shared_(id: String, old_id: String) -> &'static str {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE;
+    }
     if !hbb_common::is_valid_custom_id(&id) {
         log::debug!(
             "debugging invalid id: \"{id}\", len: {}, base64: \"{}\"",
@@ -1673,10 +1706,16 @@ pub fn has_valid_2fa() -> bool {
 }
 
 pub fn generate2fa() -> String {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return String::new();
+    }
     crate::auth_2fa::generate2fa()
 }
 
 pub fn verify2fa(code: String) -> bool {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return false;
+    }
     let res = crate::auth_2fa::verify2fa(code);
     if res {
         refresh_options();
@@ -1689,6 +1728,9 @@ pub fn has_valid_bot() -> bool {
 }
 
 pub fn verify_bot(token: String) -> String {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE.to_owned();
+    }
     match crate::auth_2fa::get_chatid_telegram(&token) {
         Err(err) => err.to_string(),
         Ok(None) => {
@@ -1726,6 +1768,9 @@ pub fn get_unlock_pin() -> String {
 
 #[cfg(feature = "flutter")]
 pub fn set_unlock_pin(pin: String) -> String {
+    if !crate::clanto::settings_lock::user_write_allowed_now() {
+        return crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE.to_owned();
+    }
     #[cfg(any(target_os = "android", target_os = "ios"))]
     return String::default();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

@@ -147,5 +147,8 @@
     <policy name="PrivacyPrompt" class="Machine" displayName="$(string.PrivacyPrompt)" explainText="$(string.PrivacyPrompt_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-privacy-prompt" presentation="$(presentation.PrivacyPrompt)">
       <parentCategory ref="Interface" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="LockSettings" class="Machine" displayName="$(string.LockSettings)" explainText="$(string.LockSettings_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-lock-settings" presentation="$(presentation.LockSettings)">
+      <parentCategory ref="Interface" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
   </policies>
 </policyDefinitions>

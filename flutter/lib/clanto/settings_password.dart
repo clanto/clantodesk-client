@@ -237,7 +237,7 @@ Future<bool> setClantoLocalPasswordDialog() async {
 /// Righe per la sezione "Impostazioni" della pagina mobile. `refresh` rilancia
 /// il setState del chiamante.
 List<AbstractSettingsTile> clantoLocalPasswordTiles(
-    {required VoidCallback refresh}) {
+    {required VoidCallback refresh, bool enabled = true}) {
   final isSet = ClantoLocalPassword.isSet;
   return [
     SettingsTile(
@@ -246,9 +246,11 @@ List<AbstractSettingsTile> clantoLocalPasswordTiles(
           ? 'A password is set. It replaces PIN and biometrics.'
           : 'Use a password when the device has no PIN or biometrics.')),
       leading: const Icon(Icons.password),
-      onPressed: (context) async {
-        if (await setClantoLocalPasswordDialog()) refresh();
-      },
+      onPressed: enabled
+          ? (context) async {
+              if (await setClantoLocalPasswordDialog()) refresh();
+            }
+          : null,
     ),
     if (isSet)
       SettingsTile.switchTile(
@@ -256,28 +258,32 @@ List<AbstractSettingsTile> clantoLocalPasswordTiles(
         description:
             Text(translate('Hide the ID and password of this device.')),
         initialValue: ClantoLocalPassword.guardsHostPage,
-        onToggle: (v) async {
-          await ClantoLocalPassword.setScope(
-              v ? kScopeSettingsAndHost : kScopeSettings);
-          refresh();
-        },
+        onToggle: enabled
+            ? (v) async {
+                await ClantoLocalPassword.setScope(
+                    v ? kScopeSettingsAndHost : kScopeSettings);
+                refresh();
+              }
+            : null,
       ),
     if (isSet)
       SettingsTile(
         title: Text(translate('Remove settings password')),
         leading: const Icon(Icons.lock_open),
-        onPressed: (context) async {
-          // Toglierla richiede conoscerla: altrimenti chi ha il dispositivo in
-          // mano la disattiva e apre le impostazioni.
-          if (!await promptClantoLocalPassword(
-              translate('Authenticate to remove the password'))) {
-            return;
-          }
-          await ClantoLocalPassword.clear();
-          await ClantoLocalPassword.setScope(kScopeSettings);
-          showToast(translate('Successful'));
-          refresh();
-        },
+        onPressed: enabled
+            ? (context) async {
+                // Toglierla richiede conoscerla: altrimenti chi ha il dispositivo in
+                // mano la disattiva e apre le impostazioni.
+                if (!await promptClantoLocalPassword(
+                    translate('Authenticate to remove the password'))) {
+                  return;
+                }
+                await ClantoLocalPassword.clear();
+                await ClantoLocalPassword.setScope(kScopeSettings);
+                showToast(translate('Successful'));
+                refresh();
+              }
+            : null,
       ),
   ];
 }

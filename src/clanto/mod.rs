@@ -17,5 +17,6 @@ pub mod keystore;
 pub mod outgoing;
 pub mod posture;
 pub mod session_log;
+pub mod settings_lock;
 pub mod temp_password;
 pub mod watermark;

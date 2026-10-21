@@ -341,6 +341,9 @@ in `res/admx`: si copiano in `PolicyDefinitions`, nel Central Store del dominio 
 importano in Intune. I criteri sono letti da
 `HKLM\Software\Policies\Clanto\ClantoDesk` **una sola volta all'avvio**: dopo
 `gpupdate` riavviare il servizio. Le chiavi dei server non sono mai gestibili via GPO.
+Il criterio `LockSettings` rende tutte le impostazioni di sola lettura, anche per gli
+amministratori, tranne tema e lingua. La relativa chiave `clanto-lock-settings` è accettata
+soltanto dalla GPO; i tentativi di scrittura da interfaccia, IPC o riga di comando sono rifiutati.
 
 ### Predefiniti più sicuri
 
@@ -366,6 +369,8 @@ lo legge. Senza installazione o senza privilegi risponde
 `Installation and administrative privileges required!`; con le impostazioni
 disabilitate risponde `Settings are disabled!`. Su Windows si può usare la GPO
 (solo Windows): una chiave gestita da GPO non è sovrascrivibile dalle altre vie.
+Con `clanto-lock-settings=Y`, una scrittura da riga di comando risponde
+`Settings are managed by policy`.
 
 #### Ingresso e postura
 
@@ -418,7 +423,7 @@ L'elenco degli ID è l'opzione upstream `id-whitelist` (GPO `IdWhitelist`).
 
 | Chiave | Valori | Default | Interfaccia | GPO |
 | --- | --- | --- | --- | --- |
-| `clanto-session-log-days` | intero 0-3650 (`0` disabilita ed elimina i file; valore non numerico = 180) | `180` | solo GPO o `--option` (la sezione «Report sessioni» consulta ed esporta, non imposta la durata) | `SessionLogDays` |
+| `clanto-session-log-days` | intero 0-3650 (`0` disabilita ed elimina i file; valore non numerico = 180) | `180` | «Conserva i report per (giorni)» nella sezione «Report sessioni» desktop e nel relativo dialogo mobile; `0` richiede conferma | `SessionLogDays` |
 
 #### Audit e SIEM
 
@@ -439,13 +444,14 @@ L'interfaccia di questi controlli è nella sezione «Audit» delle impostazioni 
 
 | Chiave | Valori | Default | Interfaccia | GPO |
 | --- | --- | --- | --- | --- |
-| `clanto-temp-password-rotate-minutes` | intero 1-1440; `0` o vuoto = nessuna rotazione; altro valore = rotazione disattivata con avviso nel log | assente (nessuna rotazione) | solo GPO o `--option` | `TemporaryPasswordRotation` |
+| `clanto-temp-password-rotate-minutes` | intero 1-1440; `0` o vuoto = nessuna rotazione; altro valore = rotazione disattivata con avviso nel log | assente (nessuna rotazione) | menu «Ruota la password monouso» nella card Password desktop e nella sezione Sicurezza dell'host Android, visibile quando si usa la password temporanea | `TemporaryPasswordRotation` |
 
 #### Interfaccia
 
 | Chiave | Valori | Default | Interfaccia | GPO |
 | --- | --- | --- | --- | --- |
 | `clanto-privacy-prompt` | `Y`, `N` (`N` = mai il popup) | assente (popup attivo) | «Chiedi di attivare la modalità privacy all'inizio di ogni sessione» (Altre opzioni predefinite, desktop e mobile) | `PrivacyPrompt` |
+| `clanto-lock-settings` | `Y`, `N` | assente (impostazioni modificabili) | nessun controllo locale; con `Y` tutte le impostazioni sono in sola lettura tranne tema e lingua | `LockSettings` |
 
 #### Default dell'host
 

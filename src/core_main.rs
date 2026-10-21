@@ -439,6 +439,10 @@ pub fn core_main() -> Option<Vec<String>> {
             }
             return None;
         } else if args[0] == "--password" {
+            if !crate::clanto::settings_lock::user_write_allowed_now() {
+                println!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+                return None;
+            }
             if is_cli_setting_change_disabled() {
                 println!("Settings are disabled!");
                 return None;
@@ -460,6 +464,10 @@ pub fn core_main() -> Option<Vec<String>> {
             }
             return None;
         } else if args[0] == "--set-unlock-pin" {
+            if !crate::clanto::settings_lock::user_write_allowed_now() {
+                println!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+                return None;
+            }
             if config::Config::is_disable_unlock_pin() {
                 println!("Unlock PIN is disabled!");
                 return None;
@@ -481,6 +489,10 @@ pub fn core_main() -> Option<Vec<String>> {
             println!("{}", crate::ipc::get_id());
             return None;
         } else if args[0] == "--set-id" {
+            if !crate::clanto::settings_lock::user_write_allowed_now() {
+                println!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+                return None;
+            }
             if is_cli_setting_change_disabled() {
                 println!("Settings are disabled!");
                 return None;
@@ -528,7 +540,12 @@ pub fn core_main() -> Option<Vec<String>> {
             }
             return None;
         } else if args[0] == "--option" {
-            if is_cli_setting_change_disabled() {
+            if args.len() == 3 && !crate::clanto::settings_lock::user_option_write_allowed(&args[1])
+            {
+                println!("{}", crate::clanto::settings_lock::MANAGED_SETTINGS_MESSAGE);
+                return None;
+            }
+            if args.len() == 3 && is_cli_setting_change_disabled() {
                 println!("Settings are disabled!");
                 return None;
             }

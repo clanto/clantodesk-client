@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
 import '../../common.dart';
+import '../../clanto/settings_lock.dart';
 import '../../common/widgets/dialog.dart';
 import '../../consts.dart';
 import '../../models/platform_model.dart';
@@ -23,7 +24,8 @@ class ServerPage extends StatefulWidget implements PageShape {
   final icon = const Icon(Icons.mobile_screen_share);
 
   @override
-  final appBarActions = (!bind.isDisableSettings() &&
+  final appBarActions = (!clantoSettingsLocked() &&
+          !bind.isDisableSettings() &&
           bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) != 'Y')
       ? [_DropDownAction()]
       : [];
@@ -56,6 +58,8 @@ class _DropDownAction extends StatelessWidget {
           final verificationMethod = gFFI.serverModel.verificationMethod;
           final showPasswordOption = approveMode != 'click';
           final isApproveModeFixed = isOptionFixed(kOptionApproveMode);
+          final isVerificationMethodFixed =
+              isOptionFixed(kOptionVerificationMethod);
           final isNumericOneTimePasswordFixed =
               isOptionFixed(kOptionAllowNumericOneTimePassword);
           final isAllowNumericOneTimePassword =
@@ -114,12 +118,14 @@ class _DropDownAction extends StatelessWidget {
                 value: kUseTemporaryPassword,
                 child: listTile('Use one-time password',
                     verificationMethod == kUseTemporaryPassword),
+                enabled: !isVerificationMethodFixed,
               ),
             if (showPasswordOption)
               PopupMenuItem(
                 value: kUsePermanentPassword,
                 child: listTile('Use permanent password',
                     verificationMethod == kUsePermanentPassword),
+                enabled: !isVerificationMethodFixed,
               ),
             if (showPasswordOption)
               PopupMenuItem(
@@ -128,6 +134,7 @@ class _DropDownAction extends StatelessWidget {
                     'Use both passwords',
                     verificationMethod != kUseTemporaryPassword &&
                         verificationMethod != kUsePermanentPassword),
+                enabled: !isVerificationMethodFixed,
               ),
           ];
         },

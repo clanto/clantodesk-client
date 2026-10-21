@@ -418,5 +418,15 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("ID or pattern is required", "ID or pattern is required"),
         ("Controller watermark requires the official ClantoDesk client verified through clanto.it and disables session recording.", "Controller watermark requires the official ClantoDesk client verified through clanto.it and disables session recording."),
         ("The official ClantoDesk client is required by the remote device.", "The official ClantoDesk client is required by the remote device."),
+        ("Settings managed by your organization", "Settings managed by your organization"),
+        ("Keep reports for (days)", "Keep reports for (days)"),
+        ("Value must be between 0 and 3650", "Value must be between 0 and 3650"),
+        ("Disable session reports?", "Disable session reports?"),
+        ("Existing session reports will be deleted.", "Existing session reports will be deleted."),
+        ("Disable and delete", "Disable and delete"),
+        ("minutes", "minutes"),
+        ("Rotate one-time password", "Rotate one-time password"),
+        ("Custom interval (minutes)", "Custom interval (minutes)"),
+        ("Value must be between 1 and 1440", "Value must be between 1 and 1440"),
     ].iter().cloned().collect();
 }
