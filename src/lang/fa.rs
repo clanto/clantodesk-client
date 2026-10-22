@@ -880,5 +880,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Rotate one-time password", ""),
         ("Custom interval (minutes)", ""),
         ("Value must be between 1 and 1440", ""),
+        ("clanto_posture_outdated_error", ""),
+        ("clanto_posture_unofficial_error", ""),
+        ("clanto_posture_unreachable_error", ""),
+        ("clanto_posture_policy_error", ""),
     ].iter().cloned().collect();
 }

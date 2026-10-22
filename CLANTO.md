@@ -125,6 +125,9 @@ del peer (`os-username`, `os-password`, `rdp_username`, `rdp_password`), token e
 profilo dell'account locale, rubrica e gruppi. La chiave **macchina** protegge la
 configurazione globale dell'host: ID, password permanente, chiave privata, PIN di
 sblocco, password Socks5, dispositivi attendibili, segreto TOTP e token Telegram.
+L'URI `otpauth` usa il nome applicazione configurato a runtime (`ClantoDesk`) come issuer e label;
+questi metadati non sono salvati nel record TOTP e non partecipano al calcolo o alla verifica del
+codice, quindi le configurazioni 2FA esistenti restano valide.
 
 La posizione dipende dalla piattaforma; `Config::path(...)` indica sempre la
 cartella di configurazione del profilo corrente.
@@ -498,6 +501,15 @@ coerenza e versione revocata, ma non applica le regole della policy di postura. 
 il client ClantoDesk ufficiale senza imporre la postura completa ed è ugualmente fail-closed. Con
 entrambe le opzioni attive viene eseguita una sola richiesta, quella completa; con entrambe spente
 non viene eseguita alcuna richiesta.
+
+I rifiuti sono classificati prima di essere inviati al controller: versioni precedenti alla 1.5.0
+o revocate sono `outdated`, postura/firma assente su versioni recenti e firme non valide sono
+`unofficial`, timeout, errori di rete e risposte JSON non valide sono `unreachable`, mentre le
+regole di postura non rispettate sono `policy`. Il controller riceve un testo già tradotto
+dall'host e mai gli identificatori interni `core:*`; questi ultimi restano nel log, nell'audit e
+nel report locale insieme alla classe del rifiuto. Il messaggio `outdated` ha un prefisso Unicode
+invisibile: i client precedenti lo mostrano normalmente, quelli dalla 1.5.0 lo rimuovono e offrono
+il pulsante «Aggiorna», usando il download/installer desktop o la pagina Play Store su Android.
 
 - **Controller.** `src/clanto/posture.rs`: `collect()` raccoglie le chiavi di `POSTURE_KEYS` (sistema,
   patch, antivirus, firewall, firmware, rete...), `unknown` dove non arriva senza privilegi o entro il

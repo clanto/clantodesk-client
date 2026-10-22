@@ -947,5 +947,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Rotate one-time password", "Ruota la password monouso"),
         ("Custom interval (minutes)", "Intervallo personalizzato (minuti)"),
         ("Value must be between 1 and 1440", "Il valore deve essere compreso tra 1 e 1440"),
+        ("clanto_posture_outdated_error", "La versione di ClantoDesk di questo dispositivo non è aggiornata. Aggiorna ClantoDesk all'ultima versione per connetterti."),
+        ("clanto_posture_unofficial_error", "Questo dispositivo non usa un client ClantoDesk ufficiale. Installa il client ClantoDesk ufficiale per connetterti."),
+        ("clanto_posture_unreachable_error", "Il dispositivo remoto non riesce a raggiungere clanto.it per verificare i requisiti di sicurezza. Riprova più tardi o contatta l'amministratore."),
+        ("clanto_posture_policy_error", "Dispositivo non protetto."),
     ].iter().cloned().collect();
 }

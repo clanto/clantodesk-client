@@ -72,7 +72,7 @@ class ClantoSessionRecord {
       idProfile: _string(json['id_profile']),
       primaryAuth: _primaryAuth(json['primary_auth']),
       twoFactor: _twoFactor(json['two_factor']),
-      postureResult: _string(json['posture_result']),
+      postureResult: _string(json['posture_result'] ?? json['reason_class']),
       postureBypasses: (json['posture_bypasses'] as List?)
               ?.map((value) => value.toString())
               .toList(growable: false) ??
@@ -83,8 +83,10 @@ class ClantoSessionRecord {
               return file.map((key, value) => MapEntry(key.toString(), value));
             }).toList(growable: false)
           : const [],
-      closeReason:
-          _string(json['close_reason'] ?? json['alarm_type'] ?? json['details']),
+      closeReason: _string(json['close_reason'] ??
+          json['reason_detail'] ??
+          json['alarm_type'] ??
+          json['details']),
       rejected: json['record_type'] == 'rejected_attempt',
       closed: json['closed'] == true,
     );

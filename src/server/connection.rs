@@ -3038,9 +3038,11 @@ impl Connection {
         &self,
         lr: &LoginRequest,
         mode: crate::clanto::posture::VerificationMode,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::clanto::posture::VerificationRejection> {
         if lr.clanto_posture.is_empty() || lr.clanto_posture_mac.is_empty() {
-            return Err("requisiti di sicurezza mancanti".to_owned());
+            return Err(
+                crate::clanto::posture::VerificationRejection::missing_credentials(&lr.version),
+            );
         }
         let mut body = json!({
             "posture": &lr.clanto_posture,
@@ -3063,28 +3065,59 @@ impl Connection {
             ),
         )
         .await
-        .map_err(|_| "verifica non disponibile".to_owned())?
-        .map_err(|_| "verifica non disponibile".to_owned())?;
-        let response: Value =
-            serde_json::from_str(&response).map_err(|_| "verifica non disponibile".to_owned())?;
-        let ok = response
-            .get("ok")
-            .and_then(Value::as_bool)
-            .ok_or_else(|| "verifica non disponibile".to_owned())?;
-        let failed: Vec<crate::clanto::posture::FailedRule> = serde_json::from_value(
-            response
-                .get("failed")
-                .cloned()
-                .ok_or_else(|| "verifica non disponibile".to_owned())?,
-        )
-        .map_err(|_| "verifica non disponibile".to_owned())?;
+        .map_err(|_| {
+            crate::clanto::posture::VerificationRejection::unreachable(
+                &lr.version,
+                "posture verification timed out".to_owned(),
+            )
+        })?
+        .map_err(|err| {
+            crate::clanto::posture::VerificationRejection::unreachable(
+                &lr.version,
+                format!("posture verification request failed: {err}"),
+            )
+        })?;
+        let response: Value = serde_json::from_str(&response).map_err(|err| {
+            crate::clanto::posture::VerificationRejection::unreachable(
+                &lr.version,
+                format!("invalid posture verification JSON: {err}"),
+            )
+        })?;
+        let ok = response.get("ok").and_then(Value::as_bool).ok_or_else(|| {
+            crate::clanto::posture::VerificationRejection::unreachable(
+                &lr.version,
+                "posture verification response has no boolean ok field".to_owned(),
+            )
+        })?;
+        let failed: Vec<crate::clanto::posture::FailedRule> =
+            serde_json::from_value(response.get("failed").cloned().ok_or_else(|| {
+                crate::clanto::posture::VerificationRejection::unreachable(
+                    &lr.version,
+                    "posture verification response has no failed field".to_owned(),
+                )
+            })?)
+            .map_err(|err| {
+                crate::clanto::posture::VerificationRejection::unreachable(
+                    &lr.version,
+                    format!("invalid posture verification failed rules: {err}"),
+                )
+            })?;
         let bypass = Config::get_option(crate::clanto::posture::OPT_POSTURE_BYPASS)
             .split(',')
             .map(str::trim)
             .filter(|id| !id.is_empty())
             .map(str::to_owned)
             .collect::<Vec<_>>();
-        let bypassed = crate::clanto::posture::decide(ok, &failed, &bypass)?;
+        let bypassed = match crate::clanto::posture::decide(ok, &failed, &bypass) {
+            Ok(bypassed) => bypassed,
+            Err(message) => {
+                return Err(crate::clanto::posture::VerificationRejection::rules(
+                    &lr.version,
+                    &failed,
+                    message,
+                ));
+            }
+        };
         if bypassed.is_empty() {
             self.post_conn_audit(json!({
                 "peer": ((&lr.my_id, &lr.my_name)),
@@ -3100,6 +3133,36 @@ impl Connection {
             }));
         }
         Ok(())
+    }
+
+    fn clanto_posture_login_error(
+        rejection: &crate::clanto::posture::VerificationRejection,
+    ) -> String {
+        use crate::clanto::posture::{
+            RejectionKind, LOGIN_ERROR_OUTDATED, LOGIN_ERROR_POLICY, LOGIN_ERROR_UNOFFICIAL,
+            LOGIN_ERROR_UNREACHABLE, OUTDATED_LOGIN_ERROR_MARKER,
+        };
+
+        let key = match rejection.kind {
+            RejectionKind::Outdated => LOGIN_ERROR_OUTDATED,
+            RejectionKind::Unofficial => LOGIN_ERROR_UNOFFICIAL,
+            RejectionKind::Unreachable => LOGIN_ERROR_UNREACHABLE,
+            RejectionKind::Policy => LOGIN_ERROR_POLICY,
+        };
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        let mut message = crate::lang::translate(key.to_owned());
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        let mut message = crate::lang::translate_locale(key.to_owned(), "");
+        if rejection.kind == RejectionKind::Policy {
+            if let Some(policy_message) = rejection.policy_message.as_deref() {
+                message.push(' ');
+                message.push_str(policy_message);
+            }
+        }
+        if rejection.kind == RejectionKind::Outdated {
+            message.insert_str(0, OUTDATED_LOGIN_ERROR_MARKER);
+        }
+        message
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -3164,17 +3227,27 @@ impl Connection {
             self.apply_id_permissions().await;
             let posture_mode = crate::clanto::posture::configured_verification_mode();
             if posture_mode != crate::clanto::posture::VerificationMode::None {
-                if let Err(reason) = self.verify_clanto_posture(&lr, posture_mode).await {
+                if let Err(rejection) = self.verify_clanto_posture(&lr, posture_mode).await {
+                    hbb_common::throttled_log!(
+                        std::time::Duration::from_secs(30),
+                        warn,
+                        "Clanto posture rejected controller {}: class={}, detail={}",
+                        &lr.my_id,
+                        rejection.kind.as_str(),
+                        &rejection.technical_detail
+                    );
                     self.post_alarm_audit(
                         AlarmAuditType::PostureRejected,
-                        json!({"id": &lr.my_id, "name": &lr.my_name, "ip": &self.ip, "reason": &reason}),
+                        json!({
+                            "id": &lr.my_id,
+                            "name": &lr.my_name,
+                            "ip": &self.ip,
+                            "reason_class": rejection.kind.as_str(),
+                            "reason": &rejection.technical_detail,
+                            "failed_rules": &rejection.failed_rules,
+                        }),
                     );
-                    let reason =
-                        if posture_mode == crate::clanto::posture::VerificationMode::Signature {
-                            crate::clanto::posture::LOGIN_ERROR_OFFICIAL_CLIENT_REQUIRED.to_owned()
-                        } else {
-                            format!("Dispositivo non protetto: {reason}")
-                        };
+                    let reason = Self::clanto_posture_login_error(&rejection);
                     self.send_login_error(&reason).await;
                     self.remember_close_reason(&reason);
                     return false;

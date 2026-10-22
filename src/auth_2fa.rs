@@ -14,7 +14,6 @@ lazy_static::lazy_static! {
     static ref CURRENT_2FA: Mutex<Option<(TOTPInfo, TOTP)>> = Mutex::new(None);
 }
 
-const ISSUER: &str = "RustDesk";
 const TAG_LOGIN: &str = "Connection";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -27,13 +26,17 @@ pub struct TOTPInfo {
 
 impl TOTPInfo {
     fn new_totp(&self) -> ResultType<TOTP> {
+        self.new_totp_with_app_name(&crate::get_app_name())
+    }
+
+    fn new_totp_with_app_name(&self, app_name: &str) -> ResultType<TOTP> {
         let totp = TOTP::new(
             Algorithm::SHA1,
             self.digits,
             1,
             30,
             self.secret.clone(),
-            Some(format!("{} {}", ISSUER, TAG_LOGIN)),
+            Some(format!("{} {}", app_name, TAG_LOGIN)),
             self.name.clone(),
         )?;
         Ok(totp)
@@ -80,6 +83,29 @@ impl TOTPInfo {
         } else {
             bail!("decrypt_vec_or_original 2fa secret failed")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TOTPInfo;
+
+    #[test]
+    fn otpauth_uri_uses_runtime_app_name_without_changing_codes() {
+        let info = TOTPInfo {
+            name: "123456789".to_owned(),
+            secret: vec![7; 20],
+            digits: 6,
+            created_at: 0,
+        };
+        let branded = info.new_totp_with_app_name("ClantoDesk").unwrap();
+        let legacy = info.new_totp_with_app_name("RustDesk").unwrap();
+        let uri = branded.get_url();
+        let at = 1_700_000_000;
+
+        assert_eq!(uri.matches("ClantoDesk%20Connection").count(), 2);
+        assert!(!uri.contains("RustDesk"));
+        assert!(branded.check(&legacy.generate(at), at));
     }
 }
 

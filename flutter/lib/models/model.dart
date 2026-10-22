@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_hbb/clanto/chat_notification.dart';
+import 'package:flutter_hbb/clanto/posture_login_error.dart';
 import 'package:flutter_hbb/clanto/privacy_prompt.dart';
 import 'package:flutter_hbb/common/widgets/peers_view.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -30,6 +31,7 @@ import 'package:flutter_hbb/models/terminal_model.dart';
 import 'package:flutter_hbb/common/shared_state.dart';
 import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:flutter_hbb/utils/http_service.dart' as http;
+import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
 import 'package:tuple/tuple.dart';
 import 'package:image/image.dart' as img2;
 import 'package:flutter_svg/flutter_svg.dart';
@@ -37,6 +39,7 @@ import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:vector_math/vector_math.dart' show Vector2;
 
 import '../common.dart';
@@ -887,7 +890,9 @@ class FfiModel with ChangeNotifier {
     final dialogManager = parent.target!.dialogManager;
     final type = evt['type'];
     final title = evt['title'];
-    final text = evt['text'];
+    final postureLoginError =
+        clantoParsePostureLoginError((evt['text'] ?? '').toString());
+    final text = postureLoginError.message;
     final link = evt['link'];
 
     // The peer-gone detector reconnects under `restarting-show` rather than an error title, so
@@ -911,7 +916,9 @@ class FfiModel with ChangeNotifier {
       parent.target?.inputModel.setRelativeMouseMode(false);
     }
 
-    if (type == 're-input-password') {
+    if (postureLoginError.requiresUpdate && (isDesktop || isAndroid)) {
+      _showClantoOutdatedDialog(sessionId, type, title, text, dialogManager);
+    } else if (type == 're-input-password') {
       wrongPasswordDialog(sessionId, dialogManager, type, title, text);
     } else if (type == 'input-2fa') {
       enter2FaDialog(sessionId, dialogManager);
@@ -970,6 +977,70 @@ class FfiModel with ChangeNotifier {
       }
       showMsgBox(sessionId, type, title, text, link, hasRetry, dialogManager);
     }
+  }
+
+  void _showClantoOutdatedDialog(
+      SessionID sessionId,
+      String type,
+      String title,
+      String text,
+      OverlayDialogManager dialogManager) {
+    dialogManager.show(
+      (setState, close, context) {
+        void closeDialog() {
+          closeConnection();
+          close();
+        }
+
+        void update() {
+          closeConnection();
+          close();
+          _startClantoUpdate();
+        }
+
+        return CustomAlertDialog(
+          title: null,
+          content: SelectionArea(child: msgboxContent(type, title, text)),
+          actions: [
+            dialogButton('Close', onPressed: closeDialog, isOutline: true),
+            dialogButton('Update', onPressed: update),
+          ],
+          onCancel: closeDialog,
+        );
+      },
+      tag: '$sessionId-clanto-outdated',
+    );
+  }
+
+  void _startClantoUpdate() {
+    if (isAndroid) {
+      launchUrl(Uri.parse(
+          'https://play.google.com/store/apps/details?id=it.clanto.clantodesk'));
+      return;
+    }
+
+    final updateUrl = stateGlobal.updateUrl.value;
+    if (updateUrl.isNotEmpty) {
+      handleUpdate(updateUrl);
+      return;
+    }
+
+    const handlerName = 'clanto-posture-outdated-update';
+    platformFFI.registerEventHandler(
+      kCheckSoftwareUpdateFinish,
+      handlerName,
+      (evt) async {
+        platformFFI.unregisterEventHandler(
+            kCheckSoftwareUpdateFinish, handlerName);
+        final url = evt['url'];
+        if (url is String && url.isNotEmpty) {
+          stateGlobal.updateUrl.value = url;
+          handleUpdate(url);
+        }
+      },
+      replace: true,
+    );
+    bind.mainGetSoftwareUpdateUrl();
   }
 
   void resetRestartReconnectState() {

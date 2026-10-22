@@ -98,6 +98,16 @@ void main() {
     expect(parsed.single.idProfile, 'custom');
   });
 
+  test('parses the classified posture rejection and technical detail', () {
+    final parsed = clantoParseSessionRecords(
+      '[{"record_type":"rejected_attempt","reason_class":"outdated",'
+      '"reason_detail":"revoked release [core:revoked]"}]',
+    );
+
+    expect(parsed.single.postureResult, 'outdated');
+    expect(parsed.single.closeReason, 'revoked release [core:revoked]');
+  });
+
   test('exports only filtered session records as CSV', () {
     final filtered = clantoFilterSessionRecords(
       records,

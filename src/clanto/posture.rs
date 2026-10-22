@@ -41,8 +41,12 @@ impl Drop for CollectingGuard {
 pub const OPT_REQUIRE_PROTECTED_DEVICE: &str = "clanto-require-protected-device";
 pub const OPT_POSTURE_BYPASS: &str = "clanto-posture-bypass";
 pub const POSTURE_API_URL: &str = "https://clanto.it/api/clantodesk-posture.php";
-pub const LOGIN_ERROR_OFFICIAL_CLIENT_REQUIRED: &str =
-    "The official ClantoDesk client is required by the remote device.";
+pub const MIN_POSTURE_VERSION: &str = "1.5.0";
+pub const OUTDATED_LOGIN_ERROR_MARKER: &str = "\u{2063}\u{2064}\u{2063}";
+pub const LOGIN_ERROR_OUTDATED: &str = "clanto_posture_outdated_error";
+pub const LOGIN_ERROR_UNOFFICIAL: &str = "clanto_posture_unofficial_error";
+pub const LOGIN_ERROR_UNREACHABLE: &str = "clanto_posture_unreachable_error";
+pub const LOGIN_ERROR_POLICY: &str = "clanto_posture_policy_error";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VerificationMode {
@@ -113,6 +117,102 @@ pub struct FailedRule {
     pub id: String,
     pub message: String,
     pub bypassable: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RejectionKind {
+    Outdated,
+    Unofficial,
+    Unreachable,
+    Policy,
+}
+
+impl RejectionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Outdated => "outdated",
+            Self::Unofficial => "unofficial",
+            Self::Unreachable => "unreachable",
+            Self::Policy => "policy",
+        }
+    }
+}
+
+pub enum VerificationFailure<'a> {
+    MissingCredentials,
+    Unreachable,
+    Rules(&'a [FailedRule]),
+}
+
+pub struct VerificationRejection {
+    pub kind: RejectionKind,
+    pub technical_detail: String,
+    pub policy_message: Option<String>,
+    pub failed_rules: Vec<String>,
+}
+
+pub fn classify_rejection(version: &str, failure: VerificationFailure<'_>) -> RejectionKind {
+    if hbb_common::get_version_number(version) < hbb_common::get_version_number(MIN_POSTURE_VERSION)
+    {
+        return RejectionKind::Outdated;
+    }
+    match failure {
+        VerificationFailure::MissingCredentials => RejectionKind::Unofficial,
+        VerificationFailure::Unreachable => RejectionKind::Unreachable,
+        VerificationFailure::Rules(failed) => {
+            if failed.iter().any(|rule| rule.id == "core:revoked") {
+                RejectionKind::Outdated
+            } else if failed.iter().any(|rule| rule.id == "core:signature") {
+                RejectionKind::Unofficial
+            } else {
+                RejectionKind::Policy
+            }
+        }
+    }
+}
+
+impl VerificationRejection {
+    pub fn missing_credentials(version: &str) -> Self {
+        Self {
+            kind: classify_rejection(version, VerificationFailure::MissingCredentials),
+            technical_detail: "posture or signature missing".to_owned(),
+            policy_message: None,
+            failed_rules: Vec::new(),
+        }
+    }
+
+    pub fn unreachable(version: &str, technical_detail: String) -> Self {
+        Self {
+            kind: classify_rejection(version, VerificationFailure::Unreachable),
+            technical_detail,
+            policy_message: None,
+            failed_rules: Vec::new(),
+        }
+    }
+
+    pub fn rules(version: &str, failed: &[FailedRule], technical_reason: String) -> Self {
+        let failed_rules = failed
+            .iter()
+            .map(|rule| rule.id.clone())
+            .collect::<Vec<_>>();
+        let policy_message = failed
+            .iter()
+            .map(|rule| rule.message.trim())
+            .filter(|message| !message.is_empty() && !message.contains("core:"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let technical_detail = if failed_rules.is_empty() {
+            technical_reason
+        } else {
+            format!("{} [{}]", technical_reason, failed_rules.join(", "))
+        };
+        Self {
+            kind: classify_rejection(version, VerificationFailure::Rules(failed)),
+            technical_detail,
+            policy_message: (!policy_message.is_empty()).then_some(policy_message),
+            failed_rules,
+        }
+    }
 }
 
 fn cached() -> Option<HashMap<String, String>> {
@@ -575,8 +675,9 @@ fn apply_lines(posture: &mut HashMap<String, String>, output: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_lines, collect, complete_lines, decide, release_key, sign, verification_mode,
-        FailedRule, VerificationMode, POSTURE_KEYS,
+        apply_lines, classify_rejection, collect, complete_lines, decide, release_key, sign,
+        verification_mode, FailedRule, RejectionKind, VerificationFailure, VerificationMode,
+        POSTURE_KEYS,
     };
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
@@ -603,6 +704,38 @@ mod tests {
         assert_eq!(verification_mode(false, true), VerificationMode::Signature);
         assert_eq!(verification_mode(true, false), VerificationMode::Full);
         assert_eq!(verification_mode(true, true), VerificationMode::Full);
+    }
+
+    #[test]
+    fn classifies_posture_rejections_by_version_and_failure() {
+        let revoked = [failed("core:revoked", false)];
+        let signature = [failed("core:signature", false)];
+        let policy = [failed("antivirus", false)];
+
+        assert_eq!(
+            classify_rejection("1.4.9", VerificationFailure::MissingCredentials),
+            RejectionKind::Outdated
+        );
+        assert_eq!(
+            classify_rejection("1.10.0", VerificationFailure::MissingCredentials),
+            RejectionKind::Unofficial
+        );
+        assert_eq!(
+            classify_rejection("1.5.0", VerificationFailure::Rules(&revoked)),
+            RejectionKind::Outdated
+        );
+        assert_eq!(
+            classify_rejection("1.5.0", VerificationFailure::Rules(&signature)),
+            RejectionKind::Unofficial
+        );
+        assert_eq!(
+            classify_rejection("1.5.0", VerificationFailure::Unreachable),
+            RejectionKind::Unreachable
+        );
+        assert_eq!(
+            classify_rejection("1.5.0", VerificationFailure::Rules(&policy)),
+            RejectionKind::Policy
+        );
     }
 
     #[test]

@@ -327,6 +327,10 @@ fn on_file(value: &Value) {
 }
 
 fn on_alarm(value: &Value) {
+    write_value_async(alarm_record(value));
+}
+
+fn alarm_record(value: &Value) -> Value {
     let mut record = json!({
         "record_type": "rejected_attempt",
         "occurred_at": now().to_rfc3339(),
@@ -342,8 +346,17 @@ fn on_alarm(value: &Value) {
         record["ip"] = info.get("ip").cloned().unwrap_or(Value::Null);
         record["peer_id"] = info.get("id").cloned().unwrap_or(Value::Null);
         record["peer_name"] = info.get("name").cloned().unwrap_or(Value::Null);
+        if let Some(reason_class) = info.get("reason_class") {
+            record["reason_class"] = reason_class.clone();
+        }
+        if let Some(reason) = info.get("reason") {
+            record["reason_detail"] = reason.clone();
+        }
+        if let Some(failed_rules) = info.get("failed_rules") {
+            record["failed_rules"] = failed_rules.clone();
+        }
     }
-    write_value_async(record);
+    record
 }
 
 fn is_file_security_kind(kind: &str) -> bool {
@@ -693,5 +706,25 @@ mod tests {
             assert!(is_file_security_kind(kind));
         }
         assert!(!is_file_security_kind("file"));
+    }
+
+    #[test]
+    fn posture_rejection_report_keeps_class_and_technical_detail() {
+        let record = alarm_record(&json!({
+            "conn_id": 7,
+            "typ": 11,
+            "info": json!({
+                "id": "peer",
+                "name": "Peer",
+                "ip": "192.0.2.1",
+                "reason_class": "outdated",
+                "reason": "revoked release [core:revoked]",
+                "failed_rules": ["core:revoked"],
+            }).to_string(),
+        }));
+
+        assert_eq!(record["reason_class"], "outdated");
+        assert_eq!(record["reason_detail"], "revoked release [core:revoked]");
+        assert_eq!(record["failed_rules"], json!(["core:revoked"]));
     }
 }
