@@ -9,6 +9,7 @@
 
 pub mod audit_sink;
 pub mod config;
+pub mod config_import;
 pub mod file_scan;
 pub mod gpo;
 pub mod host_watermark;

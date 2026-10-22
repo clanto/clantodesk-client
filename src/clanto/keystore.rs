@@ -115,6 +115,24 @@ pub fn import_machine_key(source_config: &Path, config2_is_imported: bool) -> Re
     )
 }
 
+pub(crate) fn import_machine_key_to(
+    source_config: &Path,
+    destination_config: &Path,
+    destination_config2: &Path,
+    config2_is_imported: bool,
+) -> Result<()> {
+    let source = source_machine_key_path(source_config)?;
+    if !source.exists() {
+        return Ok(());
+    }
+    let destination = destination_config
+        .parent()
+        .ok_or_else(|| anyhow!("destination config has no parent directory"))?
+        .join(MACHINE_KEY_FILE);
+    let destination_config2 = (!config2_is_imported).then_some(destination_config2);
+    import_machine_key_files(&source, &destination, destination_config2)
+}
+
 pub fn source_has_machine_key(source_config: &Path) -> bool {
     source_machine_key_path(source_config).map_or(false, |path| path.exists())
 }

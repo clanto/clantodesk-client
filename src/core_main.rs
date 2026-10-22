@@ -758,41 +758,7 @@ pub fn core_main() -> Option<Vec<String>> {
 }
 
 fn import_config(path: &str) {
-    use hbb_common::{config::*, get_exe_time, get_modified_time};
-    let path2 = path.replace(".toml", "2.toml");
-    let path2 = std::path::Path::new(&path2);
-    let path = std::path::Path::new(path);
-    log::info!("import config from {:?} and {:?}", path, path2);
-    let config: Config = load_path(path.into());
-    if config.is_empty() {
-        log::info!("Empty source config, skipped");
-        return;
-    }
-    let config2: Config2 = load_path(path2.into());
-    let import_config = get_modified_time(&path) > get_modified_time(&Config::file())
-        && get_modified_time(&path) < get_exe_time();
-    let import_config2 = get_modified_time(&path2) > get_modified_time(&Config2::file());
-    if import_config {
-        if let Err(err) = crate::clanto::keystore::import_machine_key(path, import_config2) {
-            log::error!("Failed to import protected machine key: {err}");
-            return;
-        }
-    } else if import_config2 && crate::clanto::keystore::source_has_machine_key(path) {
-        log::error!(
-            "Refusing to import Config2 without Config because its protected machine key may differ"
-        );
-        return;
-    }
-    if import_config {
-        if store_path(Config::file(), config).is_err() {
-            log::info!("config written");
-        }
-    }
-    if import_config2 {
-        if store_path(Config2::file(), config2).is_err() {
-            log::info!("config2 written");
-        }
-    }
+    crate::clanto::config_import::import_config(std::path::Path::new(path));
 }
 
 /// invoke a new connection
