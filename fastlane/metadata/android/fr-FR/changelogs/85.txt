@@ -1,0 +1,6 @@
+- Basé sur RustDesk 1.5.0, avec ses correctifs de stabilité et d'audio.
+- Mots de passe et identifiants enregistrés chiffrés avec une clé conservée dans l'Android Keystore.
+- Mot de passe local facultatif pour protéger les paramètres.
+- Si le PC distant l'exige, la session affiche un filigrane avec technicien, heure et code de session.
+- Propose d'activer le mode confidentialité à la connexion à un PC ; désactivable.
+- Les liens clantodesk:// ouvrent l'app ClantoDesk.

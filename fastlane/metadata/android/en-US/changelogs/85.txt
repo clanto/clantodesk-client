@@ -1,0 +1,6 @@
+- Based on RustDesk 1.5.0, with its stability and audio fixes.
+- Saved passwords and credentials are encrypted with a key held in the Android Keystore.
+- Optional local password to protect the settings.
+- When the remote PC requires it, the session shows a watermark with technician, time and session code.
+- Asks whether to enable privacy mode when connecting to a PC; it can be turned off.
+- clantodesk:// links open the ClantoDesk app.

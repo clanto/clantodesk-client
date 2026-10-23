@@ -7,7 +7,7 @@
  */
 
 // --- CONFIGURAZIONE ---
-$LATEST_TAG = '1.4.9';
+$LATEST_TAG = '1.5.0';
 $UPDATE_ENABLED = true;
 
 // Store Links
