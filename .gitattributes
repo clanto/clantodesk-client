@@ -1,1 +1,4 @@
 * text=auto
+# Script eseguiti nei container Linux: mai CRLF, anche nei checkout Windows.
+*.sh text eol=lf
+docker/** text eol=lf
