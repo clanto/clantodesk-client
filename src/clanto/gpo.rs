@@ -21,6 +21,7 @@ pub const GPO_KEYS: &[&str] = &[
     "approve-mode",
     "id-whitelist",
     "clanto-id-permissions",
+    "clanto-trusted-controllers",
     "clanto-temp-password-rotate-minutes",
     "clanto-require-protected-device",
     "clanto-posture-bypass",

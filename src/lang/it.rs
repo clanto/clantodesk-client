@@ -951,5 +951,15 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_posture_unofficial_error", "Questo dispositivo non usa un client ClantoDesk ufficiale. Installa il client ClantoDesk ufficiale per connetterti."),
         ("clanto_posture_unreachable_error", "Il dispositivo remoto non riesce a raggiungere clanto.it per verificare i requisiti di sicurezza. Riprova più tardi o contatta l'amministratore."),
         ("clanto_posture_policy_error", "Dispositivo non protetto."),
+        ("Trusted controllers", "Controller fidati"),
+        ("trusted-controllers-tip", "Questi controller non devono inserire il codice di autenticazione a due fattori su questo PC. La password resta obbligatoria. Un controller è riconosciuto solo se dimostra di possedere la chiave registrata per il suo ID: l'ID da solo non basta."),
+        ("No trusted controllers", "Nessun controller fidato"),
+        ("Controller ID", "ID del controller"),
+        ("Device key", "Chiave del dispositivo"),
+        ("Invalid controller ID", "ID del controller non valido"),
+        ("Invalid device key", "Chiave del dispositivo non valida"),
+        ("device-key-tip", "Comunica questa chiave all'amministratore del PC remoto per essere aggiunto ai controller fidati. Identifica questo utente su questo dispositivo e non è un segreto."),
+        ("Device key unavailable", "Chiave del dispositivo non disponibile: l'archivio protetto delle credenziali non è accessibile."),
+        ("Copy", "Copia"),
     ].iter().cloned().collect();
 }

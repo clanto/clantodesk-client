@@ -504,6 +504,30 @@ Nel fork la richiesta non esiste: `controller_device_trust_allowed()` in `src/cl
 con controller vecchi o modificati. Le voci già salvate restano inerti e scadono da sole. La chiave
 non è in `GPO_KEYS` e un test lo verifica.
 
+### Controller fidati, decisi dall'host
+
+L'esenzione la concede solo l'host, con l'opzione `clanto-trusted-controllers` (voci `ID=CHIAVE`
+separate da virgole; interfaccia, GPO `TrustedControllers`, oppure `--trust-controller` /
+`--untrust-controller` da amministratore su installazione). Logica in
+`src/clanto/trusted_controllers.rs`:
+
+- **Controller.** Chiave Ed25519 per utente, generata al primo uso e salvata in `LocalConfig`
+  (`clanto-device-key`) cifrata con la chiave **utente** del keystore. Se la chiave utente non è
+  disponibile non viene salvata in chiaro: il controller resta senza chiave e l'host chiede il 2FA.
+  La pubblica si legge con `--device-key` o in Impostazioni → Sicurezza.
+- **Login.** `LoginRequest.clanto_device_key = 1002` e `clanto_device_sig = 1003` (in
+  `libs/base/protos/message.proto`, da conservare nei porting). La firma copre
+  `clanto-controller-v1`, ID dell'host composto dal controller, `challenge` del messaggio `Hash`,
+  ID del controller e chiave pubblica. L'host verifica con **il proprio** `Config::get_id()`: una
+  firma ottenuta da un altro host non vale, e con l'accesso via IP l'esenzione non scatta mai.
+- **Host.** Hook unico in `handle_login_request_without_validation()`: salta il 2FA solo se la coppia
+  ID/chiave è in elenco e la firma è valida; audit `TrustedDevice`. Voci malformate sono ignorate
+  (fail-closed). Password, allowlist, postura e filigrana restano invariate.
+- **Privacy.** La chiave pubblica viaggia a ogni login, come l'ID del controller che identifica
+  già il dispositivo; a differenza dell'`hwid` di upstream non deriva dall'hardware.
+- **Limite noto.** L'interfaccia Sciter (build legacy) non ha la gestione dell'elenco: lì si usano
+  CLI o GPO.
+
 ## Accesso solo da dispositivi protetti
 
 Opzione host `clanto-require-protected-device` (default `N`), nella sezione «Sicurezza in ingresso»

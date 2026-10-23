@@ -432,5 +432,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_posture_unofficial_error", "This device is not using an official ClantoDesk client. Install the official ClantoDesk client to connect."),
         ("clanto_posture_unreachable_error", "The remote device cannot reach clanto.it to verify security requirements. Try again later or contact the administrator."),
         ("clanto_posture_policy_error", "Device security requirements were not met."),
+        ("trusted-controllers-tip", "These controllers do not have to enter the two-factor authentication code on this PC. The password is still required. A controller is recognized only if it proves it holds the key registered for its ID: the ID alone is not enough."),
+        ("device-key-tip", "Give this key to the administrator of the remote PC to be added to its trusted controllers. It identifies this user on this device and is not a secret."),
+        ("Device key unavailable", "Device key unavailable: the protected credential store cannot be accessed."),
     ].iter().cloned().collect();
 }

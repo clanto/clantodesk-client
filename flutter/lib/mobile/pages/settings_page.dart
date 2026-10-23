@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import '../../clanto/privacy_prompt.dart';
 import '../../clanto/inbound_security.dart';
 import '../../clanto/outgoing_security.dart';
+import '../../clanto/trusted_controllers.dart';
 import '../../clanto/session_report.dart';
 import '../../clanto/settings_lock.dart';
 import '../../clanto/settings_password.dart';
@@ -353,6 +354,8 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
           },
         ),
       if (enable2fa)
+        clantoTrustedControllersTile(enabled: !settingsLocked),
+      if (enable2fa && clantoUpstreamTrustedDevicesVisible())
         SettingsTile.switchTile(
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,7 +375,9 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                   });
                 },
         ),
-      if (enable2fa && _enableTrustedDevices)
+      if (enable2fa &&
+          _enableTrustedDevices &&
+          clantoUpstreamTrustedDevicesVisible())
         SettingsTile(
             title: Text(translate('Manage trusted devices')),
             trailing: Icon(Icons.arrow_forward_ios),
@@ -753,6 +758,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                     refresh: () => setState(() {})),
               if (!incomingOnly)
                 clantoOutgoingSecurityTile(enabled: !settingsLocked),
+              if (!incomingOnly) clantoDeviceKeyTile(),
             ],
           ),
         SettingsSection(title: Text(translate("Settings")), tiles: [

@@ -238,6 +238,25 @@ secondi o risposta non valida valgono rifiuto.
 - Con l'opzione attiva l'accesso diretto via IP è di fatto escluso.
 - È una misura contro i dispositivi trascurati, non contro chi ricompila il client.
 
+### Autenticazione a due fattori e controller fidati
+
+Il controller non può chiedere di essere ricordato per saltare il 2FA: la casella
+«Trust this device» di RustDesk non esiste. È l'amministratore
+dell'host a decidere quali controller sono esentati, con l'elenco «Controller fidati»
+nella sezione 2FA, con il criterio di gruppo `TrustedControllers` oppure da riga di
+comando con privilegi di amministratore:
+
+```bash
+clantodesk --device-key                          # sul controller: stampa la chiave
+clantodesk --trust-controller <ID> <CHIAVE>      # sull'host
+clantodesk --untrust-controller <ID> [CHIAVE]    # sull'host
+```
+
+Ogni utente di ogni controller ha una chiave Ed25519 propria, visibile anche in
+Impostazioni → Sicurezza → «Chiave del dispositivo». L'host salta il 2FA solo se il
+controller firma la connessione con la chiave registrata per il suo ID: un ID
+dichiarato, da solo, non basta. La password resta sempre obbligatoria.
+
 ### Filigrane
 
 - **«Forza la filigrana del controller»**: l'host chiede al controller una filigrana
@@ -418,6 +437,14 @@ Un valore diverso da `N` consente l'operazione.
 | `clanto-id-permissions` | JSON: per voce `name`, `profile` (`view`, `support`, `full`, `custom`) e, per `custom`, `perms` | assente (ogni voce dell'elenco vale `full`; JSON non valido = `view`) | finestra «ID autorizzati» (Sicurezza) | `IdPermissions` |
 
 L'elenco degli ID è l'opzione upstream `id-whitelist` (GPO `IdWhitelist`).
+
+#### Controller fidati (2FA)
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-trusted-controllers` | voci `ID=CHIAVE` separate da virgole; la chiave è base64url di 43 caratteri | assente (nessuna esenzione) | «Controller fidati» (2FA) | `TrustedControllers` |
+
+`enable-trusted-devices` di upstream è fissata a `N` e non è gestibile.
 
 #### Report
 

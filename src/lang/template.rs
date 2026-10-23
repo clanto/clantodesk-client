@@ -950,5 +950,15 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_posture_unofficial_error", ""),
         ("clanto_posture_unreachable_error", ""),
         ("clanto_posture_policy_error", ""),
+        ("Trusted controllers", ""),
+        ("trusted-controllers-tip", ""),
+        ("No trusted controllers", ""),
+        ("Controller ID", ""),
+        ("Device key", ""),
+        ("Invalid controller ID", ""),
+        ("Invalid device key", ""),
+        ("device-key-tip", ""),
+        ("Device key unavailable", ""),
+        ("Copy", ""),
     ].iter().cloned().collect();
 }

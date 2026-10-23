@@ -3888,6 +3888,14 @@ impl LoginConfigHandler {
             avatar,
             ..Default::default()
         };
+        if let Some((key, sig)) = crate::clanto::trusted_controllers::sign_login(
+            &lr.username,
+            &self.hash.challenge,
+            &lr.my_id,
+        ) {
+            lr.clanto_device_key = key.into();
+            lr.clanto_device_sig = sig.into();
+        }
         lr.clanto_posture = crate::clanto::posture::collect();
         lr.clanto_posture_mac = crate::clanto::posture::sign(
             &lr.clanto_posture,

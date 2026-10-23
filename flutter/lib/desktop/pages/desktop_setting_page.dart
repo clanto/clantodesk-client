@@ -13,6 +13,7 @@ import 'package:flutter_hbb/clanto/id_permissions.dart';
 import 'package:flutter_hbb/clanto/privacy_prompt.dart';
 import 'package:flutter_hbb/clanto/inbound_security.dart';
 import 'package:flutter_hbb/clanto/outgoing_security.dart';
+import 'package:flutter_hbb/clanto/trusted_controllers.dart';
 import 'package:flutter_hbb/clanto/protected_device.dart';
 import 'package:flutter_hbb/clanto/session_report.dart';
 import 'package:flutter_hbb/clanto/settings_lock.dart';
@@ -1216,7 +1217,13 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
       ).marginOnly(left: 30);
 
       return Column(
-        children: [tfa, bot, trust],
+        children: [
+          tfa,
+          bot,
+          if (clantoUpstreamTrustedDevicesVisible()) trust,
+          clantoTrustedControllersRow(context, enabled: !locked)
+              .marginOnly(left: 30),
+        ],
       );
     }
 
@@ -1832,18 +1839,18 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
   Widget outgoingSecurity(BuildContext context) {
     return _Card(
       title: 'Outgoing security',
-      children: clantoOutgoingRestrictions.entries
-          .map((entry) => _OptionCheckBox(
-                context,
-                entry.value,
-                entry.key,
-                enabled: !locked,
-                optGetter: () =>
-                    bind.mainGetOptionSync(key: entry.key) != 'N',
-                optSetter: (key, on) => bind.mainSetOption(
-                    key: key, value: on ? 'Y' : 'N'),
-              ))
-          .toList(growable: false),
+      children: [
+        ...clantoOutgoingRestrictions.entries.map((entry) => _OptionCheckBox(
+              context,
+              entry.value,
+              entry.key,
+              enabled: !locked,
+              optGetter: () => bind.mainGetOptionSync(key: entry.key) != 'N',
+              optSetter: (key, on) =>
+                  bind.mainSetOption(key: key, value: on ? 'Y' : 'N'),
+            )),
+        clantoDeviceKeyButton(context).marginOnly(left: _kCheckBoxLeftMargin),
+      ],
     );
   }
 

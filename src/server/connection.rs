@@ -3031,6 +3031,18 @@ impl Connection {
                 }
             }
         }
+        if self.require_2fa.is_some()
+            && crate::clanto::trusted_controllers::verify_login(
+                &self.hash.challenge,
+                &lr.my_id,
+                &lr.clanto_device_key,
+                &lr.clanto_device_sig,
+            )
+        {
+            log::info!("2FA bypassed by trusted controller key");
+            self.set_conn_audit_two_factor(ConnAuditTwoFactor::TrustedDevice);
+            self.require_2fa = None;
+        }
         self.video_ack_required = lr.video_ack_required;
     }
 

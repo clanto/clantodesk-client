@@ -560,6 +560,13 @@ pub fn core_main() -> Option<Vec<String>> {
                 println!("Installation and administrative privileges required!");
             }
             return None;
+        } else if crate::clanto::trusted_controllers::is_cli_command(&args[0]) {
+            crate::clanto::trusted_controllers::run_cli(
+                &args,
+                is_cli_setting_change_disabled(),
+                crate::platform::is_installed() && is_root(),
+            );
+            return None;
         } else if args[0] == "--assign" {
             if config::Config::no_register_device() {
                 println!("Cannot assign an unregistrable device!");
@@ -884,6 +891,8 @@ fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
             | Some("--option")
             | Some("--assign")
             | Some("--deploy")
+            | Some("--trust-controller")
+            | Some("--untrust-controller")
     )
 }
 

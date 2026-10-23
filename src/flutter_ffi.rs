@@ -2755,6 +2755,9 @@ pub fn main_get_printer_names() -> SyncReturn<String> {
 }
 
 pub fn main_get_common(key: String) -> String {
+    if key == "clanto-device-key" {
+        return crate::clanto::trusted_controllers::device_public_key().unwrap_or_default();
+    }
     if key == "is-printer-installed" {
         #[cfg(target_os = "windows")]
         {

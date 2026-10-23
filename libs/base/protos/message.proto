@@ -86,6 +86,10 @@ message LoginRequest {
   string avatar = 17;
   map<string, string> clanto_posture = 1000;
   bytes clanto_posture_mac = 1001;
+  // Chiave del controller e firma del login: esenzione dal 2FA solo se l'host
+  // ha registrato la chiave (src/clanto/trusted_controllers.rs).
+  bytes clanto_device_key = 1002;
+  bytes clanto_device_sig = 1003;
 }
 
 message Terminal {
