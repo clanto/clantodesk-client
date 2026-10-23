@@ -55,8 +55,17 @@ separati:
 
 ```bash
 docker/check.sh                                   # feature di default
-docker/check.sh --features flutter,linux-pkg-config
+docker/flutter-check.sh                           # bridge, flutter analyze/test, check con flutter
+docker/e2e/run.sh                                 # 2FA e controller fidati end-to-end
 ```
+
+`docker/check.sh --features flutter` fallisce senza `src/bridge_generated.rs`, che la CI genera:
+per la parte Flutter usare `docker/flutter-check.sh`, che lo genera come `bridge.yml`.
+`docker/e2e/run.sh` avvia hbbs/hbbr ufficiali, un host reale (`--server`) e un controller
+headless con due utenti, e verifica 11 scenari (2FA, hwid non salvato, chiave registrata, ID
+falso, firma assente, password errata, revoca). L'harness `docker/e2e/e2e_harness.rs` entra
+solo nella copia del repo dentro il container. Su Windows (Git Bash) anteporre
+`MSYS_NO_PATHCONV=1`.
 
 Usa la feature `linux-pkg-config` per prendere vpx/aom/libyuv/opus da apt invece
 che da vcpkg: immagine pronta in ~1 minuto invece di ~1 ora. Il repo è montato in
