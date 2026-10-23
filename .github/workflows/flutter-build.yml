@@ -48,7 +48,7 @@ env:
   # 1. Call `$VCPKG_ROOT/vcpkg x-update-baseline` to update the baseline in `vcpkg.json`.
   #  Or we may face build issue like 
   #  https://github.com/rustdesk/rustdesk/actions/runs/14414119794/job/40427970174
-  # 2. Update the `VCPKG_COMMIT_ID` in `ci.yml` and `playground.yml`.
+  # 2. Update the `VCPKG_COMMIT_ID` in `ci.yml`.
   VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
   VCPKG_CMAKE_VERSION: "4.3.0"
   ARMV7_VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836" # 2025.01.13, got "/opt/artifacts/vcpkg/vcpkg: No such file or directory" with latest version
@@ -107,8 +107,6 @@ jobs:
             "$(grep -m1 '^version:' flutter/pubspec.yaml | sed 's/^version: *//; s/+.*//')"
           check .github/workflows/flutter-build.yml \
             "$(grep -m1 '^  VERSION:' .github/workflows/flutter-build.yml | sed 's/.*"\(.*\)".*/\1/')"
-          check .github/workflows/playground.yml \
-            "$(grep -m1 '^  VERSION:' .github/workflows/playground.yml | sed 's/.*"\(.*\)".*/\1/')"
           for f in res/rpm-flutter.spec res/rpm-flutter-suse.spec; do
             check "$f" "$(grep -m1 '^Version:' "$f" | awk '{print $2}')"
           done
@@ -164,9 +162,6 @@ jobs:
           # l'espressione prima che bash la veda. 'rustdesk-' seguito da cifra o da
           # dollaro cattura sia il nome con versione letterale sia quello con
           # espressione, e non tocca rustdesk-portable / rustdesk-unsigned.
-          #
-          # Ambito: solo i workflow che pubblicano nel nostro flusso. playground.yml
-          # e' un workflow sperimentale di upstream, ancora con nomi rustdesk-*.
           if grep -nE 'rustdesk-[0-9$]' \
                .github/workflows/flutter-build.yml \
                .github/workflows/flutter-tag.yml \

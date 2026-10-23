@@ -108,8 +108,8 @@ configurazione server, e con esso sono usciti `qr_code_scanner`, `zxing2`,
 Il job `verify-secrets` in `flutter-build.yml` blocca tutti i build se:
 
 1. mancano i secret dei server
-2. la versione in `Cargo.toml` non coincide con i 7 file che non la derivano da lui
-   (`pubspec.yaml`, `env.VERSION` ×2, i due rpm-flutter, i due AppImage)
+2. la versione in `Cargo.toml` non coincide con i 6 file che non la derivano da lui
+   (`pubspec.yaml`, `env.VERSION` di `flutter-build.yml`, i due rpm-flutter, i due AppImage)
 3. il commit di `libs/hbb_common` pinnato dal tag upstream non è un antenato del
    commit del fork Clanto — il fork può essere avanti, ma non può perdere modifiche upstream
 4. resta qualche nome di artefatto `rustdesk-*`
@@ -741,9 +741,12 @@ il percorso resta quello vecchio. Gli agganci sono in `clipboard.rs` (lettura, s
 
 ## Debito noto
 
-- `res/msi/Package/License.rtf` è un testo **provvisorio** che rimanda alla policy
-  pubblicata: va sostituito con l'EULA vero, e serve la versione inglese se si
-  distribuisce fuori dall'Italia.
-- `.github/workflows/playground.yml` è un workflow sperimentale di upstream, con
-  nomi `rustdesk-*` e riferimenti a `RustDesk.app` che non esiste più: se lanciato
-  a mano pubblicherebbe artefatti con il nome sbagliato sulla release `nightly`.
+- `res/msi/Package/License.rtf` (italiano e inglese) non è un EULA e non deve
+  diventarlo: la AGPL-3.0 (§10) vieta restrizioni ulteriori sull'uso del software.
+  Condizioni contrattuali (SLA, uso dei server Clanto, responsabilità) vanno nei
+  termini di servizio dell'infrastruttura, pubblicati a parte e richiamati qui con
+  un link quando esisteranno.
+
+`.github/workflows/playground.yml` di upstream è stato rimosso: era disabilitato e
+pubblicava artefatti `rustdesk-*`. Nei porting da upstream le sue modifiche si
+ignorano.
