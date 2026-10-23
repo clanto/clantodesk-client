@@ -20,6 +20,12 @@ conflitti a ogni merge upstream.
 Due eccezioni volute, non sostituite: le chiavi `upgrade_rustdesk_server_pro*` e
 `powered_by_me`, che si riferiscono al prodotto RustDesk vero.
 
+Le chiavi nuove del fork vanno **solo** in `template.rs`, `it.rs` e, se il testo
+inglese differisce dalla chiave, `en.rs`. Non negli altri file, a differenza di
+quanto chiede `AGENTS.md`: `translate()` tratta una chiave assente come una con
+valore `""` (ricade su `en.rs`), e ogni file toccato in più conflitta a ogni
+aggiornamento upstream delle traduzioni.
+
 ### 2. Gli script macOS di installazione sono template
 
 `src/platform/privileges_scripts/*.plist` e `*.scpt` contengono
