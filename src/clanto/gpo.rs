@@ -145,4 +145,9 @@ mod tests {
             assert!(!GPO_KEYS.contains(&key));
         }
     }
+
+    #[test]
+    fn gpo_cannot_reenable_self_trusted_devices() {
+        assert!(!GPO_KEYS.contains(&"enable-trusted-devices"));
+    }
 }

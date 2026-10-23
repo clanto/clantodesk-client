@@ -491,6 +491,19 @@ impostarla. Il backend rifiuta inoltre le altre scritture richieste dall'utente 
 L'elenco completo delle chiavi gestibili è `GPO_KEYS`; la tabella con valori e predefiniti è nel
 [README](README.md#opzioni-di-configurazione).
 
+## 2FA senza "Trust this device"
+
+Upstream, dopo un codice 2FA corretto, il controller può chiedere di essere ricordato e l'host salva
+hwid, ID, nome e piattaforma **dichiarati dal controller**: per 90 giorni quel controller entra senza
+2FA. Sono dati che il controller invia a ogni host a cui si collega, quindi chi gestisce un host li
+conosce e un client modificato può replicarli: il secondo fattore si riduce alla password.
+
+Nel fork la richiesta non esiste: `controller_device_trust_allowed()` in `src/clanto/config.rs` vale
+`false` (il controller non mostra la casella e non invia l'hwid) e `apply_build_config()` fissa
+`enable-trusted-devices=N` in `OVERWRITE_SETTINGS`, così l'host non salva né consulta l'elenco anche
+con controller vecchi o modificati. Le voci già salvate restano inerti e scadono da sole. La chiave
+non è in `GPO_KEYS` e un test lo verifica.
+
 ## Accesso solo da dispositivi protetti
 
 Opzione host `clanto-require-protected-device` (default `N`), nella sezione «Sicurezza in ingresso»

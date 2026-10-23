@@ -3857,7 +3857,9 @@ impl LoginConfigHandler {
         let my_platform = hbb_common::whoami::platform().to_string();
         #[cfg(target_os = "android")]
         let my_platform = "Android".into();
-        let hwid = if self.get_option("trust-this-device") == "Y" {
+        let hwid = if crate::clanto::config::controller_device_trust_allowed()
+            && self.get_option("trust-this-device") == "Y"
+        {
             crate::get_hwid()
         } else {
             Bytes::new()

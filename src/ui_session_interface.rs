@@ -1391,6 +1391,8 @@ impl<T: InvokeUiSession> Session<T> {
     }
 
     pub fn send2fa(&self, code: String, trust_this_device: bool) {
+        let trust_this_device =
+            trust_this_device && crate::clanto::config::controller_device_trust_allowed();
         let mut msg_out = Message::new();
         let hwid = if trust_this_device {
             crate::get_hwid()
@@ -1410,7 +1412,8 @@ impl<T: InvokeUiSession> Session<T> {
     }
 
     pub fn get_enable_trusted_devices(&self) -> bool {
-        self.lc.read().unwrap().enable_trusted_devices
+        crate::clanto::config::controller_device_trust_allowed()
+            && self.lc.read().unwrap().enable_trusted_devices
     }
 
     pub fn new_rdp(&self) {

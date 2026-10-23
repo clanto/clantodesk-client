@@ -20,6 +20,14 @@ pub fn webrtc_allowed() -> bool {
     false
 }
 
+/// Un controller non puo' chiedere di essere esentato dal 2FA ("Trust this
+/// device"): l'host lo salverebbe fidandosi di hwid, ID e nome dichiarati dal
+/// controller stesso. Con `false` il controller non mostra la casella e non
+/// invia l'hwid; l'host ha `enable-trusted-devices` fissato a `N`.
+pub fn controller_device_trust_allowed() -> bool {
+    false
+}
+
 /// Nessun probe verso STUN pubblici: manderebbe l'IP del dispositivo a terzi.
 /// Il probe IPv6 tornerà con uno STUN Clanto.
 pub fn public_stun_allowed() -> bool {
@@ -127,6 +135,12 @@ pub fn apply_build_config() {
     config::OVERWRITE_SETTINGS.write().unwrap().insert(
         "relay-server".to_owned(),
         option_env!("RELAY_SERVER").unwrap_or("").to_owned(),
+    );
+    // Lato host del blocco "Trust this device": nessuna esenzione dal 2FA viene
+    // salvata ne' consultata, e i dispositivi gia' salvati restano inerti.
+    config::OVERWRITE_SETTINGS.write().unwrap().insert(
+        keys::OPTION_ENABLE_TRUSTED_DEVICES.to_owned(),
+        "N".to_owned(),
     );
     super::gpo::apply();
     apply_outgoing_restrictions();
