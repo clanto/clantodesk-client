@@ -111,8 +111,8 @@ android {
         }
     }
 
-    // Librerie native compresse (extractNativeLibs=true): con minSdk 22 è il default,
-    // lo esplicitiamo perché Play su 16 KB dipende da qui e non più da gradle.properties.
+    // Librerie native compresse (extractNativeLibs=true). Con minSdk >= 23 il default
+    // di AGP sarebbe non compresse: va esplicitato, e Play su 16 KB dipende da qui.
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -139,7 +139,9 @@ android {
             // L'host non controlla altri PC: i link clantodesk:// devono aprire solo il client.
             deepLinkScheme: clantoIsHost ? "clantodesk-host" : "clantodesk",
         ]
-        minSdkVersion 22
+        // 24 = Android 7.0: minimo richiesto dalla protezione automatica di Play.
+        // La libreria Rust resta compilata per API 21 (flutter/ndk_*.sh), compatibile.
+        minSdkVersion 24
         targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
