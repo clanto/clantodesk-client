@@ -1,0 +1,6 @@
+- Basato su RustDesk 1.5.0, con le sue correzioni di stabilità e audio.
+- Richiede Android 7.0 o successivo.
+- Password e credenziali salvate cifrate con una chiave custodita nell'Android Keystore.
+- Password locale facoltativa per proteggere le impostazioni.
+- Se il PC remoto lo richiede, la sessione mostra una filigrana con tecnico, ora e codice sessione.
+- Chiede se attivare la modalità privacy all'ingresso in un PC; disattivabile.

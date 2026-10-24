@@ -1,0 +1,6 @@
+- Gebaseerd op RustDesk 1.5.0, met de bijbehorende stabiliteits- en audiocorrecties.
+- Vereist Android 7.0 of hoger.
+- Opgeslagen inloggegevens versleuteld met een sleutel in de Android Keystore.
+- Optioneel lokaal wachtwoord om de instellingen te beschermen.
+- Als de externe pc dat vereist, toont de sessie een watermerk met technicus, tijd en sessiecode.
+- Vraagt bij verbinding of de privacymodus aan moet; uit te schakelen.
