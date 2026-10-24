@@ -16,6 +16,7 @@
     <category name="OutgoingSessions" displayName="$(string.OutgoingSessions)" />
     <category name="AuditSiem" displayName="$(string.AuditSiem)" />
     <category name="Interface" displayName="$(string.Interface)" />
+    <category name="Privacy" displayName="$(string.Privacy)" />
   </categories>
   <policies>
     <policy name="EnableRemotePrinter" class="Machine" displayName="$(string.EnableRemotePrinter)" explainText="$(string.EnableRemotePrinter_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-remote-printer" presentation="$(presentation.EnableRemotePrinter)">
@@ -76,6 +77,9 @@
       <parentCategory ref="InboundSecurity" />
       <supportedOn ref="ClantoDesk150" /><elements><decimal id="TemporaryPasswordRotationValue" valueName="clanto-temp-password-rotate-minutes" minValue="0" maxValue="1440" /></elements></policy>
     <policy name="RequireProtectedDevice" class="Machine" displayName="$(string.RequireProtectedDevice)" explainText="$(string.RequireProtectedDevice_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-require-protected-device" presentation="$(presentation.RequireProtectedDevice)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="RequireTwoFactor" class="Machine" displayName="$(string.RequireTwoFactor)" explainText="$(string.RequireTwoFactor_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-require-2fa" presentation="$(presentation.RequireTwoFactor)">
       <parentCategory ref="InboundSecurity" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
     <policy name="RequireControllerWatermark" class="Machine" displayName="$(string.RequireControllerWatermark)" explainText="$(string.RequireControllerWatermark_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-require-controller-watermark" presentation="$(presentation.RequireControllerWatermark)">
@@ -152,6 +156,9 @@
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
     <policy name="LockSettings" class="Machine" displayName="$(string.LockSettings)" explainText="$(string.LockSettings_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-lock-settings" presentation="$(presentation.LockSettings)">
       <parentCategory ref="Interface" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ShareDeviceIdentity" class="Machine" displayName="$(string.ShareDeviceIdentity)" explainText="$(string.ShareDeviceIdentity_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-share-device-identity" presentation="$(presentation.ShareDeviceIdentity)">
+      <parentCategory ref="Privacy" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
   </policies>
 </policyDefinitions>

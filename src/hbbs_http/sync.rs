@@ -133,6 +133,7 @@ async fn start_hbbs_sync_async() {
                     v["version"] = json!(crate::VERSION);
                     v["id"] = json!(id);
                     v["uuid"] = json!(crate::encode64(hbb_common::get_uuid()));
+                    crate::clanto::server_sync::filter_sysinfo(&mut v);
                     let ab_name = Config::get_option(keys::OPTION_PRESET_ADDRESS_BOOK_NAME);
                     if !ab_name.is_empty() {
                         v[keys::OPTION_PRESET_ADDRESS_BOOK_NAME] = json!(ab_name);
@@ -289,7 +290,8 @@ fn heartbeat_url() -> String {
     format!("{}/api/heartbeat", url)
 }
 
-fn handle_config_options(config_options: HashMap<String, String>) {
+fn handle_config_options(mut config_options: HashMap<String, String>) {
+    crate::clanto::server_sync::filter_strategy(&mut config_options);
     let mut options = Config::get_options();
     let default_settings = config::DEFAULT_SETTINGS.read().unwrap().clone();
     config_options

@@ -15,6 +15,7 @@ import '../../clanto/privacy_prompt.dart';
 import '../../clanto/inbound_security.dart';
 import '../../clanto/outgoing_security.dart';
 import '../../clanto/trusted_controllers.dart';
+import '../../clanto/two_factor_policy.dart';
 import '../../clanto/session_report.dart';
 import '../../clanto/settings_lock.dart';
 import '../../clanto/settings_password.dart';
@@ -353,6 +354,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
             }
           },
         ),
+      if (clantoRequire2faUnmet()) clantoRequire2faTile(),
       if (enable2fa)
         clantoTrustedControllersTile(enabled: !settingsLocked),
       if (enable2fa && clantoUpstreamTrustedDevicesVisible())

@@ -445,15 +445,24 @@ fn event_definition(kind: &str, value: &Value) -> &'static EventDefinition {
         .unwrap_or(&EVENTS[EVENTS.len() - 1])
 }
 
+/// TLS e' il predefinito: UDP e TCP mandano in chiaro IP, ID e nomi dei peer.
+fn warn_unencrypted_once() {
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    WARNED.call_once(|| hbb_common::log::warn!("Syslog audit is sent unencrypted: use clanto-syslog-protocol=tls"));
+}
+
 fn delivery_config() -> DeliveryConfig {
     let protocol = match Config::get_option(OPT_SYSLOG_PROTOCOL)
         .to_ascii_lowercase()
         .as_str()
     {
+        "udp" => Protocol::Udp,
         "tcp" => Protocol::Tcp,
-        "tls" => Protocol::Tls,
-        _ => Protocol::Udp,
+        _ => Protocol::Tls,
     };
+    if protocol != Protocol::Tls {
+        warn_unencrypted_once();
+    }
     let configured_port = Config::get_option(OPT_SYSLOG_PORT);
     let default_port = if protocol == Protocol::Tls {
         DEFAULT_TLS_PORT

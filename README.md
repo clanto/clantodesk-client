@@ -446,6 +446,13 @@ L'elenco degli ID è l'opzione upstream `id-whitelist` (GPO `IdWhitelist`).
 
 `enable-trusted-devices` di upstream è fissata a `N` e non è gestibile.
 
+#### 2FA e privacy verso il server di gestione
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-require-2fa` | `Y`, `N` | `N` | solo GPO o `--option` (avviso nella sezione 2FA) | `RequireTwoFactor` |
+| `clanto-share-device-identity` | `Y`, `N` | `N` (hostname e utente non inviati) | solo GPO o `--option` | `ShareDeviceIdentity` |
+
 #### Report
 
 | Chiave | Valori | Default | Interfaccia | GPO |
@@ -461,7 +468,7 @@ L'interfaccia di questi controlli è nella sezione «Audit» delle impostazioni 
 | `clanto-syslog-enabled` | `Y` (altro valore = spento) | assente (spento) | «Invia gli eventi al SIEM» | `SyslogEnabled` |
 | `clanto-syslog-host` | nome DNS o indirizzo del collettore | vuoto (senza host non si invia nulla) | «Host» | `SyslogHost` |
 | `clanto-syslog-port` | 1-65535 | assente: `514` (UDP/TCP), `6514` (TLS) | «Porta» | `SyslogPort` |
-| `clanto-syslog-protocol` | `udp`, `tcp`, `tls` | `udp` | «Protocollo» | `SyslogProtocol` |
+| `clanto-syslog-protocol` | `udp`, `tcp`, `tls` | `tls` | «Protocollo» | `SyslogProtocol` |
 | `clanto-syslog-facility` | 0-23 | `16` (`local0`) | «Facility» | `SyslogFacility` |
 | `clanto-syslog-tls-ca` | percorso di un file PEM | vuoto (con TLS l'invio non parte) | «Percorso del certificato CA», solo con protocollo TLS | `SyslogTlsCa` |
 | `clanto-syslog-format` | `rfc5424`, `cef` | `rfc5424` | «Formato» | `SyslogFormat` |

@@ -4,7 +4,11 @@
 //! Registro locale, non bloccante, delle sessioni in entrata.
 
 use chrono::{DateTime, Local, Utc};
-use hbb_common::{config::Config, log};
+use hbb_common::{
+    config::Config,
+    log,
+    password_security::{decrypt_str_or_original_scoped, encrypt_str_or_original_scoped, KeyScope},
+};
 use serde_derive::Serialize;
 use serde_json::{json, Value};
 use std::{
@@ -21,6 +25,7 @@ use std::{
 
 pub const OPT_SESSION_LOG_DAYS: &str = "clanto-session-log-days";
 const MAX_FILES: usize = 50;
+const MAX_RECORD_CHARS: usize = 256 * 1024;
 const CLEANUP_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Clone, Default, Serialize)]
@@ -460,15 +465,39 @@ fn writer() -> &'static mpsc::Sender<WriterMessage> {
     })
 }
 
+/// Ogni riga e' cifrata con la chiave macchina: i record contengono IP, ID e
+/// nomi dei peer. Senza chiave il record non viene scritto in chiaro.
+fn seal_line(value: &Value) -> std::io::Result<String> {
+    let plain = serde_json::to_string(value)
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+    let sealed = encrypt_str_or_original_scoped(&plain, KeyScope::Machine, MAX_RECORD_CHARS);
+    if sealed.is_empty() || sealed == plain {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "machine key unavailable, session record not written",
+        ));
+    }
+    Ok(sealed)
+}
+
+/// Le righe in chiaro scritte prima della cifratura restano leggibili.
+fn open_line(line: &str) -> Option<Value> {
+    if line.starts_with('{') {
+        return serde_json::from_str(line).ok();
+    }
+    let (plain, success, _) = decrypt_str_or_original_scoped(line, KeyScope::Machine);
+    success.then(|| serde_json::from_str(&plain).ok()).flatten()
+}
+
 fn append_record(dir: &Path, value: &Value) -> std::io::Result<()> {
+    let line = seal_line(value)?;
     fs::create_dir_all(dir)?;
     let name = format!("sessions-{}.jsonl", Local::now().format("%Y-%m"));
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(dir.join(name))?;
-    serde_json::to_writer(&mut file, value)
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+    file.write_all(line.as_bytes())?;
     file.write_all(b"\n")
 }
 
@@ -554,7 +583,7 @@ pub fn report_json(from_ms: i64, to_ms: i64) -> String {
             continue;
         };
         for line in data.lines() {
-            let Ok(record) = serde_json::from_str::<Value>(line) else {
+            let Some(record) = open_line(line) else {
                 continue;
             };
             let at = record
@@ -726,5 +755,15 @@ mod tests {
         assert_eq!(record["reason_class"], "outdated");
         assert_eq!(record["reason_detail"], "revoked release [core:revoked]");
         assert_eq!(record["failed_rules"], json!(["core:revoked"]));
+    }
+
+    #[test]
+    fn records_are_sealed_and_legacy_lines_stay_readable() {
+        let value = json!({"peer_id": "123", "ip": "192.0.2.1"});
+        let sealed = seal_line(&value).unwrap();
+        assert!(!sealed.contains("192.0.2.1"));
+        assert_eq!(open_line(&sealed), Some(value.clone()));
+        assert_eq!(open_line(&value.to_string()), Some(value));
+        assert_eq!(open_line("not a record"), None);
     }
 }

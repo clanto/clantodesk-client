@@ -39,10 +39,12 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/mod.rs`
 - `src/clanto/outgoing.rs`
 - `src/clanto/posture.rs`
+- `src/clanto/server_sync.rs`
 - `src/clanto/session_log.rs`
 - `src/clanto/settings_lock.rs`
 - `src/clanto/temp_password.rs`
 - `src/clanto/trusted_controllers.rs`
+- `src/clanto/two_factor_policy.rs`
 - `src/clanto/watermark.rs`
 - `flutter/lib/clanto/about_links.dart`
 - `flutter/lib/clanto/accessibility_disclosure.dart`
@@ -66,6 +68,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `flutter/lib/clanto/settings_password.dart`
 - `flutter/lib/clanto/temp_password_rotation.dart`
 - `flutter/lib/clanto/trusted_controllers.dart`
+- `flutter/lib/clanto/two_factor_policy.dart`
 - `flutter/lib/clanto/watermark.dart`
 - `flutter/lib/clanto/watermark_data.dart`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoChatNotifier.kt`

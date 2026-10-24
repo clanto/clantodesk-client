@@ -54,22 +54,31 @@ separati:
 ## Compilare senza toolchain Rust in locale
 
 ```bash
-docker/check.sh                                   # feature di default
+docker/test-all.sh                                # tutto, con riepilogo finale
+docker/check.sh                                   # cargo check (linux-pkg-config)
+docker/check.sh --test clanto:: core_main::       # test della lib filtrati
 docker/flutter-check.sh                           # bridge, flutter analyze/test, check con flutter
 docker/e2e/run.sh                                 # 2FA e controller fidati end-to-end
+docker/security-scan.sh                           # Semgrep (blocca) e OSV-Scanner (informa)
 ```
 
-`docker/check.sh --features flutter` fallisce senza `src/bridge_generated.rs`, che la CI genera:
-per la parte Flutter usare `docker/flutter-check.sh`, che lo genera come `bridge.yml`.
-`docker/e2e/run.sh` avvia hbbs/hbbr ufficiali, un host reale (`--server`) e un controller
-headless con due utenti, e verifica 11 scenari (2FA, hwid non salvato, chiave registrata, ID
-falso, firma assente, password errata, revoca). L'harness `docker/e2e/e2e_harness.rs` entra
-solo nella copia del repo dentro il container. Su Windows (Git Bash) anteporre
-`MSYS_NO_PATHCONV=1`.
+`--features flutter` richiede `src/bridge_generated.rs`, che la CI genera: per la parte Flutter
+usare `docker/flutter-check.sh`, che lo genera come `bridge.yml`. Il workflow `security-scan.yml`
+esegue gli stessi strumenti di `docker/security-scan.sh`; le esclusioni Semgrep sono motivate nello
+script e i falsi positivi nei test sono marcati `nosemgrep`. `docker/e2e/run.sh` avvia hbbs/hbbr
+ufficiali, un host reale (`--server`) e un controller headless con due utenti; l'harness
+`docker/e2e/e2e_harness.rs` entra solo nella copia del repo nel volume di lavoro.
+
+**Prestazioni e I/O** (`docker/common.sh`): il repo è montato in sola lettura e allineato con
+`rsync` incrementale in un volume per profilo (`clantodesk-work-{check,flutter,e2e}`); `target/`,
+registry e git di Cargo e pub cache stanno in volumi nominati sul disco della VM di Docker, non sul
+filesystem dell'host; `/tmp` è un tmpfs. I Dockerfile usano le cache BuildKit per apt e Cargo.
+Dopo il primo giro si ricompila solo ciò che è cambiato. Gli script convertono da soli i percorsi
+su Windows (Git Bash). Per ripartire da zero: `docker volume rm` dei volumi `clantodesk-*`.
 
 Usa la feature `linux-pkg-config` per prendere vpx/aom/libyuv/opus da apt invece
-che da vcpkg: immagine pronta in ~1 minuto invece di ~1 ora. Il repo è montato in
-sola lettura e copiato dentro il container, il working tree non viene toccato.
+che da vcpkg: immagine pronta in ~1 minuto invece di ~1 ora. Il working tree non
+viene mai toccato.
 
 Solo per verificare che compili. Le build di release devono passare da vcpkg come
 la CI.
@@ -407,6 +416,11 @@ I quattro esiti di sicurezza dei file sono record autonomi con `record_type=file
 campi `occurred_at`, `conn_id`, `event`, `name`, `size`, `sha256`, `engine` e `result`; non includono
 contenuto o percorso del file.
 
+Ogni riga è cifrata con la chiave **macchina** (`seal_line()` in `src/clanto/session_log.rs`); la
+lettura avviene nel servizio via IPC, come prima. Senza chiave macchina il record non viene scritto
+in chiaro ma scartato, con un messaggio nel log: l'audit SIEM resta l'evidenza di riserva. Le righe
+in chiaro scritte dalle versioni precedenti restano leggibili e scadono con la conservazione.
+
 `clanto-session-log-days` stabilisce la conservazione, predefinita a 180 giorni; `0` disabilita
 il registro ed elimina i file esistenti. Il report è consultabile ed esportabile dalle impostazioni
 di ClantoDesk; nella stessa sezione si imposta la conservazione da 0 a 3650 giorni, con conferma
@@ -424,7 +438,8 @@ configurano con queste opzioni:
 - `clanto-syslog-host`: nome DNS o indirizzo del collettore; è anche il nome server verificato da
   TLS.
 - `clanto-syslog-port`: porta del collettore. Se vuota, usa `514` per UDP/TCP e `6514` per TLS.
-- `clanto-syslog-protocol`: `udp` (predefinito), `tcp` oppure `tls`.
+- `clanto-syslog-protocol`: `tls` (predefinito), `udp` oppure `tcp`. UDP e TCP inviano in chiaro IP, ID e nomi dei
+  peer: all'avvio dell'invio il log lo segnala una volta.
 - `clanto-syslog-facility`: facility RFC 5424 da 0 a 23; il valore predefinito è 16 (`local0`).
 - `clanto-syslog-tls-ca`: percorso del file PEM contenente la CA del collettore. Il trust store TLS
   contiene esclusivamente i certificati validi letti da questo file: non usa le radici di sistema.
@@ -536,6 +551,30 @@ separate da virgole; interfaccia, GPO `TrustedControllers`, oppure `--trust-cont
   già il dispositivo; a differenza dell'`hwid` di upstream non deriva dall'hardware.
 - **Limite noto.** L'interfaccia Sciter (build legacy) non ha la gestione dell'elenco: lì si usano
   CLI o GPO.
+
+### 2FA obbligatorio per policy
+
+`clanto-require-2fa=Y` (GPO `RequireTwoFactor`, oppure `--option`) non crea il segreto TOTP, che è
+per macchina e va registrato dall'utente: fa rifiutare ogni login finché sull'host il 2FA non è
+configurato. Il controllo sta in `src/clanto/two_factor_policy.rs`, con un hook in `connection.rs`
+dopo allowlist e permessi per ID e prima della postura; il controller riceve il testo
+`clanto_2fa_policy_error` già tradotto dall'host. Con la policy attiva e il 2FA spento, le
+impostazioni host mostrano un avviso rosso nella sezione 2FA.
+
+## Canale verso `api-server`
+
+Con `API_SERVER` al build il client manda a quel server heartbeat e `sysinfo`
+(`src/hbbs_http/sync.rs`), e il server può rispondere con una `strategy` che **scrive opzioni
+sull'host**. Hook in `src/clanto/server_sync.rs`:
+
+- **In uscita** hostname e nome utente raccolti dal sistema non partono, salvo
+  `clanto-share-device-identity=Y` (GPO `ShareDeviceIdentity`). Le etichette impostate
+  dall'amministratore (`preset-device-name`, `preset-device-username`) partono sempre.
+- **In entrata** la `strategy` non può mai scrivere le chiavi di `SERVER_PROTECTED_KEYS` (2FA,
+  allowlist, controller fidati, postura, filigrane, blocco impostazioni, conservazione dei report,
+  policy dei file). Con `clanto-lock-settings` attivo viene ignorata del tutto: decide la GPO.
+  Un server compromesso non può quindi abbassare la sicurezza degli host. Il pannello di gestione
+  dovrà usare un canale firmato, non questo.
 
 ## Accesso solo da dispositivi protetti
 
@@ -802,3 +841,6 @@ il percorso resta quello vecchio. Gli agganci sono in `clipboard.rs` (lettura, s
 `.github/workflows/playground.yml` di upstream è stato rimosso: era disabilitato e
 pubblicava artefatti `rustdesk-*`. Nei porting da upstream le sue modifiche si
 ignorano.
+
+Allo stesso modo `docs/SECURITY*.md` di upstream (contatto `info@rustdesk.com`) sono stati rimossi:
+vale `SECURITY.md` in radice. Nei porting non vanno reintrodotti.

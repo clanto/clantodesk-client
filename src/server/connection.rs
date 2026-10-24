@@ -3237,6 +3237,13 @@ impl Connection {
                 return false;
             }
             self.apply_id_permissions().await;
+            if crate::clanto::two_factor_policy::blocks_login() {
+                log::warn!("Login rejected: 2FA required by policy but not configured");
+                let reason = crate::clanto::two_factor_policy::login_error();
+                self.send_login_error(&reason).await;
+                self.remember_close_reason(&reason);
+                return false;
+            }
             let posture_mode = crate::clanto::posture::configured_verification_mode();
             if posture_mode != crate::clanto::posture::VerificationMode::None {
                 if let Err(rejection) = self.verify_clanto_posture(&lr, posture_mode).await {

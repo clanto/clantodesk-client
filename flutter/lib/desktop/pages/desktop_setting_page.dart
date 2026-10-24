@@ -14,6 +14,7 @@ import 'package:flutter_hbb/clanto/privacy_prompt.dart';
 import 'package:flutter_hbb/clanto/inbound_security.dart';
 import 'package:flutter_hbb/clanto/outgoing_security.dart';
 import 'package:flutter_hbb/clanto/trusted_controllers.dart';
+import 'package:flutter_hbb/clanto/two_factor_policy.dart';
 import 'package:flutter_hbb/clanto/protected_device.dart';
 import 'package:flutter_hbb/clanto/session_report.dart';
 import 'package:flutter_hbb/clanto/settings_lock.dart';
@@ -1035,7 +1036,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
         bind.mainGetOptionSync(key: kOptClantoSyslogProtocol).toLowerCase();
     _syslogProtocol = const {'udp', 'tcp', 'tls'}.contains(protocol)
         ? protocol
-        : 'udp';
+        : 'tls';
     final port = bind.mainGetOptionSync(key: kOptClantoSyslogPort);
     _syslogPort.text =
         port.isEmpty ? (_syslogProtocol == 'tls' ? '6514' : '514') : port;
@@ -1151,7 +1152,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
         onTap: enabled ? () => onChanged(!has2fa.value) : null,
       ).marginOnly(left: _kCheckBoxLeftMargin);
       if (!has2fa.value) {
-        return tfa;
+        return Column(children: [tfa, clantoRequire2faNotice()]);
       }
       updateBot() async {
         hasBot.value = bind.mainHasValidBotSync();

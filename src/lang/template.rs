@@ -960,5 +960,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("device-key-tip", ""),
         ("Device key unavailable", ""),
         ("Copy", ""),
+        ("clanto_2fa_policy_error", ""),
+        ("clanto-require-2fa-tip", ""),
     ].iter().cloned().collect();
 }

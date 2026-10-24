@@ -961,5 +961,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("device-key-tip", "Comunica questa chiave all'amministratore del PC remoto per essere aggiunto ai controller fidati. Identifica questo utente su questo dispositivo e non è un segreto."),
         ("Device key unavailable", "Chiave del dispositivo non disponibile: l'archivio protetto delle credenziali non è accessibile."),
         ("Copy", "Copia"),
+        ("clanto_2fa_policy_error", "Il PC remoto richiede l'autenticazione a due fattori, ma non l'ha ancora configurata. Contatta l'amministratore del PC remoto."),
+        ("clanto-require-2fa-tip", "La policy richiede l'autenticazione a due fattori: finché non la attivi, ogni connessione in entrata viene rifiutata."),
     ].iter().cloned().collect();
 }
