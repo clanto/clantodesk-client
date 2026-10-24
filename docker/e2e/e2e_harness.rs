@@ -8,6 +8,7 @@
 //!
 //!   --e2e host-setup <password> <totp-hex>   host: password, 2FA, approvazione
 //!   --e2e host-trust <elenco>                host: clanto-trusted-controllers via IPC
+//!   --e2e host-option <chiave> <valore>      host: qualsiasi opzione via IPC
 //!   --e2e device-key | my-id                 controller
 //!   --e2e login <host-id> <password> <totp-hex|-> [hwid] [no-key] [as-id=<ID>]
 //!
@@ -218,6 +219,11 @@ pub fn run(args: &[String]) {
             crate::ipc::set_option(key, &arg(1));
             let stored = crate::ipc::get_options().get(key).cloned().unwrap_or_default();
             println!("TRUSTED={stored}");
+        }
+        "host-option" => {
+            crate::ipc::set_option(&arg(1), &arg(2));
+            let stored = crate::ipc::get_options().get(&arg(1)).cloned().unwrap_or_default();
+            println!("OPTION {}={}", arg(1), if arg(1) == "2fa" { "<redacted>".to_owned() } else { stored });
         }
         "device-key" => println!(
             "DEVICE_KEY={}",

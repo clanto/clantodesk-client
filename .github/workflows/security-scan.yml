@@ -1,0 +1,39 @@
+# Analisi di sicurezza senza secret: Semgrep blocca, OSV-Scanner informa.
+# Stessi strumenti e versioni di docker/security-scan.sh.
+name: Security scan
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "clnt_*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - name: Semgrep (blocking)
+        run: |
+          docker run --rm -v "$PWD":/src:ro -w /src semgrep/semgrep:1.95.0 \
+            semgrep scan --metrics=off --error --quiet \
+              --config p/rust --config p/secrets --config p/php \
+              --exclude-rule rust.lang.security.unsafe-usage.unsafe-usage \
+              --exclude-rule rust.lang.security.args.args \
+              src/clanto flutter/lib/clanto api docker/e2e \
+              src/server/connection.rs src/client.rs src/core_main.rs src/hbbs_http/sync.rs
+
+      # Le dipendenze ereditate da upstream hanno advisory aperti: report senza
+      # bloccare finche' non e' fatto il triage (vedi CLANTO.md).
+      - name: OSV-Scanner (report)
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD":/src:ro ghcr.io/google/osv-scanner:v1.9.1 \
+            --recursive --skip-git /src

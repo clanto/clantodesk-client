@@ -6,15 +6,16 @@
 #   docker/e2e/run.sh            # build + scenari
 #   KEEP=1 docker/e2e/run.sh     # lascia i container accesi per ispezionarli
 #
-# L'harness (docker/e2e/e2e_harness.rs) entra solo nella copia del repo dentro
-# il container di build: il working tree e il prodotto non cambiano.
-# Su Windows (Git Bash) usare MSYS_NO_PATHCONV=1.
+# L'harness (docker/e2e/e2e_harness.rs) entra solo nella copia del repo nel
+# volume di lavoro del profilo `e2e`: il working tree e il prodotto non cambiano.
+# La chiave di hbbs sta in un volume persistente: entra nel binario al build, e
+# cambiarla a ogni giro forzerebbe la ricompilazione del crate.
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-case "$(uname -s)" in MINGW*|MSYS*) REPO_ROOT="$(cygpath -m "$REPO_ROOT")" ;; esac
 NET=clantodesk-e2e
 SERVER_IMAGE=rustdesk/rustdesk-server:1.1.14
+SERVER_VOLUME=clantodesk-e2e-server
 PASSWORD='E2e-Pass-7731'
 TOTP_HEX=00112233445566778899aabbccddeeff01234567
 BIN=/out/rustdesk
@@ -22,44 +23,36 @@ BIN=/out/rustdesk
 remove_all() {
   docker rm -f e2e-hbbs e2e-hbbr e2e-host e2e-ctrl >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
-  docker volume rm e2e-server-data >/dev/null 2>&1 || true
 }
 on_exit() {
   if [ "${KEEP:-0}" = 1 ]; then echo "KEEP=1: container lasciati accesi"; else remove_all; fi
 }
+require_docker
 remove_all
 trap on_exit EXIT
 
-docker build -q -f "$REPO_ROOT/docker/Dockerfile.check" -t clantodesk-check "$REPO_ROOT/docker" >/dev/null
-for v in clantodesk-cargo clantodesk-cargo-git clantodesk-e2e-target clantodesk-e2e-out; do
-  docker volume create "$v" >/dev/null
-done
+build_image Dockerfile.check clantodesk-check
+for v in clantodesk-e2e-out "$SERVER_VOLUME"; do docker volume create "$v" >/dev/null; done
 docker network create "$NET" >/dev/null
 
 echo "==> rendezvous $SERVER_IMAGE"
-docker volume create e2e-server-data >/dev/null
-docker run -d --name e2e-hbbr --network "$NET" -v e2e-server-data:/root "$SERVER_IMAGE" hbbr >/dev/null
-docker run -d --name e2e-hbbs --network "$NET" -v e2e-server-data:/root "$SERVER_IMAGE" \
+docker run -d --name e2e-hbbr --network "$NET" -v "$SERVER_VOLUME":/root "$SERVER_IMAGE" hbbr >/dev/null
+docker run -d --name e2e-hbbs --network "$NET" -v "$SERVER_VOLUME":/root "$SERVER_IMAGE" \
   hbbs -r e2e-hbbr:21117 >/dev/null
 for _ in $(seq 30); do
   # L'immagine di hbbs non ha una shell: si legge il volume da un altro container.
-  RS_PUB_KEY="$(docker run --rm -v e2e-server-data:/d clantodesk-check cat /d/id_ed25519.pub 2>/dev/null || true)"
+  RS_PUB_KEY="$(docker run --rm -v "$SERVER_VOLUME":/d clantodesk-check cat /d/id_ed25519.pub 2>/dev/null || true)"
   [ -n "$RS_PUB_KEY" ] && break; sleep 1
 done
 [ -n "$RS_PUB_KEY" ] || { echo "hbbs non ha generato la chiave"; docker logs e2e-hbbs; exit 1; }
 echo "    chiave rendezvous: $RS_PUB_KEY"
 
 echo "==> build con harness (RENDEZVOUS_SERVER=e2e-hbbs)"
-docker run --rm \
-  -v "$REPO_ROOT":/src-ro:ro \
-  -v clantodesk-cargo:/root/.cargo/registry \
-  -v clantodesk-cargo-git:/root/.cargo/git \
-  -v clantodesk-e2e-target:/build/target \
+dev_run e2e clantodesk-check \
   -v clantodesk-e2e-out:/out \
-  -e CARGO_TARGET_DIR=/build/target \
   -e RENDEZVOUS_SERVER=e2e-hbbs \
   -e RS_PUB_KEY="$RS_PUB_KEY" \
-  clantodesk-check bash /src-ro/docker/e2e/build-inner.sh
+  -- bash docker/e2e/build-inner.sh
 
 run_node() { # nome
   docker run -d --name "$1" --network "$NET" -v clantodesk-e2e-out:/out:ro \
@@ -118,6 +111,23 @@ expect "9 controller fidato, password errata" "error:Wrong Password" tech1 "$HOS
 echo "    host: elenco svuotato"
 docker exec e2e-host $BIN --e2e host-trust "" | sed 's/^/    /'
 expect "10 fiducia revocata: torna il 2FA" 2fa-required tech1 "$HOST_ID" "$PASSWORD" -
+
+echo "    host: clanto-require-2fa=Y (policy)"
+hopt() { docker exec e2e-host $BIN --e2e host-option "$@" | sed 's/^/    /'; }
+hopt clanto-require-2fa Y
+expect "11 policy 2FA, 2FA configurato: chiede il codice" 2fa-required tech1 "$HOST_ID" "$PASSWORD" -
+echo "    host: 2FA disattivato con la policy attiva"
+hopt 2fa ""
+expect_prefix() { # descrizione prefisso utente args...
+  local desc="$1" want="$2" user="$3"; shift 3
+  local got
+  got="$(ctrl "$user" login "$@" 2>/dev/null | sed -n 's/^RESULT=//p')"
+  if [ "${got#"$want"}" != "$got" ]; then PASS=$((PASS+1)); echo "  OK    $desc -> $got"
+  else FAIL=$((FAIL+1)); echo "  FAIL  $desc -> atteso '$want...', ottenuto '$got'"; fi
+}
+expect_prefix "12 policy 2FA senza 2FA: accesso rifiutato" "error:The remote PC requires two-factor" tech1 "$HOST_ID" "$PASSWORD" "$TOTP_HEX"
+hopt clanto-require-2fa N
+expect "13 senza policy e senza 2FA: solo password" ok tech1 "$HOST_ID" "$PASSWORD" -
 
 echo
 echo "E2E 2FA: $PASS superati, $FAIL falliti"

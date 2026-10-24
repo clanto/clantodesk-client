@@ -1692,6 +1692,7 @@ mod tests {
 
     #[test]
     fn file_key_is_private_and_stable() {
+        // nosemgrep: rust.lang.security.temp-dir.temp-dir -- solo test, nome casuale
         let directory = std::env::temp_dir().join(format!(
             "clantodesk-keystore-{}-{}",
             std::process::id(),
@@ -1834,6 +1835,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn present_secret_service_key_writes_private_backend_marker() {
+        // nosemgrep: rust.lang.security.temp-dir.temp-dir -- solo test, nome casuale
         let directory = std::env::temp_dir().join(format!(
             "clantodesk-keystore-marker-{}-{}",
             std::process::id(),
@@ -1863,6 +1865,7 @@ mod tests {
             decrypt_str_or_original_scoped, encrypt_str_or_original_scoped,
         };
 
+        // nosemgrep: rust.lang.security.temp-dir.temp-dir -- solo test, nome casuale
         let directory = std::env::temp_dir().join(format!(
             "clantodesk-machine-key-import-{}-{}",
             std::process::id(),

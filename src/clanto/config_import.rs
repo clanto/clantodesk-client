@@ -219,6 +219,7 @@ mod tests {
 
     impl TestDirectory {
         fn new() -> Self {
+            // nosemgrep: rust.lang.security.temp-dir.temp-dir -- solo test, nome casuale
             let path = std::env::temp_dir().join(format!(
                 "clantodesk-config-import-{}-{}",
                 std::process::id(),
@@ -471,6 +472,7 @@ mod tests {
             } else {
                 root.0.join("service-xdg")
             };
+            // nosemgrep: rust.lang.security.current-exe.current-exe -- solo test
             let status = std::process::Command::new(std::env::current_exe().unwrap())
                 .arg("--exact")
                 .arg(
