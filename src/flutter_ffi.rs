@@ -1768,6 +1768,79 @@ pub fn session_remove_port_forward(session_id: SessionID, local_port: i32) {
     }
 }
 
+/// Forward Clanto della sessione, JSON (vedi `clanto::forwarding::controller`).
+pub fn session_clanto_forward_list(session_id: SessionID) -> SyncReturn<String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
+        let key = session.lc.read().unwrap().session_id;
+        let list = crate::clanto::forwarding::controller::list(key);
+        return SyncReturn(serde_json::to_string(&list).unwrap_or_default());
+    }
+    let _ = session_id;
+    SyncReturn("[]".to_owned())
+}
+
+/// `direction`: "to_host" | "to_controller". Risponde `{"ok":..}` o `{"error":..}`.
+pub fn session_clanto_forward_add(
+    session_id: SessionID,
+    direction: String,
+    local_port: i32,
+    target_host: String,
+    target_port: i32,
+    service: String,
+) -> SyncReturn<String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let result = clanto_forward_add(session_id, direction, local_port, target_host, target_port, service);
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let result: Result<crate::clanto::forwarding::catalog::Direction, String> = {
+        let _ = (session_id, direction, local_port, target_host, target_port, service);
+        Err("Not supported".to_owned())
+    };
+    SyncReturn(match result {
+        Ok(info) => serde_json::json!({ "ok": info }).to_string(),
+        Err(e) => serde_json::json!({ "error": e }).to_string(),
+    })
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn clanto_forward_add(
+    session_id: SessionID,
+    direction: String,
+    local_port: i32,
+    target_host: String,
+    target_port: i32,
+    service: String,
+) -> Result<crate::clanto::forwarding::controller::ForwardInfo, String> {
+    use crate::clanto::forwarding::{catalog::Direction, controller};
+    let direction = match direction.as_str() {
+        "to_host" => Direction::ToHost,
+        "to_controller" => Direction::ToController,
+        _ => return Err("Invalid direction".to_owned()),
+    };
+    let session = sessions::get_session_by_session_id(&session_id).ok_or("No session")?;
+    let key = session.lc.read().unwrap().session_id;
+    let sender = session.sender.read().unwrap().clone().ok_or("Not connected")?;
+    controller::add(key, &sender, direction, local_port, target_host, target_port, service)
+}
+
+pub fn session_clanto_forward_remove(session_id: SessionID, id: i32) {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
+        let key = session.lc.read().unwrap().session_id;
+        crate::clanto::forwarding::controller::remove(key, id);
+    }
+    let _ = (session_id, id);
+}
+
+/// Servizi del catalogo firmato, JSON.
+pub fn main_clanto_forward_catalog() -> String {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    return serde_json::to_string(&crate::clanto::forwarding::controller::catalog_services())
+        .unwrap_or_else(|_| "[]".to_owned());
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    "[]".to_owned()
+}
+
 pub fn session_new_rdp(session_id: SessionID) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         session.new_rdp();

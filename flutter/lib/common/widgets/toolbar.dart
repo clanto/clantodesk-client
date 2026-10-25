@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_hbb/clanto/forwarding.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/shared_state.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
@@ -479,6 +480,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
           child: Text(translate('TCP tunneling')),
           onPressed: () => connectWithToken(isTcpTunneling: true)),
     );
+    v.add(clantoForwardingMenu(context, ffi));
   }
   // note
   if (isDefaultConn && !bind.isDisableAccount()) {

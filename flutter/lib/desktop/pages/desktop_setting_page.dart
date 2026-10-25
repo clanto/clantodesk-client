@@ -13,6 +13,7 @@ import 'package:flutter_hbb/clanto/id_permissions.dart';
 import 'package:flutter_hbb/clanto/privacy_prompt.dart';
 import 'package:flutter_hbb/clanto/inbound_security.dart';
 import 'package:flutter_hbb/clanto/outgoing_security.dart';
+import 'package:flutter_hbb/clanto/forwarding.dart';
 import 'package:flutter_hbb/clanto/trusted_controllers.dart';
 import 'package:flutter_hbb/clanto/two_factor_policy.dart';
 import 'package:flutter_hbb/clanto/protected_device.dart';
@@ -1104,6 +1105,9 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                 more(context),
                 incomingSecurity(context),
                 outgoingSecurity(context),
+                _Card(title: 'Forwarding', children: [
+                  ClantoForwardingSettings(enabled: !locked),
+                ]),
               ]),
             ),
           ],

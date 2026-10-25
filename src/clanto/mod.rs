@@ -11,6 +11,7 @@ pub mod audit_sink;
 pub mod config;
 pub mod config_import;
 pub mod file_scan;
+pub mod forwarding;
 pub mod gpo;
 pub mod host_watermark;
 pub mod id_permissions;

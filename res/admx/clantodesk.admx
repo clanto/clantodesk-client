@@ -17,6 +17,7 @@
     <category name="AuditSiem" displayName="$(string.AuditSiem)" />
     <category name="Interface" displayName="$(string.Interface)" />
     <category name="Privacy" displayName="$(string.Privacy)" />
+    <category name="Forwarding" displayName="$(string.Forwarding)" />
   </categories>
   <policies>
     <policy name="EnableRemotePrinter" class="Machine" displayName="$(string.EnableRemotePrinter)" explainText="$(string.EnableRemotePrinter_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-remote-printer" presentation="$(presentation.EnableRemotePrinter)">
@@ -160,5 +161,26 @@
     <policy name="ShareDeviceIdentity" class="Machine" displayName="$(string.ShareDeviceIdentity)" explainText="$(string.ShareDeviceIdentity_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-share-device-identity" presentation="$(presentation.ShareDeviceIdentity)">
       <parentCategory ref="Privacy" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ForwardEnabled" class="Machine" displayName="$(string.ForwardEnabled)" explainText="$(string.ForwardEnabled_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-enabled" presentation="$(presentation.ForwardEnabled)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ForwardCatalog" class="Machine" displayName="$(string.ForwardCatalog)" explainText="$(string.ForwardCatalog_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-catalog" presentation="$(presentation.ForwardCatalog)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ForwardCustomHost" class="Machine" displayName="$(string.ForwardCustomHost)" explainText="$(string.ForwardCustomHost_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-custom-host" presentation="$(presentation.ForwardCustomHost)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ForwardCustomHostTargets" class="Machine" displayName="$(string.ForwardCustomHostTargets)" explainText="$(string.ForwardCustomHostTargets_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ForwardCustomHostTargets)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="ForwardCustomHostTargetsValue" valueName="clanto-forward-custom-host-targets" maxLength="4000" /></elements></policy>
+    <policy name="ForwardReverse" class="Machine" displayName="$(string.ForwardReverse)" explainText="$(string.ForwardReverse_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-reverse" presentation="$(presentation.ForwardReverse)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ForwardCustomController" class="Machine" displayName="$(string.ForwardCustomController)" explainText="$(string.ForwardCustomController_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-custom-controller" presentation="$(presentation.ForwardCustomController)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ForwardCustomControllerTargets" class="Machine" displayName="$(string.ForwardCustomControllerTargets)" explainText="$(string.ForwardCustomControllerTargets_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ForwardCustomControllerTargets)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="ForwardCustomControllerTargetsValue" valueName="clanto-forward-custom-controller-targets" maxLength="4000" /></elements></policy>
   </policies>
 </policyDefinitions>

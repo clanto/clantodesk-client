@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "expires": "2027-06-30",
+  "services": [
+    {
+      "id": "rdp",
+      "name": "Desktop remoto (RDP)",
+      "kind": "tcp",
+      "direction": "to_host",
+      "target": "localhost:3389",
+      "description": "Desktop remoto di Windows sul PC assistito"
+    },
+    {
+      "id": "ssh",
+      "name": "SSH",
+      "kind": "tcp",
+      "direction": "to_host",
+      "target": "localhost:22",
+      "description": "Shell SSH sul PC assistito"
+    }
+  ]
+}

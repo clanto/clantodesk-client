@@ -74,6 +74,8 @@ env:
   RENDEZVOUS_SERVER: "${{ secrets.RENDEZVOUS_SERVER }}"
   API_SERVER: "${{ secrets.API_SERVER }}"
   CLANTO_POSTURE_MASTER: "${{ secrets.CLANTO_POSTURE_MASTER }}"
+  # Chiave pubblica Ed25519 (base64) del catalogo del forwarding; senza, il catalogo e' spento.
+  CLANTO_FORWARD_CATALOG_PK: "${{ secrets.CLANTO_FORWARD_CATALOG_PK }}"
 
 jobs:
   # Preflight: blocca i build su secret mancanti, versione incoerente,

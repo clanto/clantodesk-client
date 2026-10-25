@@ -406,6 +406,8 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                 }
                 log::debug!("Exit io_loop of id={}", self.handler.get_id());
+                #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                crate::clanto::forwarding::controller::close(self.handler.lc.read().unwrap().session_id);
                 // Stop client audio server.
                 if let Some(s) = self.stop_voice_call_sender.take() {
                     s.send(()).ok();
@@ -2070,6 +2072,11 @@ impl<T: InvokeUiSession> Remote<T> {
                         }
                         _ => {}
                     }
+                }
+                #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                Some(message::Union::ClantoForward(cf)) => {
+                    let key = self.handler.lc.read().unwrap().session_id;
+                    crate::clanto::forwarding::controller::on_message(key, &self.sender, cf);
                 }
                 Some(message::Union::Misc(misc)) => match misc.union {
                     Some(misc::Union::AudioFormat(f)) => {

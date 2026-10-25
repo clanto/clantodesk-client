@@ -32,6 +32,7 @@ remove_all
 trap on_exit EXIT
 
 build_image Dockerfile.check clantodesk-check
+build_image e2e/Dockerfile.node clantodesk-e2e-node
 for v in clantodesk-e2e-out "$SERVER_VOLUME"; do docker volume create "$v" >/dev/null; done
 docker network create "$NET" >/dev/null
 
@@ -56,7 +57,7 @@ dev_run e2e clantodesk-check \
 
 run_node() { # nome
   docker run -d --name "$1" --network "$NET" -v clantodesk-e2e-out:/out:ro \
-    clantodesk-check sleep infinity >/dev/null
+    clantodesk-e2e-node sleep infinity >/dev/null
 }
 
 echo "==> host (root) e controller (utenti tech1, tech2)"
@@ -68,7 +69,8 @@ SETUP="$(docker exec e2e-host $BIN --e2e host-setup "$PASSWORD" "$TOTP_HEX")"
 echo "    $SETUP"
 HOST_ID="$(sed -n 's/.*HOST_ID=\([^ ]*\).*/\1/p' <<<"$SETUP")"
 grep -q 'TFA=true' <<<"$SETUP" || { echo "2FA non configurato sull'host"; exit 1; }
-docker exec -d e2e-host bash -c "$BIN --server >/tmp/server.log 2>&1"
+# Display virtuale: le sessioni di controllo remoto enumerano i monitor.
+docker exec -d e2e-host bash -c "Xvfb :0 -screen 0 1280x800x24 >/tmp/xvfb.log 2>&1 & sleep 1; DISPLAY=:0 $BIN --server >/tmp/server.log 2>&1"
 
 ctrl() { docker exec -u "$1" e2e-ctrl $BIN --e2e "${@:2}"; }
 KEY1="$(ctrl tech1 device-key | sed -n 's/^DEVICE_KEY=//p')"
@@ -129,8 +131,72 @@ expect_prefix "12 policy 2FA senza 2FA: accesso rifiutato" "error:The remote PC 
 hopt clanto-require-2fa N
 expect "13 senza policy e senza 2FA: solo password" ok tech1 "$HOST_ID" "$PASSWORD" -
 
+echo "==> forwarding (sessione di controllo remoto)"
+ECHO_PY='import socket,sys,threading
+s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+s.bind(("127.0.0.1",int(sys.argv[1])));s.listen()
+def h(c):
+    while True:
+        d=c.recv(65536)
+        if not d: break
+        c.sendall(d)
+    c.close()
+while True:
+    c,_=s.accept();threading.Thread(target=h,args=(c,),daemon=True).start()'
+CLIENT_PY='import socket,sys
+d=b""
+try:
+    s=socket.create_connection(("127.0.0.1",int(sys.argv[1])),timeout=10);s.sendall(b"rev-e2e")
+    while len(d)<7:
+        x=s.recv(64)
+        if not x: break
+        d+=x
+except Exception: pass
+print("ECHO="+d.decode(errors="replace"))'
+docker exec -d e2e-host python3 -c "$ECHO_PY" 7001
+docker exec -d e2e-host python3 -c "$ECHO_PY" 7002
+docker exec -d e2e-ctrl python3 -c "$ECHO_PY" 7003
+sleep 1
+fwd() { ctrl "$1" forward "$HOST_ID" "$PASSWORD" "$2" 2>/dev/null | sed -n 's/^RESULT=//p'; }
+expect_fwd() { # descrizione atteso utente modo
+  local got; got="$(fwd "$3" "$4")"
+  if [ "$got" = "$2" ]; then PASS=$((PASS+1)); echo "  OK    $1 -> $got"
+  else FAIL=$((FAIL+1)); echo "  FAIL  $1 -> atteso $2, ottenuto '$got'"; fi
+}
+# Forward verso il controller: harness in background, client dalla parte dell'host.
+expect_reverse() { # descrizione atteso(ECHO=...) utente
+  docker exec e2e-ctrl rm -f /tmp/rev.out
+  docker exec -u "$3" -d e2e-ctrl bash -c "$BIN --e2e forward $HOST_ID $PASSWORD reverse:127.0.0.1:7003:20 > /tmp/rev.out 2>&1"
+  local port="" out=""
+  for _ in $(seq 60); do
+    out="$(docker exec e2e-ctrl cat /tmp/rev.out 2>/dev/null || true)"
+    port="$(sed -n 's/^LISTEN=//p' <<<"$out")"
+    { [ -n "$port" ] || grep -q '^RESULT=' <<<"$out"; } && break; sleep 0.5
+  done
+  local got
+  if [ -n "$port" ]; then got="$(docker exec e2e-host python3 -c "$CLIENT_PY" "$port")"
+  else got="$(sed -n 's/^RESULT=//p' <<<"$out")"; fi
+  if [ "$got" = "$2" ]; then PASS=$((PASS+1)); echo "  OK    $1 -> $got"
+  else FAIL=$((FAIL+1)); echo "  FAIL  $1 -> atteso $2, ottenuto '$got'"; fi
+  docker exec e2e-ctrl pkill -f 'e2e forward' >/dev/null 2>&1 || true
+}
+expect_fwd "14 forwarding spento sull'host" "error:Forwarding is disabled on this device" tech1 "to-host:127.0.0.1:7001"
+hopt clanto-forward-enabled Y
+hopt clanto-forward-custom-host Y
+hopt clanto-forward-custom-host-targets "127.0.0.1:7001"
+expect_fwd "15 destinazione ammessa sull'host" ok tech1 "to-host:127.0.0.1:7001"
+expect_fwd "16 destinazione non in elenco" "error:Forwarding target not allowed" tech1 "to-host:127.0.0.1:7002"
+expect_fwd "16b alias localhost della destinazione ammessa" ok tech1 "to-host:localhost:7001"
+expect_reverse "17 inverso non consentito dall'host" "error:listen Forwarding towards the controller is not allowed on this device" tech1
+hopt clanto-forward-reverse Y
+expect_reverse "18 inverso: il controller non espone nulla" "ECHO=" tech1
+docker exec -u tech1 e2e-ctrl $BIN --e2e local-option clanto-forward-enabled Y >/dev/null
+docker exec -u tech1 e2e-ctrl $BIN --e2e local-option clanto-forward-custom-controller Y >/dev/null
+docker exec -u tech1 e2e-ctrl $BIN --e2e local-option clanto-forward-custom-controller-targets "127.0.0.1:7003" >/dev/null
+expect_reverse "19 inverso: servizio del controller esposto sull'host" "ECHO=rev-e2e" tech1
+
 echo
-echo "E2E 2FA: $PASS superati, $FAIL falliti"
+echo "E2E 2FA e forwarding: $PASS superati, $FAIL falliti"
 if [ "$FAIL" != 0 ]; then
   echo "--- log host (ultime righe) ---"; docker exec e2e-host tail -40 /tmp/server.log || true
   exit 1

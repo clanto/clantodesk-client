@@ -576,6 +576,43 @@ sull'host**. Hook in `src/clanto/server_sync.rs`:
   Un server compromesso non può quindi abbassare la sicurezza degli host. Il pannello di gestione
   dovrà usare un canale firmato, non questo.
 
+## Forwarding
+
+Canali nei due sensi dentro una **sessione di controllo remoto** autorizzata, separati dal port
+forward di upstream (che resta spento e non viene toccato). Codice in `src/clanto/forwarding/`,
+interfaccia in `flutter/lib/clanto/forwarding.dart` (voce "Forwarding" nel menu della sessione,
+scheda "Forwarding" nelle impostazioni di sicurezza).
+
+- **Protocollo.** Un solo messaggio `ClantoForward` (campo `1000` di `Message`, in
+  `libs/base/protos/message.proto`, da conservare nei porting). I frame dei canali sono
+  `PortForwardChannel` di upstream incapsulati: `engine.rs` riusa senza modificarle finestre, crediti e
+  `run_channel` di `crate::port_forward_mux`. Il motore e' simmetrico: id dispari aperti dal
+  controller, pari dall'host. Un tipo di canale per funzione: oggi porte TCP; webcam, audio e USB si
+  aggiungono come nuovi tipi.
+- **Direzioni.** `to_host`: il controller ascolta su `127.0.0.1` e raggiunge una destinazione dalla
+  parte dell'host. `to_controller`: su richiesta del controller l'host ascolta su `127.0.0.1` e porta
+  le connessioni a una destinazione dalla parte del controller (host `clanto-listen`, porta =
+  listen_id). Nessun listener e' mai aperto sulla rete, solo in loopback.
+- **Policy** (`policy.rs`, tutte gestibili via GPO, protette dalla `strategy` del server). Ogni lato
+  decide solo su cio' che espone:
+  - `clanto-forward-enabled` (master, spento) su ogni PC;
+  - `clanto-forward-catalog` (acceso salvo `N`): servizi del catalogo firmato;
+  - `clanto-forward-custom-host` + `-targets`: destinazioni personalizzate dalla parte dell'host;
+  - `clanto-forward-reverse`: l'host puo' aprire listener per `to_controller`;
+  - `clanto-forward-custom-controller` + `-targets`: cosa il controller espone.
+  Elenchi `indirizzo:porte` (nome, IP, `[IPv6]`, CIDR o `*`; `N`, `N-M` o `*`); `localhost` vale
+  anche per 127.0.0.1 e ::1. Un nome viene risolto e ci si collega solo agli indirizzi verificati.
+- **Catalogo** (`catalog.rs`): `https://clanto.it/api/clantodesk-forward-catalog.json`,
+  `{"payload","signature"}` con firma Ed25519 dei byte esatti del payload, `version` 1 e `expires`.
+  Chiave pubblica al build da `CLANTO_FORWARD_CATALOG_PK` (secret GitHub); senza chiave o con firma
+  non valida il catalogo e' vuoto. Si firma con `api/sign-forward-catalog.py` (esempio in
+  `api/forward-catalog.example.json`); la chiave privata resta a Clanto, mai nel repo.
+- **Audit**: 61170 canale aperto, 61171 canale negato, 61172 listener aperto, 61173 listener negato.
+- **Piattaforme.** Desktop (Windows, macOS, Linux). Su Android e iOS il modulo del controller non e'
+  compilato.
+- **Prova.** `docker/e2e/run.sh`, scenari 14-19, con host Linux su Xvfb: le sessioni di controllo
+  remoto enumerano i monitor e senza display l'host rifiuta il login.
+
 ## Accesso solo da dispositivi protetti
 
 Opzione host `clanto-require-protected-device` (default `N`), nella sezione «Sicurezza in ingresso»

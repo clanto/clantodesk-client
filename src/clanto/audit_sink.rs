@@ -72,6 +72,10 @@ enum EventKey {
     FileUnscannable,
     FileDirectionBlocked,
     FileExtensionBlocked,
+    ForwardOpened,
+    ForwardDenied,
+    ForwardListenOpened,
+    ForwardListenDenied,
     Unknown,
 }
 
@@ -261,6 +265,34 @@ const EVENTS: &[EventDefinition] = &[
         cef_severity: 7,
     },
     EventDefinition {
+        key: EventKey::ForwardOpened,
+        id: 61170,
+        name: "Forwarding channel opened",
+        syslog_severity: 5,
+        cef_severity: 5,
+    },
+    EventDefinition {
+        key: EventKey::ForwardDenied,
+        id: 61171,
+        name: "Forwarding channel denied",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::ForwardListenOpened,
+        id: 61172,
+        name: "Forwarding listener opened",
+        syslog_severity: 5,
+        cef_severity: 5,
+    },
+    EventDefinition {
+        key: EventKey::ForwardListenDenied,
+        id: 61173,
+        name: "Forwarding listener denied",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
         key: EventKey::Unknown,
         id: 61999,
         name: "Unknown audit event",
@@ -437,6 +469,10 @@ fn event_definition(kind: &str, value: &Value) -> &'static EventDefinition {
         "clanto_file_unscannable" => EventKey::FileUnscannable,
         "clanto_file_direction_blocked" => EventKey::FileDirectionBlocked,
         "clanto_file_extension_blocked" => EventKey::FileExtensionBlocked,
+        "clanto_forward_opened" => EventKey::ForwardOpened,
+        "clanto_forward_denied" => EventKey::ForwardDenied,
+        "clanto_forward_listen" => EventKey::ForwardListenOpened,
+        "clanto_forward_listen_denied" => EventKey::ForwardListenDenied,
         _ => EventKey::Unknown,
     };
     EVENTS
@@ -1258,6 +1294,16 @@ mod tests {
             assert_eq!(event.key, key);
             assert_eq!(event.id, id);
             assert_eq!(event.syslog_severity, 4);
+        }
+        for (kind, key, id) in [
+            ("clanto_forward_opened", EventKey::ForwardOpened, 61170),
+            ("clanto_forward_denied", EventKey::ForwardDenied, 61171),
+            ("clanto_forward_listen", EventKey::ForwardListenOpened, 61172),
+            ("clanto_forward_listen_denied", EventKey::ForwardListenDenied, 61173),
+        ] {
+            let event = event_definition(kind, &json!({}));
+            assert_eq!(event.key, key);
+            assert_eq!(event.id, id);
         }
     }
 

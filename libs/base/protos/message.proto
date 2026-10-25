@@ -1045,5 +1045,37 @@ message Message {
     TerminalAction terminal_action = 31;
     TerminalResponse terminal_response = 32;
     PortForwardChannel port_forward_channel = 33;
+    // Forwarding Clanto (src/clanto/forwarding): numero alto per non collidere
+    // con i campi che upstream aggiungera'. Da conservare nei porting.
+    ClantoForward clanto_forward = 1000;
   }
+}
+
+// Canali multiplexati nei due sensi dentro una sessione autorizzata. I frame
+// riusano PortForwardChannel (finestre e crediti di upstream); id dispari =
+// aperti dal controller, pari = aperti dall'host. Un canale aperto dall'host
+// per un listener remoto ha host = "clanto-listen" e port = listen_id.
+message ClantoForward {
+  oneof union {
+    PortForwardChannel channel = 1;
+    ClantoForwardListen listen = 2;
+    ClantoForwardListening listening = 3;
+    ClantoForwardUnlisten unlisten = 4;
+  }
+}
+// Controller -> host: ascolta su 127.0.0.1:port dell'host (0 = porta libera)
+// e porta le connessioni al controller.
+message ClantoForwardListen {
+  int32 listen_id = 1;
+  int32 port = 2;
+  string description = 3;
+}
+message ClantoForwardListening {
+  int32 listen_id = 1;
+  bool success = 2;
+  string message = 3;
+  int32 port = 4;
+}
+message ClantoForwardUnlisten {
+  int32 listen_id = 1;
 }

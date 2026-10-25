@@ -24,6 +24,13 @@ pub const GPO_KEYS: &[&str] = &[
     "clanto-trusted-controllers",
     "clanto-require-2fa",
     "clanto-share-device-identity",
+    "clanto-forward-enabled",
+    "clanto-forward-catalog",
+    "clanto-forward-custom-host",
+    "clanto-forward-custom-host-targets",
+    "clanto-forward-reverse",
+    "clanto-forward-custom-controller",
+    "clanto-forward-custom-controller-targets",
     "clanto-temp-password-rotate-minutes",
     "clanto-require-protected-device",
     "clanto-posture-bypass",
@@ -152,5 +159,16 @@ mod tests {
     #[test]
     fn gpo_cannot_reenable_self_trusted_devices() {
         assert!(!GPO_KEYS.contains(&"enable-trusted-devices"));
+    }
+
+    #[test]
+    fn forwarding_keys_are_gpo_managed_and_server_protected() {
+        for key in crate::clanto::forwarding::policy::GPO_KEYS {
+            assert!(GPO_KEYS.contains(key), "{key} not in GPO_KEYS");
+            assert!(
+                crate::clanto::server_sync::SERVER_PROTECTED_KEYS.contains(key),
+                "{key} can be set by the server"
+            );
+        }
     }
 }

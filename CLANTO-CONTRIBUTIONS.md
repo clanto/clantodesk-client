@@ -28,6 +28,12 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/config.rs`
 - `src/clanto/config_import.rs`
 - `src/clanto/file_scan.rs`
+- `src/clanto/forwarding/catalog.rs`
+- `src/clanto/forwarding/controller.rs`
+- `src/clanto/forwarding/engine.rs`
+- `src/clanto/forwarding/host.rs`
+- `src/clanto/forwarding/mod.rs`
+- `src/clanto/forwarding/policy.rs`
 - `src/clanto/gpo.rs`
 - `src/clanto/host_watermark.rs`
 - `src/clanto/host_watermark/android.rs`
@@ -52,6 +58,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `flutter/lib/clanto/audit_settings.dart`
 - `flutter/lib/clanto/chat_notification.dart`
 - `flutter/lib/clanto/file_transfer_security.dart`
+- `flutter/lib/clanto/forwarding.dart`
 - `flutter/lib/clanto/id_permissions.dart`
 - `flutter/lib/clanto/id_permissions_data.dart`
 - `flutter/lib/clanto/inbound_security.dart`

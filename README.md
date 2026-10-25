@@ -453,6 +453,18 @@ L'elenco degli ID è l'opzione upstream `id-whitelist` (GPO `IdWhitelist`).
 | `clanto-require-2fa` | `Y`, `N` | `N` | solo GPO o `--option` (avviso nella sezione 2FA) | `RequireTwoFactor` |
 | `clanto-share-device-identity` | `Y`, `N` | `N` (hostname e utente non inviati) | solo GPO o `--option` | `ShareDeviceIdentity` |
 
+#### Forwarding
+
+| Chiave | Valori | Default | Interfaccia | GPO |
+| --- | --- | --- | --- | --- |
+| `clanto-forward-enabled` | `Y`, `N` | `N` | «Abilita il forwarding» (Forwarding) | `ForwardEnabled` |
+| `clanto-forward-catalog` | `Y`, `N` | acceso | «Usa il catalogo servizi Clanto» | `ForwardCatalog` |
+| `clanto-forward-custom-host` | `Y`, `N` | `N` | «Consenti forward personalizzati verso la rete di questo PC» | `ForwardCustomHost` |
+| `clanto-forward-custom-host-targets` | voci `indirizzo:porte` | vuoto | «Destinazioni ammesse dalla parte di questo PC» | `ForwardCustomHostTargets` |
+| `clanto-forward-reverse` | `Y`, `N` | `N` | «Consenti forward verso il controller» | `ForwardReverse` |
+| `clanto-forward-custom-controller` | `Y`, `N` | `N` | «Consenti forward personalizzati dalla rete di questo PC come controller» | `ForwardCustomController` |
+| `clanto-forward-custom-controller-targets` | voci `indirizzo:porte` | vuoto | «Destinazioni ammesse dalla parte del controller» | `ForwardCustomControllerTargets` |
+
 #### Report
 
 | Chiave | Valori | Default | Interfaccia | GPO |

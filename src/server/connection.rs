@@ -3221,6 +3221,18 @@ impl Connection {
             if let Some(message) = self.authorized_scope_violation(&msg) {
                 return self.handle_authorized_scope_violation(message).await;
             }
+            if let (Some(message::Union::ClantoForward(cf)), Some(tx)) =
+                (msg.union.as_ref(), self.inner.tx.as_ref())
+            {
+                let peer = crate::clanto::forwarding::host::Peer {
+                    conn_id: self.inner.id(),
+                    id: self.lr.my_id.clone(),
+                    name: self.lr.my_name.clone(),
+                    ip: self.ip.clone(),
+                };
+                crate::clanto::forwarding::host::on_message(peer, tx, cf.clone());
+                return true;
+            }
         }
         // After handling CloseReason messages, proceed to process other message types
         if let Some(message::Union::LoginRequest(lr)) = msg.union {
@@ -5730,6 +5742,7 @@ impl Connection {
             return;
         }
         self.closed = true;
+        crate::clanto::forwarding::host::close(self.inner.id());
         // If voice A,B -> C, and A,B has voice call
         // B disconnects, C will reset the voice call input.
         //

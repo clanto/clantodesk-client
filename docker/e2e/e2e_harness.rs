@@ -9,6 +9,8 @@
 //!   --e2e host-setup <password> <totp-hex>   host: password, 2FA, approvazione
 //!   --e2e host-trust <elenco>                host: clanto-trusted-controllers via IPC
 //!   --e2e host-option <chiave> <valore>      host: qualsiasi opzione via IPC
+//!   --e2e local-option <chiave> <valore>     controller: opzione dell'utente
+//!   --e2e forward <host-id> <password> to-host:<ip>:<porta> | reverse:<ip>:<porta>:<secondi>
 //!   --e2e device-key | my-id                 controller
 //!   --e2e login <host-id> <password> <totp-hex|-> [hwid] [no-key] [as-id=<ID>]
 //!
@@ -94,22 +96,22 @@ struct LoginArgs {
 
 #[tokio::main(flavor = "current_thread")]
 async fn login(a: LoginArgs) -> String {
+    match open_session(&a, ConnType::FILE_TRANSFER).await {
+        Ok(_) => "ok".to_owned(),
+        Err(result) => result,
+    }
+}
+
+/// Login completo; `Err` porta gia' l'esito (`2fa-required`, `error:...`).
+async fn open_session(a: &LoginArgs, conn: ConnType) -> Result<Stream, String> {
     let lc: Arc<RwLock<LoginConfigHandler>> = Default::default();
-    lc.write().unwrap().initialize(
-        a.host.clone(),
-        ConnType::FILE_TRANSFER,
-        None,
-        false,
-        None,
-        None,
-        None,
-    );
+    lc.write()
+        .unwrap()
+        .initialize(a.host.clone(), conn, None, false, None, None, None);
     let key = Config::get_option("key");
-    let ((mut stream, ..), _) =
-        match Client::start(&a.host, &key, "", ConnType::FILE_TRANSFER, Harness { lc }).await {
-            Ok(v) => v,
-            Err(e) => return format!("error:connect {e}"),
-        };
+    let ((mut stream, ..), _) = Client::start(&a.host, &key, "", conn, Harness { lc })
+        .await
+        .map_err(|e| format!("error:connect {e}"))?;
     let my_id = a.as_id.clone().unwrap_or_else(Config::get_id);
     let hwid = if a.hwid {
         crate::get_hwid()
@@ -118,7 +120,7 @@ async fn login(a: LoginArgs) -> String {
     };
     loop {
         let Some(Ok(bytes)) = stream.next_timeout(20_000).await else {
-            return "error:timeout".to_owned();
+            return Err("error:timeout".to_owned());
         };
         let Ok(msg) = Message::parse_from_bytes(&bytes) else {
             continue;
@@ -143,10 +145,12 @@ async fn login(a: LoginArgs) -> String {
                     hwid: hwid.clone(),
                     ..Default::default()
                 };
-                lr.set_file_transfer(FileTransfer {
-                    dir: "/tmp".to_owned(),
-                    ..Default::default()
-                });
+                if conn == ConnType::FILE_TRANSFER {
+                    lr.set_file_transfer(FileTransfer {
+                        dir: "/tmp".to_owned(),
+                        ..Default::default()
+                    });
+                }
                 if !a.no_key {
                     if let Some((k, s)) = crate::clanto::trusted_controllers::sign_login(
                         &a.host,
@@ -159,9 +163,7 @@ async fn login(a: LoginArgs) -> String {
                 }
                 let mut m = Message::new();
                 m.set_login_request(lr);
-                if let Err(e) = stream.send(&m).await {
-                    return format!("error:send {e}");
-                }
+                stream.send(&m).await.map_err(|e| format!("error:send {e}"))?;
             }
             Some(message::Union::LoginResponse(res)) => match res.union {
                 Some(login_response::Union::Error(err)) => {
@@ -173,19 +175,161 @@ async fn login(a: LoginArgs) -> String {
                                 hwid: hwid.clone(),
                                 ..Default::default()
                             });
-                            if let Err(e) = stream.send(&m).await {
-                                return format!("error:send {e}");
-                            }
+                            stream.send(&m).await.map_err(|e| format!("error:send {e}"))?;
                             continue;
                         }
-                        return "2fa-required".to_owned();
+                        return Err("2fa-required".to_owned());
                     }
-                    return format!("error:{err}");
+                    eprintln!("LOGIN_ERROR {err:?}");
+                    return Err(format!("error:{err}"));
                 }
-                Some(login_response::Union::PeerInfo(_)) => return "ok".to_owned(),
+                Some(login_response::Union::PeerInfo(_)) => return Ok(stream),
                 _ => {}
             },
             _ => {}
+        }
+    }
+}
+
+/// Hook del controller per l'harness: la policy e' quella vera
+/// (`authorize_target` con le opzioni locali di questo utente).
+struct ForwardHooks {
+    reverse_target: (String, i32),
+    listening: std::sync::Mutex<Option<ClantoForwardListening>>,
+    refused: std::sync::Mutex<Vec<String>>,
+}
+
+impl crate::clanto::forwarding::engine::Hooks for ForwardHooks {
+    fn authorize_open(
+        &self,
+        host: String,
+        _port: i32,
+    ) -> hbb_common::futures::future::BoxFuture<'static, Result<Vec<std::net::SocketAddr>, String>> {
+        use crate::clanto::forwarding::{catalog::Direction, engine::LISTEN_HOST, policy};
+        let (t_host, t_port) = self.reverse_target.clone();
+        Box::pin(async move {
+            if host != LISTEN_HOST {
+                return Err(policy::DENIED_TARGET.to_owned());
+            }
+            let d = policy::authorize_target(Direction::ToController, &t_host, t_port).await?;
+            let policy::Target::Addrs(addrs) = d.target;
+            Ok(addrs)
+        })
+    }
+    fn on_listening(&self, msg: ClantoForwardListening) {
+        *self.listening.lock().unwrap() = Some(msg);
+    }
+    fn on_refused(&self, _id: i32, message: String) {
+        self.refused.lock().unwrap().push(message);
+    }
+}
+
+/// Sessione di controllo remoto con un forward.
+///   to-host:<ip>:<porta>          -> ok | error:<motivo>
+///   reverse:<ip>:<porta>:<secondi> -> stampa LISTEN=<porta host>, tiene aperto
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
+async fn forward(a: LoginArgs, mode: String) -> String {
+    use crate::clanto::forwarding::engine::{Engine, Side};
+    use hbb_common::tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::{TcpListener, TcpStream},
+        sync::mpsc,
+    };
+    use std::time::Duration;
+
+    let mut stream = match open_session(&a, ConnType::DEFAULT_CONN).await {
+        Ok(s) => s,
+        Err(result) => return result,
+    };
+    let parts: Vec<&str> = mode.split(':').collect();
+    let reverse_target = match parts.as_slice() {
+        ["reverse", ip, port, _] => (ip.to_string(), port.parse().unwrap_or(0)),
+        _ => (String::new(), 0),
+    };
+    let hooks = Arc::new(ForwardHooks {
+        reverse_target,
+        listening: Default::default(),
+        refused: Default::default(),
+    });
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Message>();
+    let engine = Engine::new(
+        Side::Controller,
+        Arc::new(move |m| {
+            out_tx.send(m).ok();
+        }),
+        hooks.clone(),
+    );
+    let scenario = {
+        let engine = engine.clone();
+        let hooks = hooks.clone();
+        let parts: Vec<String> = parts.iter().map(|s| s.to_string()).collect();
+        hbb_common::tokio::spawn(async move {
+            match parts.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+                ["to-host", ip, port] => {
+                    let l = TcpListener::bind("127.0.0.1:0").await.unwrap();
+                    let mut client = TcpStream::connect(l.local_addr().unwrap()).await.unwrap();
+                    let (server, _) = l.accept().await.unwrap();
+                    if let Err(e) = engine.open_outgoing(ip, port.parse().unwrap_or(0), server) {
+                        return format!("error:{e}");
+                    }
+                    client.write_all(b"e2e-forward").await.ok();
+                    let mut buf = [0u8; 11];
+                    match hbb_common::tokio::time::timeout(Duration::from_secs(15), client.read_exact(&mut buf)).await {
+                        Ok(Ok(_)) if &buf == b"e2e-forward" => "ok".to_owned(),
+                        _ => format!(
+                            "error:{}",
+                            hooks.refused.lock().unwrap().last().cloned().unwrap_or_else(|| "closed".to_owned())
+                        ),
+                    }
+                }
+                ["reverse", _, _, secs] => {
+                    engine.send(clanto_forward::Union::Listen(ClantoForwardListen {
+                        listen_id: 1,
+                        port: 0,
+                        description: "e2e".to_owned(),
+                        ..Default::default()
+                    }));
+                    for _ in 0..150 {
+                        let listening = hooks.listening.lock().unwrap().clone();
+                        if let Some(l) = listening {
+                            if !l.success {
+                                return format!("error:listen {}", l.message);
+                            }
+                            println!("LISTEN={}", l.port);
+                            hbb_common::tokio::time::sleep(Duration::from_secs(secs.parse().unwrap_or(30))).await;
+                            return "ok".to_owned();
+                        }
+                        hbb_common::tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                    "error:no listening reply".to_owned()
+                }
+                _ => "error:bad mode".to_owned(),
+            }
+        })
+    };
+    hbb_common::tokio::pin!(scenario);
+    loop {
+        hbb_common::tokio::select! {
+            r = &mut scenario => {
+                engine.close_all();
+                return r.unwrap_or_else(|e| format!("error:{e}"));
+            }
+            Some(m) = out_rx.recv() => {
+                if let Err(e) = stream.send(&m).await {
+                    return format!("error:send {e}");
+                }
+            }
+            res = stream.next_timeout(60_000) => {
+                let Some(Ok(bytes)) = res else {
+                    eprintln!("STREAM_END {:?}", res.map(|r| r.map(|b| b.len())));
+                    return "error:session closed".to_owned();
+                };
+                if let Ok(msg) = Message::parse_from_bytes(&bytes) {
+                    if let Some(message::Union::ClantoForward(cf)) = msg.union {
+                        engine.on_message(cf);
+                    }
+                }
+            }
         }
     }
 }
@@ -230,6 +374,26 @@ pub fn run(args: &[String]) {
             crate::clanto::trusted_controllers::device_public_key().unwrap_or_default()
         ),
         "my-id" => println!("MY_ID={}", Config::get_id()),
+        // Opzione nella configurazione di questo utente (lato controller).
+        "local-option" => {
+            Config::set_option(arg(1), arg(2));
+            println!("LOCAL {}={}", arg(1), Config::get_option(&arg(1)));
+        }
+        // forward <host-id> <password> <modo>
+        "forward" => {
+            let result = forward(
+                LoginArgs {
+                    host: arg(1),
+                    password: arg(2),
+                    totp: None,
+                    hwid: false,
+                    no_key: false,
+                    as_id: None,
+                },
+                arg(3),
+            );
+            println!("RESULT={result}");
+        }
         "login" => {
             let flags = &args[4.min(args.len())..];
             let totp = arg(3);

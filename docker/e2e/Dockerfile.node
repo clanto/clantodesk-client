@@ -1,0 +1,8 @@
+# Nodi della prova E2E (host e controller). L'host di una sessione di controllo
+# remoto enumera i monitor: Xvfb gli da' un display virtuale.
+FROM clantodesk-check
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update -y && apt-get install --yes --no-install-recommends xvfb x11-utils

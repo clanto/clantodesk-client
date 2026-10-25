@@ -42,6 +42,13 @@ pub const SERVER_PROTECTED_KEYS: &[&str] = &[
     "clanto-file-scan",
     "clanto-file-direction",
     "clanto-file-blocked-ext",
+    "clanto-forward-enabled",
+    "clanto-forward-catalog",
+    "clanto-forward-custom-host",
+    "clanto-forward-custom-host-targets",
+    "clanto-forward-reverse",
+    "clanto-forward-custom-controller",
+    "clanto-forward-custom-controller-targets",
 ];
 
 pub fn filter_sysinfo(v: &mut Value) {
