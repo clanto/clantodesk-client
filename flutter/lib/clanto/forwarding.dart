@@ -49,6 +49,24 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
           key: kOptClantoForwardCustomControllerTargets));
   final _cameraDevice = TextEditingController(
       text: bind.mainGetOptionSync(key: kOptClantoForwardCameraDevice));
+  String? _macCameraStatus;
+
+  /// macOS: attiva la Camera Extension (flutter/macos/Runner/AppDelegate.swift).
+  Future<void> _activateMacCamera() async {
+    String status;
+    try {
+      final res = await const MethodChannel('it.clanto.clantodesk/camera_extension')
+          .invokeMethod<String>('activate');
+      status = translate(res == 'approval'
+          ? 'Approve ClantoDesk Camera in System Settings, General, Login Items & Extensions'
+          : 'Virtual camera active');
+    } on PlatformException catch (e) {
+      status = translate(e.message ?? e.code);
+    } on MissingPluginException {
+      status = translate('The virtual camera is not included in this build');
+    }
+    if (mounted) setState(() => _macCameraStatus = status);
+  }
 
   @override
   void dispose() {
@@ -124,6 +142,17 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
             _targets('Virtual camera device (empty = automatic)',
                 kOptClantoForwardCameraDevice, _cameraDevice,
                 hint: '/dev/video10'),
+          if (Platform.isMacOS && _isY(kOptClantoForwardCamera))
+            Padding(
+              padding: const EdgeInsets.only(left: 32, bottom: 8),
+              child: Row(children: [
+                TextButton(
+                    onPressed: widget.enabled ? _activateMacCamera : null,
+                    child: Text(translate('Activate the virtual camera'))),
+                if (_macCameraStatus != null)
+                  Flexible(child: Text(_macCameraStatus!)),
+              ]),
+            ),
         ],
       ],
     );

@@ -1252,6 +1252,9 @@ jobs:
 
       - name: Codesign app and create signed dmg
         if: env.MACOS_P12_BASE64 != null && env.UPLOAD_ARTIFACT == 'true'
+        env:
+          MACOS_APP_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_APP_PROVISIONING_PROFILE_BASE64 }}
+          MACOS_CAMERA_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_CAMERA_PROVISIONING_PROFILE_BASE64 }}
         run: |
           # Patch create-dmg to give more attempts to unmount image
           CREATE_DMG="$(command -v create-dmg)"
@@ -1262,11 +1265,23 @@ jobs:
           security unlock-keychain -p ${{ secrets.MACOS_P12_PASSWORD }} rustdesk.keychain
           # start sign the rustdesk.app and dmg
           rm -rf *.dmg || true
+          # Clanto: Camera Extension (webcam del controller) solo con i due profili
+          # Developer ID nei secret; senza, l'app resta com'era.
+          APP_ENTITLEMENTS=./flutter/macos/Runner/Release.entitlements
+          if [ -n "$MACOS_APP_PROVISIONING_PROFILE_BASE64" ] && [ -n "$MACOS_CAMERA_PROVISIONING_PROFILE_BASE64" ]; then
+            APP_ENTITLEMENTS=$RUNNER_TEMP/clantodesk-app.entitlements
+            bash ./.github/scripts/build-macos-camera-extension.sh \
+              ./flutter/build/macos/Build/Products/Release/ClantoDesk.app \
+              ${{ secrets.MACOS_CODESIGN_IDENTITY }} \
+              "$APPLE_DEVELOPMENT_TEAM" ${{ matrix.job.arch }} "$APP_ENTITLEMENTS"
+          else
+            echo "Camera Extension non inclusa: profili Developer ID assenti"
+          fi
           # the identity secret carries its own shell quoting, so expand it inline like the dmg codesign below
           bash ./.github/scripts/sign-macos-app.sh \
             ./flutter/build/macos/Build/Products/Release/ClantoDesk.app \
             ${{ secrets.MACOS_CODESIGN_IDENTITY }} \
-            ./flutter/macos/Runner/Release.entitlements
+            "$APP_ENTITLEMENTS"
           SIGNED_TEAM=$(codesign -dvvv ./flutter/build/macos/Build/Products/Release/ClantoDesk.app 2>&1 | sed -n 's/^[[:space:]]*TeamIdentifier=//p' | head -n 1)
           if [ -z "$SIGNED_TEAM" ]; then
             echo "ERROR: Could not read TeamIdentifier from the signed macOS app"

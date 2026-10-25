@@ -9,11 +9,16 @@
 //!   Windows e consegna alle applicazioni l'ultimo frame, adattato al formato
 //!   scelto dall'applicazione; senza frame, immagine nera.
 //!
-//! `frame` è codice puro, provato su ogni piattaforma; il resto è solo Windows.
+//! Su macOS la camera è una Camera Extension (flutter/macos/CameraExtension) e
+//! `mac` scrive nel suo stream sink.
+//!
+//! `frame` è codice puro, provato su ogni piattaforma.
 
 pub mod frame;
 #[cfg(windows)]
 pub mod control;
+#[cfg(target_os = "macos")]
+pub mod mac;
 #[cfg(windows)]
 pub mod shared;
 

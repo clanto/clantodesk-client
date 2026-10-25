@@ -1002,6 +1002,14 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("The remote computer did not answer", "Il computer remoto non ha risposto"),
         ("Camera stream overflow", "Flusso della webcam sovraccarico"),
         ("The camera changed resolution", "La webcam ha cambiato risoluzione"),
+        ("Activate the virtual camera", ""),
+        ("Approve ClantoDesk Camera in System Settings, General, Login Items & Extensions", ""),
+        ("Virtual camera active", ""),
+        ("The virtual camera is not included in this build", ""),
+        ("The virtual camera requires macOS 13", ""),
+        ("The virtual camera requires Windows 11", ""),
+        ("Activate the ClantoDesk camera extension in the settings (Forwarding)", ""),
+        ("Unsupported camera format", ""),
         ("Camera access denied: allow ClantoDesk in System Settings, Privacy & Security, Camera", "Accesso alla webcam negato: consenti ClantoDesk in Impostazioni di Sistema, Privacy e sicurezza, Fotocamera"),
     ].iter().cloned().collect();
 }

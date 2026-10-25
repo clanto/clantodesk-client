@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- __TEAM__ e __VERSION__ vengono sostituiti da build-macos-camera-extension.sh -->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>it.clanto.clantodesk.camera</string>
+	<key>CFBundleIdentifier</key>
+	<string>it.clanto.clantodesk.camera</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>ClantoDesk Camera</string>
+	<key>CFBundlePackageType</key>
+	<string>SYSX</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__VERSION__</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>CMIOExtension</key>
+	<dict>
+		<key>CMIOExtensionMachServiceName</key>
+		<string>__TEAM__.it.clanto.clantodesk.camera</string>
+	</dict>
+	<key>NSSystemExtensionUsageDescription</key>
+	<string>Shows the technician's webcam to the apps on this Mac during a ClantoDesk session.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Clanto Services srls</string>
+</dict>
+</plist>

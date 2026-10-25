@@ -60,6 +60,7 @@ docker/check.sh --test clanto:: core_main::       # test della lib filtrati
 docker/flutter-check.sh                           # bridge, flutter analyze/test, check con flutter
 docker/e2e/run.sh                                 # 2FA e controller fidati end-to-end
 docker/security-scan.sh                           # Semgrep (blocca) e OSV-Scanner (informa)
+docker/android-build.sh [abi] [outgoing|incoming] # APK come la CI (firma di debug) in target/android/
 ```
 
 `--features flutter` richiede `src/bridge_generated.rs`, che la CI genera: per la parte Flutter
@@ -67,7 +68,9 @@ usare `docker/flutter-check.sh`, che lo genera come `bridge.yml`. Il workflow `s
 esegue gli stessi strumenti di `docker/security-scan.sh`; le esclusioni Semgrep sono motivate nello
 script e i falsi positivi nei test sono marcati `nosemgrep`. `docker/e2e/run.sh` avvia hbbs/hbbr
 ufficiali, un host reale (`--server`) e un controller headless con due utenti; l'harness
-`docker/e2e/e2e_harness.rs` entra solo nella copia del repo nel volume di lavoro.
+`docker/e2e/e2e_harness.rs` entra solo nella copia del repo nel volume di lavoro. `docker/android-build.sh`
+usa SDK, NDK, cargo-ndk e Flutter delle versioni del workflow; vcpkg (commit `VCPKG_COMMIT_ID`), le sue
+librerie e la cache di Gradle stanno in volumi, quindi solo la prima build è lunga.
 
 **Prestazioni e I/O** (`docker/common.sh`): il repo è montato in sola lettura e allineato con
 `rsync` incrementale in un volume per profilo (`clantodesk-work-{check,flutter,e2e}`); `target/`,
@@ -623,9 +626,21 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
     memoria condivisa `Global\ClantoDeskVirtualCamera` (lettura solo per LocalService, cioè il Frame
     Server). La media source adatta il frame a 1280x720 o 640x480 con bande nere. Nessun driver.
     Con la versione portable (senza servizio) la camera virtuale non è disponibile.
-  - macOS come host: richiede una Camera Extension (target Swift, entitlement `system-extension`,
-    profilo Developer ID); da sviluppare e provare su un Mac. macOS come controller funziona:
-    entitlement `com.apple.security.device.camera` e `NSCameraUsageDescription` aggiunti.
+  - macOS 13+ come host: Camera Extension `it.clanto.clantodesk.camera`
+    (`flutter/macos/CameraExtension/`), con uno stream di uscita per le applicazioni e uno stream
+    sink in cui l'host scrive (`libs/clanto-vcam/src/mac.rs`, API C di CoreMediaIO, 1280x720 NV12
+    con bande nere). La CI la compila, la firma e la incorpora in
+    `Contents/Library/SystemExtensions` con `.github/scripts/build-macos-camera-extension.sh`, solo
+    se esistono i secret `MACOS_APP_PROVISIONING_PROFILE_BASE64` e
+    `MACOS_CAMERA_PROVISIONING_PROFILE_BASE64`: profili Developer ID per `it.clanto.clantodesk` e
+    `it.clanto.clantodesk.camera`, con capability System Extension (app) e App Group
+    `<TEAM>.it.clanto.clantodesk` (entrambi). Senza secret l'app resta com'era. L'utente attiva
+    l'estensione dal pulsante «Attiva la camera virtuale» (impostazioni, Forwarding;
+    `OSSystemExtensionRequest` in `AppDelegate.swift`) e la approva in Impostazioni di Sistema; l'app
+    deve stare in `/Applications`. Type-check Rust per `aarch64`/`x86_64-apple-darwin` in Docker; Swift
+    compilato solo dalla CI; prova funzionale su un Mac.
+  - macOS come controller: entitlement `com.apple.security.device.camera` e
+    `NSCameraUsageDescription`.
   - Prove in Docker: VP8 andata e ritorno, conversioni, ABI v4l2, buffer condiviso e adattamento
     del frame (`cargo test -p clanto-vcam`), type-check dei crate Windows per
     `x86_64-pc-windows-msvc`. La camera virtuale di Windows va provata su un PC Windows 11 reale.

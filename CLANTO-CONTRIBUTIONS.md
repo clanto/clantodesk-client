@@ -87,8 +87,11 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoHostWatermark.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoUserKeyStore.kt`
 - `flutter/ios/Runner/ClantoFileExporter.swift`
-- `libs/clanto-vcam/src/lib.rs`, `frame.rs`, `shared.rs`, `control.rs`
+- `libs/clanto-vcam/src/lib.rs`, `frame.rs`, `shared.rs`, `control.rs`, `mac.rs`
 - `libs/clanto-vcam/dll/src/lib.rs`, `source.rs`
+- `flutter/macos/CameraExtension/main.swift`, `Info.plist`, `CameraExtension.entitlements`
+- `.github/scripts/build-macos-camera-extension.sh`
+- `docker/Dockerfile.android`, `docker/android-build.sh`, `docker/android-inner.sh`
 
 L'elenco deve essere aggiornato quando viene aggiunto, rimosso o riclassificato
 un modulo. L'intestazione SPDX del singolo file prevale su questo inventario in

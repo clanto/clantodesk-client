@@ -7,7 +7,8 @@
 //! - Linux: un dispositivo v4l2loopback già presente (non lo installiamo noi).
 //! - Windows 11: camera virtuale di Media Foundation (`libs/clanto-vcam`), con
 //!   ClantoDesk installato (il servizio registra la media source).
-//! - macOS: Camera Extension (modulo separato, da firmare con Developer ID).
+//! - macOS 13+: Camera Extension (flutter/macos/CameraExtension), attivata
+//!   dall'utente dalle impostazioni; l'host scrive nel suo stream sink.
 
 use super::media::I420;
 
@@ -93,7 +94,36 @@ impl Sink for WindowsSink {
     }
 }
 
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(target_os = "macos")]
+fn platform_open(width: usize, height: usize) -> Result<Box<dyn Sink>, String> {
+    let camera = clanto_vcam::mac::CameraSink::open(clanto_vcam::FRIENDLY_NAME)?;
+    Ok(Box::new(MacSink { camera, width, height, buf: Vec::new() }))
+}
+
+#[cfg(target_os = "macos")]
+struct MacSink {
+    camera: clanto_vcam::mac::CameraSink,
+    width: usize,
+    height: usize,
+    buf: Vec<u8>,
+}
+
+#[cfg(target_os = "macos")]
+impl Sink for MacSink {
+    fn name(&self) -> String {
+        clanto_vcam::FRIENDLY_NAME.to_owned()
+    }
+
+    fn write(&mut self, frame: &I420) -> Result<(), String> {
+        if (frame.width, frame.height) != (self.width, self.height) {
+            return Err("frame size mismatch".to_owned());
+        }
+        frame.to_nv12(&mut self.buf);
+        self.camera.write(frame.width, frame.height, &self.buf)
+    }
+}
+
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
 fn platform_open(_width: usize, _height: usize) -> Result<Box<dyn Sink>, String> {
     Err(NO_SINK.to_owned())
 }
