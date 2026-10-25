@@ -632,12 +632,12 @@ fn command_output(deadline: Instant, command: &str, args: &[&str]) -> Option<Str
     };
     let snapshot = || buffer.lock().unwrap_or_else(|err| err.into_inner()).clone();
     loop {
-        if let Some(status) = child.try_wait().ok()? {
+        // Il codice di uscita non conta: gli script finiscono spesso con un test
+        // falso (`[ ... ] && emit ...`, es. ro.kernel.qemu su un telefono vero),
+        // e scartare l'output lasciava tutta la postura a "unknown".
+        if child.try_wait().ok()?.is_some() {
             let _ = reader.join();
-            return status
-                .success()
-                .then(|| String::from_utf8(snapshot()).ok())
-                .flatten();
+            return String::from_utf8(snapshot()).ok();
         }
         if Instant::now() >= deadline {
             let _ = child.kill();
@@ -675,13 +675,30 @@ fn apply_lines(posture: &mut HashMap<String, String>, output: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_lines, classify_rejection, collect, complete_lines, decide, release_key, sign,
+        apply_lines, classify_rejection, collect, command_output, complete_lines, decide, release_key, sign,
         verification_mode, FailedRule, RejectionKind, VerificationFailure, VerificationMode,
         POSTURE_KEYS,
     };
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
     use std::collections::HashMap;
+
+    /// Come lo script Android su un telefono vero: l'ultimo test e' falso e sh
+    /// esce con 1, ma i valori gia' emessi devono arrivare alla postura.
+    #[cfg(unix)]
+    #[test]
+    fn probe_output_survives_a_failing_last_command() {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let output = command_output(
+            deadline,
+            "sh",
+            &["-c", "printf 'os_build=2026-05-01\\n'; [ 0 = 1 ] && printf 'is_vm=true\\n'"],
+        )
+        .expect("output of a probe that exits with status 1");
+        let mut posture = HashMap::from([("os_build".to_owned(), "unknown".to_owned())]);
+        apply_lines(&mut posture, &output);
+        assert_eq!(posture["os_build"], "2026-05-01");
+    }
 
     #[test]
     fn sign_uses_bytewise_sorted_canonical_posture() {
