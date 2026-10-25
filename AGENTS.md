@@ -13,6 +13,7 @@
 * `libs/scrap/` screen capture
 * `libs/enigo/` input control
 * `libs/clipboard/` clipboard
+* `libs/clanto-vcam/` Clanto virtual camera: Windows 11 Media Foundation source (`dll/`), macOS host side
 * `libs/base/src/config/keys.rs` the single import path for all options
 
 ### Key Components

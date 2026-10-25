@@ -488,6 +488,13 @@ riassegnare mai un ID, neppure dopo la rimozione di un evento.
 | 61161 | Incoming file could not be scanned | 4 (warning) | 7 |
 | 61162 | File transfer blocked by direction policy | 4 (warning) | 7 |
 | 61163 | Incoming file blocked by extension | 4 (warning) | 7 |
+| 61170 | Forwarding channel opened (`clanto_forward_opened`) | 5 (notice) | 5 |
+| 61171 | Forwarding channel denied (`clanto_forward_denied`) | 4 (warning) | 7 |
+| 61172 | Forwarding listener opened (`clanto_forward_listen`) | 5 (notice) | 5 |
+| 61173 | Forwarding listener denied (`clanto_forward_listen_denied`) | 4 (warning) | 7 |
+| 61174 | Controller camera opened (`clanto_forward_camera_opened`) | 5 (notice) | 5 |
+| 61175 | Controller camera denied (`clanto_forward_camera_denied`) | 4 (warning) | 7 |
+| 61176 | Controller camera closed (`clanto_forward_camera_closed`) | 6 (informational) | 3 |
 | 61999 | Unknown audit event | 5 (notice) | 5 |
 
 Gli ID legacy 61000, 61001, 61002 e 61099 sono riservati permanentemente e non devono essere
@@ -620,6 +627,9 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
   - Host: `clanto-forward-camera` (spento) e, su Linux, `clanto-forward-camera-device`. Controller:
     serve `clanto-forward-enabled`; la webcam parte solo dal comando «Avvia» nel dialogo Forwarding.
   - Linux: scrive in YUYV su un dispositivo v4l2loopback già presente (non lo installiamo).
+    Il Flatpak concede solo `--device=dri`: per la webcam (invio o ricezione) l'amministratore la
+    abilita in modo esplicito con `flatpak override --device=all it.clanto.clantodesk`; di default
+    la sandbox non si allarga.
   - Windows 11: `libs/clanto-vcam`. Il servizio installato registra in HKLM la media source
     `clanto_vcam.dll` (crate `libs/clanto-vcam/dll`, copiata da `build.py` accanto all'eseguibile),
     crea la camera con `MFCreateVirtualCamera` per la durata del flusso e scrive i frame NV12 in una

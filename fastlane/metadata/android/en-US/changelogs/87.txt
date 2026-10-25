@@ -1,0 +1,6 @@
+- Based on RustDesk 1.5.0, with its stability and audio fixes.
+- Requires Android 7.0 or later.
+- Credentials encrypted with a key held in the Android Keystore; optional local password for the settings.
+- Watermark with technician, time and session code when the remote PC requires it.
+- Privacy mode offered when connecting to a PC; can be turned off.
+- New Forwarding menu: port forwarding in both directions and the phone camera as a webcam on the remote PC.

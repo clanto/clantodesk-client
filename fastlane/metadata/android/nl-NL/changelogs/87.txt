@@ -1,0 +1,6 @@
+- Gebaseerd op RustDesk 1.5.0, met de bijbehorende stabiliteits- en audiocorrecties.
+- Vereist Android 7.0 of hoger.
+- Inloggegevens versleuteld met een sleutel in de Android Keystore; optioneel lokaal wachtwoord voor de instellingen.
+- Watermerk met technicus, tijd en sessiecode als de externe pc dat vereist.
+- Privacymodus aangeboden bij verbinding; uit te schakelen.
+- Nieuw menu Forwarding: poortdoorsturing in beide richtingen en de telefooncamera als webcam op de externe pc.

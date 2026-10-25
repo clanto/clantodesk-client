@@ -23,6 +23,11 @@ mantenuto come mirror di upstream.
 - sincronizzare appunti e audio quando consentito;
 - usare chat testuale e chiamate vocali durante l'assistenza;
 - usare terminale, inoltro porte e le altre funzioni supportate dal core;
+- inoltrare porte nei due sensi con il menu Forwarding, scegliendo i servizi da
+  un catalogo firmato o destinazioni personalizzate ammesse dalla policy;
+- mostrare la webcam del tecnico (anche la fotocamera di un telefono Android o
+  di un iPhone) come camera virtuale sul computer assistito, per Teams, Zoom e
+  simili;
 - gestire sessioni, autorizzazioni e configurazioni centralizzate.
 
 Su Android e iOS, i file da inviare vengono scelti con il selettore documenti
@@ -51,6 +56,10 @@ include, tra le altre, queste personalizzazioni:
   dispositivi protetti, filigrane, controllo dei file ricevuti, permessi per ID,
   report sessioni, audit verso SIEM e criteri di gruppo (vedi
   [Sicurezza e amministrazione](#sicurezza-e-amministrazione));
+- forwarding modulare separato dal port forward di upstream (che resta
+  spento): porte nei due sensi, catalogo servizi firmato, policy per lato e
+  webcam del tecnico come camera virtuale su Linux (v4l2loopback), Windows 11
+  e macOS 13+, senza driver aggiuntivi;
 - trasferimento file mobile tramite picker di sistema, scoped storage e
   MediaStore su Android, ed esportazione documenti tramite app File su iOS;
 - informativa e consenso espliciti prima dell'attivazione del servizio Android
@@ -158,6 +167,12 @@ tocchi, scorrimenti e input da tastiera durante una sessione autorizzata; non è
 usato per automazioni autonome. Prima di aprire le impostazioni Android,
 l'applicazione mostra un'informativa separata e richiede un consenso esplicito.
 
+La fotocamera (Android, iOS, macOS e desktop) viene aperta solo quando il
+tecnico avvia «La mia webcam sul PC remoto» nel menu Forwarding e si chiude a
+fine flusso o sessione. Il flusso va soltanto al computer della sessione, che
+lo accetta solo con `clanto-forward-camera` attivo; apertura, rifiuto e
+chiusura finiscono nell'audit dell'host.
+
 - [Informativa privacy ClantoDesk](https://supporto.clanto.it/documentazione/privacy-clantodesk/)
 - [Documentazione e supporto](https://supporto.clanto.it/documentazione/)
 
@@ -173,6 +188,10 @@ l'applicazione mostra un'informativa separata e richiede un consenso esplicito.
 | `flutter/lib/clanto/` | Componenti Flutter specifici ClantoDesk |
 | `flutter/android/.../clanto/` | Componenti Android specifici ClantoDesk |
 | `flutter/ios/Runner/ClantoFileExporter.swift` | Esportazione file specifica iOS |
+| `src/clanto/forwarding/` | Forwarding: motore dei canali, policy, catalogo, webcam |
+| `flutter/ios/Runner/ClantoCamera.swift` | Fotocamera iPhone come webcam del tecnico |
+| `flutter/macos/CameraExtension/` | Camera Extension macOS (camera virtuale) |
+| `libs/clanto-vcam/` | Camera virtuale: Windows 11 (Media Foundation) e lato host macOS |
 | `libs/hbb_common/` | Configurazione, protocolli e utilità condivise con il server |
 | `libs/base/` | Chiavi di opzione, protocollo `message.proto`, trasferimento file e codice di piattaforma usati solo dal client |
 | `libs/scrap/` | Cattura dello schermo |
@@ -198,12 +217,18 @@ Per un controllo locale del codice Rust, senza installare la toolchain sul
 sistema host:
 
 ```bash
-docker/check.sh
-docker/check.sh --features flutter,linux-pkg-config
+docker/test-all.sh                    # tutto, con riepilogo finale
+docker/check.sh                       # cargo check
+docker/check.sh --test clanto::       # test Rust filtrati
+docker/flutter-check.sh               # bridge, flutter analyze/test
+docker/e2e/run.sh                     # 2FA, forwarding e webcam end-to-end
+docker/security-scan.sh               # Semgrep e OSV-Scanner
+docker/android-build.sh arm64-v8a     # APK come la CI, in target/android/
 ```
 
 Questa modalità serve a verificare la compilazione. Le release ufficiali usano
-la toolchain e il flusso definiti dalla CI.
+la toolchain e il flusso definiti dalla CI; macOS e iOS si compilano solo nella
+CI (dettagli in [CLANTO.md](CLANTO.md)).
 
 ## Configurazione di build
 
@@ -311,6 +336,28 @@ profilo:
 
 Il profilo è sempre in AND con i permessi globali dell'host e non può ampliarli.
 Una configurazione non valida applica la sola visualizzazione.
+
+### Forwarding
+
+Menu «Forwarding» della sessione di controllo remoto, separato dal port forward
+di upstream (che resta spento). Tutto è disattivato di default e gestibile via
+GPO e dal server; ogni lato decide su ciò che espone:
+
+- **porte verso l'host**: il controller ascolta su `127.0.0.1` e l'host si
+  collega alla destinazione, se è nel catalogo firmato di Clanto o
+  nell'elenco personalizzato dell'host;
+- **porte verso il controller**: l'host ascolta su `127.0.0.1` e il controller
+  raggiunge solo le destinazioni del proprio elenco;
+- **webcam del tecnico**: compare sull'host come «ClantoDesk Camera»
+  (v4l2loopback su Linux, Windows 11 con ClantoDesk installato, macOS 13+ dopo
+  l'attivazione della Camera Extension); il tecnico può usare la webcam del PC
+  o la fotocamera di un telefono Android o di un iPhone.
+
+Nessun listener è aperto sulla rete. Ogni canale, listener e flusso webcam,
+concesso o negato, va nell'audit (eventi 61170-61176). Su iOS un forward resta
+attivo solo con ClantoDesk in primo piano. Nel Flatpak la webcam richiede
+`flatpak override --device=all it.clanto.clantodesk`. Dettagli tecnici in
+[CLANTO.md](CLANTO.md#forwarding).
 
 ### Report sessioni
 

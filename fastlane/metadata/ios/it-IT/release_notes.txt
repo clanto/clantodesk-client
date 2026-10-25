@@ -4,3 +4,4 @@ Versione 1.5.0
 - Password e credenziali salvate sono cifrate con una chiave custodita nel Portachiavi iOS, solo su questo dispositivo.
 - Se il PC remoto lo richiede, la sessione mostra una filigrana con tecnico, ora e codice sessione.
 - Chiede se attivare la modalità privacy all'ingresso in un PC; la richiesta si può disattivare.
+- Nuovo menu Forwarding: inoltro di porte nei due sensi e fotocamera dell'iPhone come webcam sul PC remoto.
