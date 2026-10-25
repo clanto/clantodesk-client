@@ -1,0 +1,61 @@
+# Immagine per costruire l'APK Android in locale come il job Android di
+# flutter-build.yml: Flutter, SDK Android, NDK, target Rust e cargo-ndk.
+# vcpkg e le sue librerie compilate stanno in volumi (vedi docker/android-build.sh),
+# non nell'immagine: la prima build le compila, le successive le riusano.
+#
+# NON USARE PER: build da pubblicare. L'APK è firmato con la chiave di debug,
+# come nella CI prima della firma di Play.
+#
+# Uso:  docker/android-build.sh [arm64-v8a|armeabi-v7a|x86_64] [outgoing|incoming]
+FROM clantodesk-flutter-check
+
+ARG DEBIAN_FRONTEND=noninteractive
+# Allineate a env di flutter-build.yml (NDK_VERSION, CARGO_NDK_VERSION) e a
+# flutter/android/app/build.gradle (compileSdkVersion).
+ARG NDK_VERSION=r28c
+ARG CARGO_NDK_VERSION=3.1.2
+ARG ANDROID_PLATFORM=36
+ARG CMDLINE_TOOLS_BUILD=11076708
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update -y && apt-get install --yes --no-install-recommends \
+        openjdk-17-jdk-headless zip unzip tar autoconf automake libtool \
+        bison flex gperf
+
+ENV ANDROID_HOME=/opt/android-sdk \
+    ANDROID_SDK_ROOT=/opt/android-sdk \
+    ANDROID_NDK_HOME=/opt/android-ndk-${NDK_VERSION} \
+    ANDROID_NDK_ROOT=/opt/android-ndk-${NDK_VERSION} \
+    JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$PATH
+
+# sdkmanager verifica i pacchetti che scarica; Gradle aggiunge da solo quelli
+# che gli mancano (l'SDK resta scrivibile e le licenze sono accettate).
+RUN curl -fsSL -o /tmp/cmdline-tools.zip \
+      "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_BUILD}_latest.zip" \
+    && mkdir -p $ANDROID_HOME/cmdline-tools \
+    && unzip -q /tmp/cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools \
+    && mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest \
+    && rm /tmp/cmdline-tools.zip \
+    && yes | sdkmanager --licenses >/dev/null \
+    && sdkmanager --install "platform-tools" "platforms;android-${ANDROID_PLATFORM}" >/dev/null
+
+RUN curl -fsSL -o /tmp/ndk.zip "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip" \
+    && unzip -q /tmp/ndk.zip -d /opt \
+    && rm /tmp/ndk.zip \
+    && test -x $ANDROID_NDK_HOME/ndk-build
+
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    --mount=type=cache,target=/tmp/cargo-install-target \
+    rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android \
+    && CARGO_TARGET_DIR=/tmp/cargo-install-target \
+       cargo install cargo-ndk --version ${CARGO_NDK_VERSION} --locked
+
+# Flutter dell'immagine base con gli artefatti Android. La patch della CI
+# (.github/patches) si applica a ogni build: il contesto qui è solo docker/.
+RUN flutter config --android-sdk $ANDROID_HOME \
+    && flutter precache --android --no-linux --no-ios
+
+WORKDIR /work
