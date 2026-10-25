@@ -27,6 +27,8 @@
 				<RegistryKey Root="HKCR" Key="$(var.RegKeyRoot)">
 					<RegistryValue Type="string" Name="INSTALLFOLDER" Value="[INSTALLFOLDER_INNER]" />
 				</RegistryKey>
+				<!-- Clanto: media source della camera virtuale, registrata dal servizio (libs/clanto-vcam). -->
+				<RemoveRegistryKey Root="HKLM" Key="Software\Classes\CLSID\{5C3F8D4E-2A71-4B9E-9D6C-7E1F0A3B8C52}" Action="removeOnUninstall" />
 			</Component>
 
 			<Component Id="Product.Registry.DefaultIcon" Guid="6DBF2690-0955-4C6A-940F-634DDA503F49">
