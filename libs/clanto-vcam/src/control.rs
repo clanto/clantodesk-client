@@ -4,20 +4,25 @@
 //! Lato servizio: registra la media source e crea la camera virtuale per la
 //! durata del flusso. Serve un processo con diritti di amministratore (il
 //! servizio ClantoDesk installato): scrive in HKLM e crea un oggetto `Global\`.
+//!
+//! Le funzioni della camera virtuale esistono solo su Windows 11: si caricano a
+//! runtime da mfsensorgroup.dll. Un import statico impedirebbe a ClantoDesk di
+//! avviarsi su Windows 10 e Windows Server.
 
 use crate::{shared::Mapping, CLSID_STR, FRIENDLY_NAME};
-use std::path::Path;
+use std::{ffi::c_void, path::Path, sync::OnceLock};
 use windows::{
-    core::{HSTRING, PCWSTR},
+    core::{Interface, BOOL, GUID, HRESULT, HSTRING, PCWSTR},
     Win32::{
         Foundation::ERROR_SUCCESS,
         Media::MediaFoundation::{
-            IMFAsyncCallback, IMFVirtualCamera, MFCreateVirtualCamera, MFIsVirtualCameraTypeSupported, MFStartup,
-            MFSTARTUP_NOSOCKET, MFVirtualCameraAccess_AllUsers, MFVirtualCameraLifetime_Session,
-            MFVirtualCameraType_SoftwareCameraSource, MF_VERSION,
+            IMFAsyncCallback, IMFVirtualCamera, MFStartup, MFVirtualCameraAccess, MFVirtualCameraAccess_AllUsers,
+            MFVirtualCameraLifetime, MFVirtualCameraLifetime_Session, MFVirtualCameraType,
+            MFVirtualCameraType_SoftwareCameraSource, MFSTARTUP_NOSOCKET, MF_VERSION,
         },
         System::{
             Com::{CoInitializeEx, COINIT_MULTITHREADED},
+            LibraryLoader::{GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32},
             Registry::{
                 RegCloseKey, RegCreateKeyExW, RegSetValueExW, HKEY, HKEY_LOCAL_MACHINE, KEY_WRITE, REG_OPTION_NON_VOLATILE,
                 REG_SZ,
@@ -28,18 +33,53 @@ use windows::{
 
 pub const NEEDS_WINDOWS_11: &str = "The virtual camera requires Windows 11";
 
-fn init() -> Result<(), String> {
+type IsSupportedFn = unsafe extern "system" fn(MFVirtualCameraType, *mut BOOL) -> HRESULT;
+type CreateFn = unsafe extern "system" fn(
+    MFVirtualCameraType,
+    MFVirtualCameraLifetime,
+    MFVirtualCameraAccess,
+    PCWSTR,
+    PCWSTR,
+    *const GUID,
+    u32,
+    *mut *mut c_void,
+) -> HRESULT;
+
+struct Api {
+    is_supported: IsSupportedFn,
+    create: CreateFn,
+}
+
+/// mfsensorgroup.dll dalla cartella di sistema; `None` prima di Windows 11.
+fn api() -> Option<&'static Api> {
+    static API: OnceLock<Option<Api>> = OnceLock::new();
+    API.get_or_init(|| unsafe {
+        let lib = LoadLibraryExW(&HSTRING::from("mfsensorgroup.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32).ok()?;
+        let is_supported = GetProcAddress(lib, windows::core::s!("MFIsVirtualCameraTypeSupported"))?;
+        let create = GetProcAddress(lib, windows::core::s!("MFCreateVirtualCamera"))?;
+        Some(Api {
+            is_supported: std::mem::transmute::<_, IsSupportedFn>(is_supported),
+            create: std::mem::transmute::<_, CreateFn>(create),
+        })
+    })
+    .as_ref()
+}
+
+fn init() -> Result<&'static Api, String> {
     unsafe {
         // S_FALSE o RPC_E_CHANGED_MODE: COM è già pronto in questo thread.
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         // Una volta per processo: Media Foundation resta attivo fino all'uscita.
-        static STARTUP: std::sync::OnceLock<Result<(), String>> = std::sync::OnceLock::new();
+        static STARTUP: OnceLock<Result<(), String>> = OnceLock::new();
         STARTUP
             .get_or_init(|| MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET).map_err(|e| format!("MFStartup: {e}")))
             .clone()?;
-        match MFIsVirtualCameraTypeSupported(MFVirtualCameraType_SoftwareCameraSource) {
-            Ok(supported) if supported.as_bool() => Ok(()),
-            _ => Err(NEEDS_WINDOWS_11.to_owned()),
+        let api = api().ok_or_else(|| NEEDS_WINDOWS_11.to_owned())?;
+        let mut supported = BOOL::default();
+        if (api.is_supported)(MFVirtualCameraType_SoftwareCameraSource, &mut supported).is_ok() && supported.as_bool() {
+            Ok(api)
+        } else {
+            Err(NEEDS_WINDOWS_11.to_owned())
         }
     }
 }
@@ -97,18 +137,30 @@ unsafe impl Send for VirtualCamera {}
 
 impl VirtualCamera {
     pub fn start(dll: &Path) -> Result<Self, String> {
-        init()?;
+        let api = init()?;
         register(dll)?;
         let mapping = Mapping::create()?;
+        let (name, source) = (HSTRING::from(FRIENDLY_NAME), HSTRING::from(CLSID_STR));
+        let mut raw: *mut c_void = std::ptr::null_mut();
         let camera = unsafe {
-            MFCreateVirtualCamera(
+            (api.create)(
                 MFVirtualCameraType_SoftwareCameraSource,
                 MFVirtualCameraLifetime_Session,
                 MFVirtualCameraAccess_AllUsers,
-                &HSTRING::from(FRIENDLY_NAME),
-                &HSTRING::from(CLSID_STR),
-                None,
+                PCWSTR(name.as_ptr()),
+                PCWSTR(source.as_ptr()),
+                std::ptr::null(),
+                0,
+                &mut raw,
             )
+            .ok()
+            .and_then(|_| {
+                if raw.is_null() {
+                    Err(windows::core::Error::empty())
+                } else {
+                    Ok(IMFVirtualCamera::from_raw(raw))
+                }
+            })
         }
         .map_err(|e| format!("MFCreateVirtualCamera: {e}"))?;
         unsafe { camera.Start(None::<&IMFAsyncCallback>) }.map_err(|e| format!("Virtual camera start: {e}"))?;
