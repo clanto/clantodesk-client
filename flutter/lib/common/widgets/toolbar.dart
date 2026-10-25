@@ -480,6 +480,9 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
           child: Text(translate('TCP tunneling')),
           onPressed: () => connectWithToken(isTcpTunneling: true)),
     );
+  }
+  // Clanto: Forwarding anche da telefono (porte e fotocamera come webcam).
+  if (isDefaultConn) {
     v.add(clantoForwardingMenu(context, ffi));
   }
   // note

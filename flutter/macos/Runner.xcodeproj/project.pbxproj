@@ -562,6 +562,8 @@
 					__CGPreLoginApp,
 					__cgpreloginapp,
 					/dev/null,
+					"-weak_framework",
+					SystemExtensions,
 				);
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -626,6 +628,8 @@
 					__CGPreLoginApp,
 					__cgpreloginapp,
 					/dev/null,
+					"-weak_framework",
+					SystemExtensions,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = it.clanto.clantodesk;
 				PROVISIONING_PROFILE_SPECIFIER = "";

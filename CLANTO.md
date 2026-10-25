@@ -602,7 +602,13 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
 - **Direzioni.** `to_host`: il controller ascolta su `127.0.0.1` e raggiunge una destinazione dalla
   parte dell'host. `to_controller`: su richiesta del controller l'host ascolta su `127.0.0.1` e porta
   le connessioni a una destinazione dalla parte del controller (host `clanto-listen`, porta =
-  listen_id). Nessun listener è mai aperto sulla rete, solo in loopback.
+  listen_id). Nessun listener è mai aperto sulla rete, solo in loopback; sull'host solo porta libera
+  scelta dal sistema o ≥ 1024. Eliminare un forward chiude anche le connessioni già aperte.
+- **Permesso della connessione.** Se all'ID del controller è assegnato un profilo di permessi, l'host
+  accetta canali, listener e webcam solo se il profilo concede «Tunnel»: un profilo «Sola
+  visualizzazione» non apre forward. Non conta l'opzione globale `enable-tunnel`, che è il port
+  forward di upstream (spento di default). Il valore arriva con ogni messaggio
+  (`clanto_forward_profile` in `connection.rs`, `host::on_message`).
 - **Policy** (`policy.rs`, tutte gestibili via GPO, protette dalla `strategy` del server). Ogni lato
   decide solo su ciò che espone:
   - `clanto-forward-enabled` (master, spento) su ogni PC;
@@ -611,12 +617,16 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
   - `clanto-forward-reverse`: l'host può aprire listener per `to_controller`;
   - `clanto-forward-custom-controller` + `-targets`: cosa il controller espone.
   Elenchi `indirizzo:porte` (nome, IP, `[IPv6]`, CIDR o `*`; `N`, `N-M` o `*`); `localhost` vale
-  anche per 127.0.0.1 e ::1. Un nome viene risolto e ci si collega solo agli indirizzi verificati.
+  anche per 127.0.0.1 e ::1. Un nome viene risolto e ci si collega solo agli indirizzi verificati;
+  si risolve solo se una regola ammessa potrebbe corrispondere (nome uguale, rete o `*` sulla porta),
+  così un peer non fa interrogare il DNS per nomi qualsiasi.
 - **Catalogo** (`catalog.rs`): `https://clanto.it/api/clantodesk-forward-catalog.json`,
   `{"payload","signature"}` con firma Ed25519 dei byte esatti del payload, `version` 1 e `expires`.
   Chiave pubblica al build da `CLANTO_FORWARD_CATALOG_PK` (secret GitHub); senza chiave o con firma
   non valida il catalogo è vuoto. Si firma con `api/sign-forward-catalog.py` (esempio in
-  `api/forward-catalog.example.json`); la chiave privata resta a Clanto, mai nel repo.
+  `api/forward-catalog.example.json`); la chiave privata resta a Clanto, mai nel repo. La scadenza
+  vale anche per la copia in cache: se l'aggiornamento non riesce più, dopo `expires` il catalogo è
+  vuoto. Un solo aggiornamento alla volta.
 - **Webcam del controller** (`media.rs`, `camera_capture.rs`, `camera_host.rs`, `camera_sink.rs`).
   Il tecnico invia la propria webcam all'host, dove compare come camera virtuale per Teams, Zoom e
   simili. Messaggi `ClantoMedia*` dentro `ClantoForward` (campi 5-9). Il controller cattura con
@@ -665,7 +675,14 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
     del frame (`cargo test -p clanto-vcam`), type-check dei crate Windows per
     `x86_64-pc-windows-msvc`. La camera virtuale di Windows va provata su un PC Windows 11 reale.
 - **Audit**: 61170 canale aperto, 61171 canale negato, 61172 listener aperto, 61173 listener negato,
-  61174 webcam del controller aperta, 61175 negata, 61176 chiusa (frame e durata).
+  61174 webcam del controller aperta, 61175 negata, 61176 chiusa (frame e durata). Gli eventi di
+  rifiuto sono limitati a 30 al minuto per connessione; oltre, solo nel log.
+- **Robustezza webcam.** L'host crea la camera virtuale e decodifica in un thread proprio, mai in
+  quello della connessione; legge le dimensioni del keyframe VP8 prima di decodificarlo e scarta
+  frame oltre 2 MB; aspetta fino a 3 s che la camera di un flusso appena chiuso si liberi. Il
+  controller usa un id nuovo per ogni avvio e chiude il flusso se la camera non manda frame per 5 s.
+  Su Windows l'elenco delle webcam gira in un thread nuovo con COM in STA, come nokhwa. La media
+  source Windows torna al nero se il servizio non scrive frame per 2 s.
 - **Piattaforme.** Controller (porte e webcam): Windows, macOS, Linux, Android e iOS. Su iOS l'app
   viene sospesa in background: un forward resta attivo solo con ClantoDesk in primo piano (su iPad
   anche in Split View), quindi è utile soprattutto verso il controller o per brevi verifiche. Host:

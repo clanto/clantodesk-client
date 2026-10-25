@@ -85,6 +85,8 @@ struct State {
     channels: HashMap<i32, Entry>,
     next_id: i32,
     listeners: HashMap<i32, JoinHandle<()>>,
+    /// Canali aperti da ogni listener: si chiudono con il listener.
+    listener_channels: HashMap<i32, Vec<i32>>,
 }
 
 pub struct Engine {
@@ -131,6 +133,7 @@ impl Engine {
                 channels: HashMap::new(),
                 next_id: side.first_id(),
                 listeners: HashMap::new(),
+                listener_channels: HashMap::new(),
             }),
             teardown: watch::channel(false).0,
             hooks,
@@ -198,9 +201,15 @@ impl Engine {
             Some(clanto_forward::Union::Channel(ch)) => self.on_channel(ch),
             Some(clanto_forward::Union::Listen(l)) if self.side == Side::Host => self.on_listen(l),
             Some(clanto_forward::Union::Unlisten(u)) if self.side == Side::Host => {
-                if let Some(task) = self.state.lock().unwrap().listeners.remove(&u.listen_id) {
-                    task.abort();
-                }
+                let channels = {
+                    let mut state = self.state.lock().unwrap();
+                    if let Some(task) = state.listeners.remove(&u.listen_id) {
+                        task.abort();
+                    }
+                    state.listener_channels.remove(&u.listen_id).unwrap_or_default()
+                };
+                // Forward eliminato: anche le connessioni già aperte si chiudono.
+                self.close_channels(&channels);
             }
             Some(clanto_forward::Union::Listening(l)) if self.side == Side::Controller => {
                 self.hooks.on_listening(l)
@@ -318,9 +327,11 @@ impl Engine {
             reply(false, &e, 0);
             return;
         }
+        // Porta libera scelta dal sistema o non privilegiata: il controller non
+        // può prendere le porte basse dei servizi locali dell'host.
         let port = match u16::try_from(req.port) {
-            Ok(p) => p,
-            Err(_) => return reply(false, "Invalid port", 0),
+            Ok(p) if p == 0 || p >= 1024 => p,
+            _ => return reply(false, "Invalid port", 0),
         };
         if self.state.lock().unwrap().listeners.len() >= MAX_LISTENERS {
             return reply(false, "Too many forwarding listeners", 0);
@@ -340,8 +351,15 @@ impl Engine {
                 let Some(engine) = engine.upgrade() else {
                     break;
                 };
-                if let Err(e) = engine.open_outgoing(LISTEN_HOST, id, socket) {
-                    log::debug!("forwarding listener {}: {}", id, e);
+                match engine.open_outgoing(LISTEN_HOST, id, socket) {
+                    Ok(channel) => {
+                        let mut state = engine.state.lock().unwrap();
+                        let live: Vec<i32> = state.channels.keys().copied().collect();
+                        let list = state.listener_channels.entry(id).or_default();
+                        list.retain(|c| live.contains(c));
+                        list.push(channel);
+                    }
+                    Err(e) => log::debug!("forwarding listener {}: {}", id, e),
                 }
             }
         });
@@ -349,6 +367,22 @@ impl Engine {
             old.abort();
         }
         reply(true, "", bound);
+    }
+
+    /// Chiude canali aperti (forward eliminato): il task locale chiude il
+    /// socket e il peer riceve `close`.
+    pub fn close_channels(&self, ids: &[i32]) {
+        let mut state = self.state.lock().unwrap();
+        for id in ids {
+            if let Some(e) = state.channels.remove(id) {
+                e.inbound.send(Inbound::Close).ok();
+                self.raw.send((Instant::now(), Arc::new(close_msg(*id)))).ok();
+            }
+        }
+    }
+
+    pub fn has_channel(&self, id: i32) -> bool {
+        self.state.lock().unwrap().channels.contains_key(&id)
     }
 
     pub fn close_all(&self) {

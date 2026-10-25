@@ -46,6 +46,8 @@ pub struct MobileSource {
 
 /// Prima di avviare Kotlin: i frame che arrivano prima di `open` non chiudono la camera.
 pub fn prepare() {
+    // Una sorgente precedente chiusa in ritardo non deve più contare come attuale.
+    GENERATION.fetch_add(1, Ordering::SeqCst);
     ENDED.store(false, Ordering::SeqCst);
 }
 

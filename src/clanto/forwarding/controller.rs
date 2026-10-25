@@ -15,7 +15,7 @@ use super::{
     camera_capture,
     catalog::{self, Direction},
     engine::{Engine, Hooks, Out, Side, LISTEN_HOST},
-    media::{SendInfo, SendStream, CAMERA_STREAM_ID, DEFAULT_FPS},
+    media::{SendInfo, SendStream, DEFAULT_FPS},
     policy,
 };
 use crate::client::Data;
@@ -127,8 +127,16 @@ impl Hooks for ControllerHooks {
 }
 
 static SESSIONS: Mutex<Option<HashMap<u64, SessionState>>> = Mutex::new(None);
+/// Sessioni già chiuse: un comando arrivato dopo la chiusura non ricrea lo stato.
+static CLOSED: Mutex<Option<std::collections::HashSet<u64>>> = Mutex::new(None);
+/// Id dei flussi webcam: dispari come i canali del controller, nuovo a ogni avvio,
+/// così l'host scarta i frame di un flusso precedente.
+static NEXT_STREAM: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(1);
 
-fn session(key: u64, sender: &UnboundedSender<Data>) -> (Arc<Engine>, Arc<Mutex<Forwards>>) {
+fn session(key: u64, sender: &UnboundedSender<Data>) -> Option<(Arc<Engine>, Arc<Mutex<Forwards>>)> {
+    if CLOSED.lock().unwrap().as_ref().is_some_and(|c| c.contains(&key)) {
+        return None;
+    }
     let mut sessions = SESSIONS.lock().unwrap();
     let sessions = sessions.get_or_insert_with(HashMap::new);
     let state = sessions.entry(key).or_insert_with(|| {
@@ -145,7 +153,7 @@ fn session(key: u64, sender: &UnboundedSender<Data>) -> (Arc<Engine>, Arc<Mutex<
         );
         SessionState { engine, forwards, out, camera: None }
     });
-    (state.engine.clone(), state.forwards.clone())
+    Some((state.engine.clone(), state.forwards.clone()))
 }
 
 /// Messaggio `ClantoForward` dall'host (hook in `io_loop`).
@@ -156,13 +164,14 @@ pub fn on_message(key: u64, sender: &UnboundedSender<Data>, msg: ClantoForward) 
         Some(clanto_forward::Union::MediaClose(m)) => return with_camera(key, |c| c.on_close(&m)),
         union => ClantoForward { union, ..Default::default() },
     };
-    let (engine, _) = session(key, sender);
+    let Some((engine, _)) = session(key, sender) else { return };
     let _guard = runtime().enter();
     engine.on_message(msg);
 }
 
 /// Fine della sessione: chiude canali e listener locali.
 pub fn close(key: u64) {
+    CLOSED.lock().unwrap().get_or_insert_with(Default::default).insert(key);
     let state = SESSIONS.lock().unwrap().as_mut().and_then(|s| s.remove(&key));
     if let Some(state) = state {
         drop(state.camera);
@@ -222,7 +231,7 @@ pub fn add(
     if target_host.trim().is_empty() || !(1..=65535).contains(&target_port) {
         return Err(policy::DENIED_TARGET.to_owned());
     }
-    let (engine, forwards) = session(key, sender);
+    let (engine, forwards) = session(key, sender).ok_or("Session closed")?;
     let info = ForwardInfo {
         id: 0,
         direction,
@@ -239,9 +248,9 @@ pub fn add(
                 .and_then(|l| l.set_nonblocking(true).map(|_| l))
                 .map_err(|e| format!("Cannot listen on port {port}: {e}"))?;
             let bound = listener.local_addr().map(|a| a.port() as i32).unwrap_or(0);
-            let id = reserve(&forwards, ForwardInfo { listen_port: bound, state: "active", ..info })?;
             let _guard = runtime().enter();
             let listener = TcpListener::from_std(listener).map_err(|e| e.to_string())?;
+            let id = reserve(&forwards, ForwardInfo { listen_port: bound, state: "active", ..info })?;
             let (host, tport) = {
                 let f = forwards.lock().unwrap();
                 let i = &f.items[&id].info;
@@ -254,7 +263,9 @@ pub fn add(
                     let Some(engine) = weak.upgrade() else { break };
                     match engine.open_outgoing(&host, tport, socket) {
                         Ok(channel) => {
-                            fw.lock().unwrap().channels.insert(channel, id);
+                            let mut f = fw.lock().unwrap();
+                            f.channels.retain(|c, _| engine.has_channel(*c));
+                            f.channels.insert(channel, id);
                         }
                         Err(e) => log::debug!("forward {id}: {e}"),
                     }
@@ -294,11 +305,23 @@ pub fn remove(key: u64, id: i32) {
     let Some((engine, forwards)) = state else {
         return;
     };
-    let Some(f) = forwards.lock().unwrap().items.remove(&id) else {
-        return;
+    let (f, channels) = {
+        let mut fw = forwards.lock().unwrap();
+        let Some(f) = fw.items.remove(&id) else {
+            return;
+        };
+        let channels: Vec<i32> = fw.channels.iter().filter(|(_, fid)| **fid == id).map(|(c, _)| *c).collect();
+        fw.channels.retain(|_, fid| *fid != id);
+        (f, channels)
     };
     if let Some(task) = f.task {
         task.abort();
+    }
+    // Eliminato: anche le connessioni già aperte si chiudono (per i forward
+    // verso il controller lo fa l'host all'Unlisten).
+    {
+        let _guard = runtime().enter();
+        engine.close_channels(&channels);
     }
     if f.info.direction == Direction::ToController {
         let _guard = runtime().enter();
@@ -335,14 +358,14 @@ pub fn camera_start(key: u64, sender: &UnboundedSender<Data>, index: u32) -> Res
     }
     #[cfg(any(target_os = "android", target_os = "ios"))]
     camera_capture::prepare();
-    session(key, sender);
+    session(key, sender).ok_or("Session closed")?;
     let mut sessions = SESSIONS.lock().unwrap();
     let state = sessions
         .as_mut()
         .and_then(|s| s.get_mut(&key))
         .ok_or("Session closed")?;
     let factory = Box::new(move || camera_capture::open(index));
-    let previous = state.camera.replace(SendStream::start(CAMERA_STREAM_ID, DEFAULT_FPS, factory, state.out.clone()));
+    let previous = state.camera.replace(SendStream::start(NEXT_STREAM.fetch_add(2, std::sync::atomic::Ordering::SeqCst), DEFAULT_FPS, factory, state.out.clone()));
     drop(sessions);
     drop(previous);
     Ok(())

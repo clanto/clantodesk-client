@@ -353,6 +353,11 @@ GPO e dal server; ogni lato decide su ciò che espone:
   l'attivazione della Camera Extension); il tecnico può usare la webcam del PC
   o la fotocamera di un telefono Android o di un iPhone.
 
+Se all'ID del controller è assegnato un profilo di permessi, serve anche il
+permesso «Tunnel» del profilo: con «Sola visualizzazione» non si aprono forward
+né si invia la webcam. L'opzione `enable-tunnel` (port forward di RustDesk)
+resta indipendente e spenta.
+
 Nessun listener è aperto sulla rete. Ogni canale, listener e flusso webcam,
 concesso o negato, va nell'audit (eventi 61170-61176). Su iOS un forward resta
 attivo solo con ClantoDesk in primo piano. Nel Flatpak la webcam richiede

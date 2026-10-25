@@ -41,6 +41,18 @@ object ClantoCamera {
     private var session: CameraCaptureSession? = null
     private var reader: ImageReader? = null
 
+    /** Aumenta a ogni start e stop: le callback di un'apertura precedente non toccano quella nuova. */
+    private var generation = 0
+
+    @Synchronized
+    private fun current(gen: Int) = gen == generation
+
+    /** Stop solo se la callback appartiene all'avvio ancora attivo. */
+    @Synchronized
+    private fun stopIf(gen: Int) {
+        if (gen == generation) stop()
+    }
+
     /** La dimensione più grande entro 1280x720, o la più piccola disponibile. */
     fun chooseSize(sizes: List<Size>): Size? =
         sizes.filter { it.width <= MAX_WIDTH && it.height <= MAX_HEIGHT }
@@ -52,6 +64,7 @@ object ClantoCamera {
     @Synchronized
     fun start(context: Context, front: Boolean): String? {
         stop()
+        val gen = generation
         val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val facing = if (front) CameraCharacteristics.LENS_FACING_FRONT else CameraCharacteristics.LENS_FACING_BACK
         val id = manager.cameraIdList.firstOrNull {
@@ -83,18 +96,30 @@ object ClantoCamera {
             } finally {
                 image.close()
             }
-            if (!keep) handler.post { stop() }
+            if (!keep) handler.post { stopIf(gen) }
         }, handler)
         thread = t
         reader = r
 
         manager.openCamera(id, object : CameraDevice.StateCallback() {
             override fun onOpened(camera: CameraDevice) {
-                device = camera
+                synchronized(this@ClantoCamera) {
+                    if (!current(gen)) {
+                        camera.close()
+                        return
+                    }
+                    device = camera
+                }
                 @Suppress("DEPRECATION")
                 camera.createCaptureSession(listOf(r.surface), object : CameraCaptureSession.StateCallback() {
                     override fun onConfigured(s: CameraCaptureSession) {
-                        session = s
+                        synchronized(this@ClantoCamera) {
+                            if (!current(gen)) {
+                                s.close()
+                                return
+                            }
+                            session = s
+                        }
                         val request = camera.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
                             addTarget(r.surface)
                             fps?.let { set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(it.lower, it.upper)) }
@@ -103,22 +128,24 @@ object ClantoCamera {
                             s.setRepeatingRequest(request.build(), null, handler)
                         } catch (e: Exception) {
                             Log.w(TAG, "repeating request: $e")
-                            stop()
+                            stopIf(gen)
                         }
                     }
 
                     override fun onConfigureFailed(s: CameraCaptureSession) {
                         Log.w(TAG, "session configuration failed")
-                        stop()
+                        stopIf(gen)
                     }
                 }, handler)
             }
 
-            override fun onDisconnected(camera: CameraDevice) = stop()
+            override fun onDisconnected(camera: CameraDevice) {
+                if (current(gen)) stopIf(gen) else camera.close()
+            }
 
             override fun onError(camera: CameraDevice, error: Int) {
                 Log.w(TAG, "camera error $error")
-                stop()
+                if (current(gen)) stopIf(gen) else camera.close()
             }
         }, handler)
         return null
@@ -126,6 +153,7 @@ object ClantoCamera {
 
     @Synchronized
     fun stop() {
+        generation++
         try {
             session?.close()
             device?.close()

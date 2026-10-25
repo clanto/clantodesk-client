@@ -387,6 +387,8 @@ pub struct Connection {
     tunnel: bool,
     remote_printer: bool,
     id_profile: String,
+    /// Clanto: il profilo per ID concede il forwarding (tunnel); senza profilo, sì.
+    clanto_forward_profile: bool,
     control_permissions: Option<ControlPermissions>,
     last_test_delay: Option<Instant>,
     network_delay: u32,
@@ -617,6 +619,7 @@ impl Connection {
                 &control_permissions,
             ),
             id_profile: String::new(),
+            clanto_forward_profile: true,
             control_permissions,
             last_test_delay: None,
             network_delay: 0,
@@ -2832,6 +2835,7 @@ impl Connection {
 
         self.id_profile.clear();
         self.restore_global_permissions();
+        self.clanto_forward_profile = true;
         if let Some(profile) = profile {
             self.id_profile = profile.profile.as_str().to_owned();
             self.keyboard &= profile.allows(IdPermission::Keyboard);
@@ -2841,6 +2845,7 @@ impl Connection {
             self.camera &= profile.allows(IdPermission::Camera);
             self.terminal_permission &= profile.allows(IdPermission::Terminal);
             self.tunnel &= profile.allows(IdPermission::Tunnel);
+            self.clanto_forward_profile = profile.allows(IdPermission::Tunnel);
             self.restart &= profile.allows(IdPermission::Restart);
             self.recording &= profile.allows(IdPermission::Recording);
             self.block_input &= profile.allows(IdPermission::BlockInput);
@@ -3230,7 +3235,9 @@ impl Connection {
                     name: self.lr.my_name.clone(),
                     ip: self.ip.clone(),
                 };
-                crate::clanto::forwarding::host::on_message(peer, tx, cf.clone());
+                // Solo il profilo per ID: `enable-tunnel` è il port forward di upstream, spento.
+                let allowed = self.clanto_forward_profile;
+                crate::clanto::forwarding::host::on_message(peer, allowed, tx, cf.clone());
                 return true;
             }
         }

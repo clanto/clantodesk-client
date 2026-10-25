@@ -109,7 +109,8 @@ final class ClantoCamera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
             uv.assumingMemoryBound(to: UInt8.self), uvStride * CVPixelBufferGetHeightOfPlane(image, 1), Int32(uvStride),
             Int32(CVPixelBufferGetWidth(image)), Int32(CVPixelBufferGetHeight(image)))
         if !keep {
-            stopOnQueue()
+            // Non dentro la callback: stopRunning attende la fine delle consegne in corso.
+            queue.async { self.stopOnQueue() }
         }
     }
 }

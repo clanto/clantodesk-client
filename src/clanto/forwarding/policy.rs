@@ -42,6 +42,7 @@ pub const DENIED_DISABLED: &str = "Forwarding is disabled on this device";
 pub const DENIED_TARGET: &str = "Forwarding target not allowed";
 pub const DENIED_REVERSE: &str = "Forwarding towards the controller is not allowed on this device";
 pub const DENIED_CAMERA: &str = "Receiving the controller's camera is not allowed on this device";
+pub const DENIED_PERMISSION: &str = "Forwarding is not allowed for this connection";
 
 fn on(key: &str) -> bool {
     Config::get_option(key) == "Y"
@@ -175,6 +176,13 @@ pub fn literal_match(p: &Pattern, host: &str, port: u16) -> bool {
     p.name_ok(host) || (is_loopback_name(host) && p.ip_ok(IpAddr::V4(Ipv4Addr::LOCALHOST)))
 }
 
+/// Serve risolvere `host` per questa regola? Solo se potrebbe corrispondere: per
+/// nome, o per una rete (o `*`) sulla porta giusta. Così un peer non fa
+/// interrogare il DNS dell'host per nomi che nessuna regola ammette.
+fn may_match(p: &Pattern, host: &str, port: u16) -> bool {
+    literal_match(p, host, port) || (p.port_ok(port) && matches!(p.addr, Addr::Any | Addr::Net(..)))
+}
+
 /// Dove collegarsi davvero: un indirizzo già verificato, così un nome che
 /// cambia risoluzione dopo il controllo non porta altrove.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -260,22 +268,25 @@ pub async fn authorize_target(direction: Direction, host: &str, port: i32) -> Re
     if catalog_on() {
         catalog::refresh_if_stale().await;
     }
-    let resolved = resolve(host, port).await;
-    if let Some(service) = catalog_service(direction, host, port) {
-        let patterns = vec![parse_pattern(&service.target).ok_or(DENIED_TARGET)?];
-        if let Some(target) = check(&patterns, host, port, &resolved) {
-            return Ok(Decision { target, service: service.id });
-        }
-    }
+    let service = catalog_service(direction, host, port);
+    let service_patterns: Vec<Pattern> = match &service {
+        Some(s) => vec![parse_pattern(&s.target).ok_or(DENIED_TARGET)?],
+        None => Vec::new(),
+    };
     let (custom_on, list_key) = match direction {
         Direction::ToHost => (on(OPT_CUSTOM_HOST), OPT_CUSTOM_HOST_TARGETS),
         Direction::ToController => (on(OPT_CUSTOM_CONTROLLER), OPT_CUSTOM_CONTROLLER_TARGETS),
     };
-    if custom_on {
-        let (patterns, _) = parse_list(&Config::get_option(list_key));
-        if let Some(target) = check(&patterns, host, port, &resolved) {
-            return Ok(Decision { target, service: String::new() });
-        }
+    let custom_patterns = if custom_on { parse_list(&Config::get_option(list_key)).0 } else { Vec::new() };
+    if !service_patterns.iter().chain(custom_patterns.iter()).any(|p| may_match(p, host, port)) {
+        return Err(DENIED_TARGET.to_owned());
+    }
+    let resolved = resolve(host, port).await;
+    if let (Some(service), Some(target)) = (service, check(&service_patterns, host, port, &resolved)) {
+        return Ok(Decision { target, service: service.id });
+    }
+    if let Some(target) = check(&custom_patterns, host, port, &resolved) {
+        return Ok(Decision { target, service: String::new() });
     }
     Err(DENIED_TARGET.to_owned())
 }

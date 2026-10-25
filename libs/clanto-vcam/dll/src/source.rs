@@ -28,6 +28,8 @@ const FORMATS: [(u32, u32); 2] = [(1280, 720), (640, 480)];
 const FPS: u32 = 30;
 const FRAME_100NS: i64 = 10_000_000 / FPS as i64;
 const REOPEN_EVERY: Duration = Duration::from_secs(1);
+/// Senza frame nuovi per questo tempo (servizio fermo senza avvisare) si torna al nero.
+const STALE_AFTER: Duration = Duration::from_secs(2);
 
 fn media_type(w: u32, h: u32) -> Result<IMFMediaType> {
     unsafe {
@@ -226,6 +228,8 @@ struct StreamState {
     mapping: Option<Mapping>,
     last_open: Option<Instant>,
     frame: Vec<u8>,
+    last_seq: u64,
+    last_change: Instant,
     shutdown: bool,
 }
 
@@ -238,7 +242,17 @@ impl StreamState {
             self.mapping = Mapping::open();
         }
         match self.mapping.as_ref().and_then(|m| m.view.read(&mut self.frame)) {
-            Some((sw, sh, _)) => fit(&self.frame, sw, sh, dst, w, h),
+            Some((sw, sh, seq)) => {
+                if seq != self.last_seq {
+                    self.last_seq = seq;
+                    self.last_change = Instant::now();
+                }
+                if self.last_change.elapsed() < STALE_AFTER {
+                    fit(&self.frame, sw, sh, dst, w, h)
+                } else {
+                    black(dst, w, h)
+                }
+            }
             None => black(dst, w, h),
         }
     }
@@ -264,6 +278,8 @@ impl Stream {
                 mapping: None,
                 last_open: None,
                 frame: Vec::new(),
+                last_seq: 0,
+                last_change: Instant::now(),
                 shutdown: false,
             }),
         })

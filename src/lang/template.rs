@@ -1014,6 +1014,10 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Rear camera", ""),
         ("Front camera", ""),
         ("Invalid camera", ""),
+        ("The camera stopped sending frames", ""),
+        ("Invalid camera frame", ""),
+        ("Camera frame too large", ""),
+        ("Forwarding is not allowed for this connection", ""),
         ("Port forwarding and this phone's camera in the sessions you open.", ""),
         ("Camera access denied: allow ClantoDesk in System Settings, Privacy & Security, Camera", ""),
     ].iter().cloned().collect();

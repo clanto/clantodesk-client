@@ -1786,12 +1786,14 @@ pub fn session_clanto_forward_add(
     target_host: String,
     target_port: i32,
     service: String,
-) -> SyncReturn<String> {
+) -> String {
+    // Non sincrona: la verifica di un forward verso il controller risolve nomi e
+    // può aggiornare il catalogo, e non deve bloccare l'interfaccia.
     let result = clanto_forward_add(session_id, direction, local_port, target_host, target_port, service);
-    SyncReturn(match result {
+    match result {
         Ok(info) => serde_json::json!({ "ok": info }).to_string(),
         Err(e) => serde_json::json!({ "error": e }).to_string(),
-    })
+    }
 }
 
 fn clanto_forward_add(

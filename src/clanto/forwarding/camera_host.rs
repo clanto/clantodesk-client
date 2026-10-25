@@ -8,7 +8,7 @@
 use super::{
     camera_sink,
     engine::{wrap, Out},
-    host::{audit, Peer},
+    host::{audit, audit_denied, Peer},
     media::{size_ok, Decoder, CODEC_VP8, KIND_CAMERA, MAX_FPS, MAX_FRAME_BYTES},
     policy,
 };
@@ -21,7 +21,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc, Mutex,
     },
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 /// Frame in coda oltre i quali il controller non rispetta il credito.
@@ -77,46 +77,93 @@ impl Drop for Busy {
     }
 }
 
+/// Tempo per cui si aspetta che la camera virtuale di un flusso appena chiuso
+/// si liberi (Stop e subito Avvia).
+const BUSY_WAIT: Duration = Duration::from_secs(3);
+
+impl Busy {
+    fn acquire_within(wait: Duration) -> Option<Self> {
+        let deadline = Instant::now() + wait;
+        loop {
+            if let Some(b) = Self::acquire() {
+                return Some(b);
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+}
+
+/// Larghezza e altezza dichiarate da un keyframe VP8 (RFC 6386, 9.1), senza
+/// decodificarlo: un peer non può far allocare al decoder immagini enormi.
+fn vp8_keyframe_size(data: &[u8]) -> Option<(usize, usize)> {
+    if data.len() < 10 || data[0] & 1 != 0 || data[3..6] != [0x9d, 0x01, 0x2a] {
+        return None;
+    }
+    let w = u16::from_le_bytes([data[6], data[7]]) & 0x3fff;
+    let h = u16::from_le_bytes([data[8], data[9]]) & 0x3fff;
+    Some((w as usize, h as usize))
+}
+
 pub fn on_open(peer: &Peer, out: Out, msg: ClantoMediaOpen) {
-    let detail = |reason: &str| {
-        json!({"stream": msg.name, "width": msg.width, "height": msg.height, "fps": msg.fps, "reason": reason})
-    };
     let denied = |reason: String| {
         log::warn!("controller camera from {} denied: {reason}", peer.id);
-        audit("clanto_forward_camera_denied", peer, detail(&reason));
+        audit_denied(
+            "clanto_forward_camera_denied",
+            peer,
+            json!({"stream": msg.name, "width": msg.width, "height": msg.height, "fps": msg.fps, "reason": reason}),
+        );
         reply(&out, msg.stream_id, Err(reason));
     };
-    if let Err(e) = policy::authorize_camera() {
+    if let Err(e) = super::host::allowed(peer.conn_id).and_then(|_| policy::authorize_camera()) {
         return denied(e);
     }
     let (w, h) = match validate(&msg) {
         Ok(size) => size,
         Err(e) => return denied(e),
     };
-    if STREAMS.lock().unwrap().as_ref().is_some_and(|s| s.contains_key(&peer.conn_id)) {
-        return denied("Camera already active in this session".to_owned());
-    }
-    let Some(busy) = Busy::acquire() else {
-        return denied("The virtual camera is in use by another session".to_owned());
-    };
-    let sink = match camera_sink::open(w, h) {
-        Ok(sink) => sink,
-        Err(e) => return denied(e),
-    };
-    let sink_name = sink.name();
     let (tx, rx) = mpsc::sync_channel::<ClantoMediaFrame>(MAX_QUEUED);
-    STREAMS
-        .lock()
-        .unwrap()
-        .get_or_insert_with(HashMap::new)
-        .insert(peer.conn_id, Stream { stream_id: msg.stream_id, tx, out: out.clone() });
-    audit("clanto_forward_camera_opened", peer, json!({"stream": msg.name, "width": w, "height": h, "fps": msg.fps, "sink": sink_name}));
-    reply(&out, msg.stream_id, Ok(sink_name));
-
-    let conn_id = peer.conn_id;
-    let (peer, stream_id) = (peer.clone(), msg.stream_id);
+    {
+        let mut guard = STREAMS.lock().unwrap();
+        let streams = guard.get_or_insert_with(HashMap::new);
+        if streams.contains_key(&peer.conn_id) {
+            drop(guard);
+            return denied("Camera already active in this session".to_owned());
+        }
+        streams.insert(peer.conn_id, Stream { stream_id: msg.stream_id, tx, out: out.clone() });
+    }
+    // Camera virtuale e decoder in un thread proprio: la creazione (registro,
+    // Media Foundation, CoreMediaIO) può richiedere tempo e inizializza COM, e
+    // non deve farlo il thread della connessione.
+    let (peer, conn_id, stream_id, fps) = (peer.clone(), peer.conn_id, msg.stream_id, msg.fps);
+    let name = msg.name.chars().take(128).collect::<String>();
     let spawned = std::thread::Builder::new().name("clanto-camera-recv".to_owned()).spawn(move || {
-        let _busy = busy;
+        let opened = Busy::acquire_within(BUSY_WAIT)
+            .ok_or_else(|| "The virtual camera is in use by another session".to_owned())
+            .and_then(|busy| camera_sink::open(w, h).map(|sink| (busy, sink)));
+        let (_busy, sink) = match opened {
+            Ok(v) => v,
+            Err(reason) => {
+                log::warn!("controller camera from {} denied: {reason}", peer.id);
+                remove_stream(conn_id, stream_id);
+                audit_denied(
+                    "clanto_forward_camera_denied",
+                    &peer,
+                    json!({"stream": name, "width": w, "height": h, "fps": fps, "reason": reason}),
+                );
+                reply(&out, stream_id, Err(reason));
+                return;
+            }
+        };
+        let sink_name = sink.name();
+        audit(
+            "clanto_forward_camera_opened",
+            &peer,
+            json!({"stream": name, "width": w, "height": h, "fps": fps, "sink": sink_name}),
+        );
+        reply(&out, stream_id, Ok(sink_name));
         let started = Instant::now();
         let (frames, error) = receive(rx, sink, (w, h), &out, stream_id);
         if let Some(e) = &error {
@@ -127,12 +174,7 @@ pub fn on_open(peer: &Peer, out: Out, msg: ClantoMediaOpen) {
                 ..Default::default()
             })));
         }
-        // Il flusso può essere già stato sostituito: si toglie solo il proprio.
-        if let Some(streams) = STREAMS.lock().unwrap().as_mut() {
-            if streams.get(&peer.conn_id).is_some_and(|s| s.stream_id == stream_id) {
-                streams.remove(&peer.conn_id);
-            }
-        }
+        remove_stream(conn_id, stream_id);
         audit(
             "clanto_forward_camera_closed",
             &peer,
@@ -141,7 +183,16 @@ pub fn on_open(peer: &Peer, out: Out, msg: ClantoMediaOpen) {
     });
     if let Err(e) = spawned {
         log::error!("camera receiver thread: {e}");
-        close(conn_id);
+        remove_stream(conn_id, stream_id);
+    }
+}
+
+/// Il flusso può essere già stato sostituito: si toglie solo il proprio.
+fn remove_stream(conn_id: i32, stream_id: i32) {
+    if let Some(streams) = STREAMS.lock().unwrap().as_mut() {
+        if streams.get(&conn_id).is_some_and(|s| s.stream_id == stream_id) {
+            streams.remove(&conn_id);
+        }
     }
 }
 
@@ -160,8 +211,12 @@ fn receive(
     let mut waiting_key = true;
     while let Ok(frame) = rx.recv() {
         let mut keyframe = false;
-        if frame.data.len() > MAX_FRAME_BYTES {
-            return (frames, Some("Camera frame too large".to_owned()));
+        if frame.key {
+            match vp8_keyframe_size(&frame.data) {
+                Some(dims) if dims == size => {}
+                Some(_) => return (frames, Some("The camera changed resolution".to_owned())),
+                None => return (frames, Some("Invalid camera frame".to_owned())),
+            }
         }
         if waiting_key && !frame.key {
             keyframe = true;
@@ -203,12 +258,20 @@ pub fn on_frame(conn_id: i32, msg: ClantoMediaFrame) {
         return;
     };
     let stream_id = stream.stream_id;
-    if stream.tx.try_send(msg).is_err() {
-        // Coda piena (il controller ignora il credito) o ricevitore finito.
+    // Frame troppo grande, coda piena (il controller ignora il credito) o
+    // ricevitore finito: il flusso si chiude.
+    let rejected = if msg.data.len() > MAX_FRAME_BYTES {
+        Some("Camera frame too large")
+    } else if stream.tx.try_send(msg).is_err() {
+        Some("Camera stream overflow")
+    } else {
+        None
+    };
+    if let Some(reason) = rejected {
         if let Some(s) = streams.remove(&conn_id) {
             (s.out)(wrap(clanto_forward::Union::MediaClose(ClantoMediaClose {
                 stream_id,
-                message: "Camera stream overflow".to_owned(),
+                message: reason.to_owned(),
                 ..Default::default()
             })));
         }
@@ -267,7 +330,27 @@ mod tests {
     fn virtual_camera_is_exclusive() {
         let a = Busy::acquire().unwrap();
         assert!(Busy::acquire().is_none());
-        drop(a);
-        assert!(Busy::acquire().is_some());
+        assert!(Busy::acquire_within(Duration::from_millis(120)).is_none());
+        // Liberata durante l'attesa (Stop e subito Avvia): la si ottiene.
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            drop(a);
+        });
+        assert!(Busy::acquire_within(Duration::from_secs(2)).is_some());
+        release.join().unwrap();
+    }
+
+    #[test]
+    fn keyframe_size_is_read_before_decoding() {
+        use super::super::media::{Encoder, Source, TestPattern};
+        let frame = TestPattern::new(320, 240).next().unwrap().unwrap();
+        let packets = Encoder::new(320, 240, 15).unwrap().encode(&frame, 0).unwrap();
+        let (data, key) = &packets[0];
+        assert!(key);
+        assert_eq!(vp8_keyframe_size(data), Some((320, 240)));
+        let mut forged = data.clone();
+        forged[6..10].copy_from_slice(&[0xff, 0x3f, 0xff, 0x3f]);
+        assert_eq!(vp8_keyframe_size(&forged), Some((16383, 16383)));
+        assert_eq!(vp8_keyframe_size(&data[..5]), None);
     }
 }

@@ -65,6 +65,7 @@ pub fn list() -> Result<Vec<CameraInfo>, String> {
 fn list_on_this_thread() -> Result<Vec<CameraInfo>, String> {
     prepare_thread()?;
     let cameras = query(ApiBackend::Auto).map_err(|e| format!("Query cameras error: {e}"))?;
+    #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
     let mut out: Vec<CameraInfo> = cameras
         .iter()
         .filter_map(|c| match c.index() {
@@ -72,7 +73,9 @@ fn list_on_this_thread() -> Result<Vec<CameraInfo>, String> {
             CameraIndex::String(_) => None,
         })
         .collect();
-    // nokhwa su Linux può elencare due volte la stessa camera (issue 171).
+    // nokhwa su Linux può elencare due volte la stessa camera (issue 171);
+    // altrove due webcam uguali hanno davvero lo stesso nome.
+    #[cfg(target_os = "linux")]
     out.dedup_by(|a, b| a.name == b.name);
     Ok(out)
 }

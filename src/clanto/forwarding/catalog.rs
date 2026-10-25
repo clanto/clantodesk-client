@@ -86,8 +86,9 @@ fn today() -> String {
     chrono::Utc::now().format("%Y-%m-%d").to_string()
 }
 
-/// Verifica firma, versione, scadenza e forma dei servizi.
-pub fn verify(body: &str, pk: &sign::PublicKey, today: &str) -> Result<Vec<Service>, String> {
+/// Verifica firma, versione, scadenza e forma dei servizi. Restituisce anche la
+/// scadenza, che vale pure per la copia in cache.
+pub fn verify(body: &str, pk: &sign::PublicKey, today: &str) -> Result<(Vec<Service>, String), String> {
     let env: Envelope = serde_json::from_str(body).map_err(|e| format!("catalog: {e}"))?;
     let payload = base64::decode(env.payload.trim(), Variant::Original)
         .map_err(|_| "catalog: payload is not base64".to_owned())?;
@@ -120,27 +121,37 @@ pub fn verify(body: &str, pk: &sign::PublicKey, today: &str) -> Result<Vec<Servi
         })
         .take(MAX_SERVICES)
         .collect();
-    Ok(services)
+    Ok((services, payload.expires))
 }
 
 struct Cache {
     services: Vec<Service>,
+    expires: String,
     fetched: Option<Instant>,
     next_try: Option<Instant>,
 }
 
 static CACHE: RwLock<Cache> = RwLock::new(Cache {
     services: Vec::new(),
+    expires: String::new(),
     fetched: None,
     next_try: None,
 });
 
-/// Servizi validi in questo momento (vuoto se mai scaricato o non valido).
+/// Servizi validi in questo momento: vuoto se mai scaricato, non valido o
+/// scaduto anche se l'aggiornamento non riesce più.
 pub fn current() -> Vec<Service> {
-    CACHE.read().unwrap_or_else(|e| e.into_inner()).services.clone()
+    let cache = CACHE.read().unwrap_or_else(|e| e.into_inner());
+    if cache.expires.as_str() < today().as_str() {
+        return Vec::new();
+    }
+    cache.services.clone()
 }
 
-async fn fetch(pk: &sign::PublicKey) -> Result<Vec<Service>, String> {
+/// Un solo aggiornamento alla volta: le richieste concorrenti usano la cache.
+static REFRESHING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+async fn fetch(pk: &sign::PublicKey) -> Result<(Vec<Service>, String), String> {
     let client = crate::hbbs_http::create_http_client_async_with_url_strict(CATALOG_URL)
         .await
         .map_err(|e| e.to_string())?;
@@ -168,11 +179,16 @@ pub async fn refresh_if_stale() {
             return;
         }
     }
+    if REFRESHING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     let result = fetch(&pk).await;
+    REFRESHING.store(false, std::sync::atomic::Ordering::SeqCst);
     let mut cache = CACHE.write().unwrap_or_else(|e| e.into_inner());
     match result {
-        Ok(services) => {
+        Ok((services, expires)) => {
             cache.services = services;
+            cache.expires = expires;
             cache.fetched = Some(now);
             cache.next_try = None;
         }
@@ -203,7 +219,8 @@ mod tests {
     #[test]
     fn verifies_signature_and_expiry() {
         let (pk, sk) = sign::gen_keypair();
-        let services = verify(&signed(CATALOG, &sk), &pk, "2026-10-25").unwrap();
+        let (services, expires) = verify(&signed(CATALOG, &sk), &pk, "2026-10-25").unwrap();
+        assert_eq!(expires, "2027-01-31");
         assert_eq!(services.len(), 1);
         assert_eq!(services[0].direction, Direction::ToHost);
         assert!(services[0].matches("127.0.0.1", 3389));

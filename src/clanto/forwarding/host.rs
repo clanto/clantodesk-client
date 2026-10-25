@@ -52,7 +52,11 @@ impl Hooks for HostHooks {
             if host == LISTEN_HOST {
                 return Err(policy::DENIED_TARGET.to_owned());
             }
-            match policy::authorize_target(Direction::ToHost, &host, port).await {
+            let decision = match allowed(peer.conn_id) {
+                Ok(()) => policy::authorize_target(Direction::ToHost, &host, port).await,
+                Err(e) => Err(e),
+            };
+            match decision {
                 Ok(decision) => {
                     let policy::Target::Addrs(addrs) = decision.target;
                     audit(
@@ -64,7 +68,7 @@ impl Hooks for HostHooks {
                 }
                 Err(reason) => {
                     log::warn!("forwarding to {host}:{port} denied for {}: {reason}", peer.id);
-                    audit(
+                    audit_denied(
                         "clanto_forward_denied",
                         &peer,
                         json!({"direction": "to_host", "target": format!("{host}:{port}"), "reason": reason}),
@@ -76,7 +80,7 @@ impl Hooks for HostHooks {
     }
 
     fn authorize_listen(&self, req: &ClantoForwardListen) -> Result<(), String> {
-        let result = policy::authorize_listen();
+        let result = allowed(self.peer.conn_id).and_then(|_| policy::authorize_listen());
         let detail = json!({
             "direction": "to_controller",
             "listen_port": req.port,
@@ -85,21 +89,58 @@ impl Hooks for HostHooks {
         });
         match &result {
             Ok(()) => audit("clanto_forward_listen", &self.peer, detail),
-            Err(_) => audit("clanto_forward_listen_denied", &self.peer, detail),
+            Err(_) => audit_denied("clanto_forward_listen_denied", &self.peer, detail),
         }
         result
+    }
+}
+
+/// Permesso di tunnel della connessione (profilo per ID compreso), aggiornato a
+/// ogni messaggio: senza, nessun forward né webcam.
+static ALLOWED: Mutex<Option<HashMap<i32, bool>>> = Mutex::new(None);
+
+pub(super) fn allowed(conn_id: i32) -> Result<(), String> {
+    let ok = ALLOWED.lock().unwrap().as_ref().and_then(|m| m.get(&conn_id).copied()).unwrap_or(false);
+    if ok {
+        Ok(())
+    } else {
+        Err(policy::DENIED_PERMISSION.to_owned())
+    }
+}
+
+/// Eventi di rifiuto per connessione e minuto: oltre, solo log (un peer non
+/// può riempire l'audit con richieste rifiutate).
+const DENIED_AUDITS_PER_MINUTE: u32 = 30;
+static DENIED_AUDITS: Mutex<Option<HashMap<i32, (Instant, u32)>>> = Mutex::new(None);
+
+pub(super) fn audit_denied(kind: &str, peer: &Peer, extra: serde_json::Value) {
+    let emit = {
+        let mut guard = DENIED_AUDITS.lock().unwrap();
+        let entry = guard.get_or_insert_with(HashMap::new).entry(peer.conn_id).or_insert((Instant::now(), 0));
+        if entry.0.elapsed() >= std::time::Duration::from_secs(60) {
+            *entry = (Instant::now(), 0);
+        }
+        entry.1 += 1;
+        entry.1 <= DENIED_AUDITS_PER_MINUTE
+    };
+    if emit {
+        audit(kind, peer, extra);
+    } else {
+        log::debug!("forwarding: denied audit for {} rate-limited", peer.id);
     }
 }
 
 static ENGINES: Mutex<Option<HashMap<i32, Arc<Engine>>>> = Mutex::new(None);
 
 /// Messaggio `ClantoForward` da una connessione autorizzata. `tx` è il canale
-/// della connessione verso il peer.
+/// della connessione verso il peer; `allowed` = permesso di tunnel della connessione.
 pub fn on_message(
     peer: Peer,
+    allowed: bool,
     tx: &hbb_common::tokio::sync::mpsc::UnboundedSender<(Instant, Arc<Message>)>,
     msg: ClantoForward,
 ) {
+    ALLOWED.lock().unwrap().get_or_insert_with(HashMap::new).insert(peer.conn_id, allowed);
     let media_out = || -> Out {
         let tx = tx.clone();
         Arc::new(move |m: Message| {
@@ -132,6 +173,12 @@ pub fn on_message(
 /// Chiusura della connessione: chiude canali e listener.
 pub fn close(conn_id: i32) {
     super::camera_host::close(conn_id);
+    if let Some(m) = ALLOWED.lock().unwrap().as_mut() {
+        m.remove(&conn_id);
+    }
+    if let Some(m) = DENIED_AUDITS.lock().unwrap().as_mut() {
+        m.remove(&conn_id);
+    }
     let engine = ENGINES
         .lock()
         .unwrap()

@@ -42,6 +42,7 @@ pub fn size_ok(w: usize, h: usize) -> bool {
     w > 0 && h > 0 && w % 2 == 0 && h % 2 == 0 && w.max(h) <= MAX_LONG && w.min(h) <= MAX_SHORT
 }
 const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
+const NO_FRAMES_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Immagine I420 compatta: piano Y, poi U e V a metà risoluzione.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -506,6 +507,7 @@ fn run_send(
     let mut seq: i64 = 0;
     let mut pending = Some(first);
     let mut next_tick = Instant::now();
+    let mut last_frame = Instant::now();
     while !stop.load(Ordering::SeqCst) {
         let now = Instant::now();
         if now < next_tick {
@@ -519,9 +521,14 @@ fn run_send(
             Some(f) => f,
             None => match source.next()? {
                 Some(f) => f,
+                // Cattura nativa ferma (app in background, camera presa da altri).
+                None if last_frame.elapsed() > NO_FRAMES_TIMEOUT => {
+                    return Err("The camera stopped sending frames".to_owned())
+                }
                 None => continue,
             },
         };
+        last_frame = Instant::now();
         // Collegamento lento: si salta prima di codificare.
         if seq - acked.load(Ordering::SeqCst) >= MAX_IN_FLIGHT {
             continue;

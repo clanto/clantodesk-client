@@ -280,7 +280,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
     }
   }
 
-  void _add() {
+  Future<void> _add() async {
     String host;
     int port;
     if (_serviceId.isNotEmpty) {
@@ -298,7 +298,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
       host = t.substring(0, i);
       port = int.tryParse(t.substring(i + 1)) ?? 0;
     }
-    final res = jsonDecode(bind.sessionClantoForwardAdd(
+    final res = jsonDecode(await bind.sessionClantoForwardAdd(
       sessionId: widget.sessionId,
       direction: _direction,
       localPort: int.tryParse(_localPort.text.trim()) ?? 0,
@@ -306,6 +306,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
       targetPort: port,
       service: _serviceId,
     ));
+    if (!mounted) return;
     setState(() => _error = res['error'] == null ? null : translate(res['error']));
     _refresh();
   }

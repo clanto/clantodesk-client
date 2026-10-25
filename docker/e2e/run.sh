@@ -187,6 +187,12 @@ hopt clanto-forward-custom-host-targets "127.0.0.1:7001"
 expect_fwd "15 destinazione ammessa sull'host" ok tech1 "to-host:127.0.0.1:7001"
 expect_fwd "16 destinazione non in elenco" "error:Forwarding target not allowed" tech1 "to-host:127.0.0.1:7002"
 expect_fwd "16b alias localhost della destinazione ammessa" ok tech1 "to-host:localhost:7001"
+# Profilo per ID «view» (senza Tunnel): niente forward, anche se la policy lo ammette.
+hopt id-whitelist "$ID1"
+hopt clanto-id-permissions "{\"$ID1\":{\"profile\":\"view\"}}"
+expect_fwd "16c profilo Sola visualizzazione: forward rifiutato" "error:Forwarding is not allowed for this connection" tech1 "to-host:127.0.0.1:7001"
+hopt clanto-id-permissions ""
+hopt id-whitelist ""
 expect_reverse "17 inverso non consentito dall'host" "error:listen Forwarding towards the controller is not allowed on this device" tech1
 hopt clanto-forward-reverse Y
 expect_reverse "18 inverso: il controller non espone nulla" "ECHO=" tech1
