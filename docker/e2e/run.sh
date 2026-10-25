@@ -70,7 +70,7 @@ echo "    $SETUP"
 HOST_ID="$(sed -n 's/.*HOST_ID=\([^ ]*\).*/\1/p' <<<"$SETUP")"
 grep -q 'TFA=true' <<<"$SETUP" || { echo "2FA non configurato sull'host"; exit 1; }
 # Display virtuale: le sessioni di controllo remoto enumerano i monitor.
-docker exec -d e2e-host bash -c "Xvfb :0 -screen 0 1280x800x24 >/tmp/xvfb.log 2>&1 & sleep 1; DISPLAY=:0 $BIN --server >/tmp/server.log 2>&1"
+docker exec -d e2e-host bash -c "Xvfb :0 -screen 0 1280x800x24 >/tmp/xvfb.log 2>&1 & sleep 1; CLANTO_E2E_CAMERA_SINK=null DISPLAY=:0 $BIN --server >/tmp/server.log 2>&1"
 
 ctrl() { docker exec -u "$1" e2e-ctrl $BIN --e2e "${@:2}"; }
 KEY1="$(ctrl tech1 device-key | sed -n 's/^DEVICE_KEY=//p')"
@@ -195,8 +195,22 @@ docker exec -u tech1 e2e-ctrl $BIN --e2e local-option clanto-forward-custom-cont
 docker exec -u tech1 e2e-ctrl $BIN --e2e local-option clanto-forward-custom-controller-targets "127.0.0.1:7003" >/dev/null
 expect_reverse "19 inverso: servizio del controller esposto sull'host" "ECHO=rev-e2e" tech1
 
+echo "==> webcam del controller (pattern di prova, VP8)"
+cam() { ctrl "$1" camera "$HOST_ID" "$PASSWORD" "$2" 2>/dev/null | sed -n 's/^RESULT=//p'; }
+expect_cam() { # descrizione atteso(prefisso) utente frame
+  local got; got="$(cam "$3" "$4")"
+  if [ "${got#"$2"}" != "$got" ]; then PASS=$((PASS+1)); echo "  OK    $1 -> $got"
+  else FAIL=$((FAIL+1)); echo "  FAIL  $1 -> atteso '$2...', ottenuto '$got'"; fi
+}
+expect_cam "20 webcam non consentita dall'host" "error:Receiving the controller's camera is not allowed" tech1 10
+hopt clanto-forward-camera Y
+hopt clanto-forward-camera-device /dev/null
+expect_cam "21 dispositivo che non è v4l2loopback" "error:/dev/null is not a v4l2loopback device" tech1 10
+hopt clanto-forward-camera-device ""
+expect_cam "22 webcam decodificata dall'host" "ok frames=" tech1 45
+
 echo
-echo "E2E 2FA e forwarding: $PASS superati, $FAIL falliti"
+echo "E2E 2FA, forwarding e webcam: $PASS superati, $FAIL falliti"
 if [ "$FAIL" != 0 ]; then
   echo "--- log host (ultime righe) ---"; docker exec e2e-host tail -40 /tmp/server.log || true
   exit 1

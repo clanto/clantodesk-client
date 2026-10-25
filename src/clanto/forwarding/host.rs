@@ -32,7 +32,7 @@ struct HostHooks {
     peer: Peer,
 }
 
-fn audit(kind: &str, peer: &Peer, extra: serde_json::Value) {
+pub(super) fn audit(kind: &str, peer: &Peer, extra: serde_json::Value) {
     let mut value = json!({
         "conn_id": peer.conn_id,
         "id": peer.id,
@@ -100,6 +100,18 @@ pub fn on_message(
     tx: &hbb_common::tokio::sync::mpsc::UnboundedSender<(Instant, Arc<Message>)>,
     msg: ClantoForward,
 ) {
+    let media_out = || -> Out {
+        let tx = tx.clone();
+        Arc::new(move |m: Message| {
+            tx.send((Instant::now(), Arc::new(m))).ok();
+        })
+    };
+    let msg = match msg.union {
+        Some(clanto_forward::Union::MediaOpen(m)) => return super::camera_host::on_open(&peer, media_out(), m),
+        Some(clanto_forward::Union::MediaFrame(m)) => return super::camera_host::on_frame(peer.conn_id, m),
+        Some(clanto_forward::Union::MediaClose(m)) => return super::camera_host::on_close(peer.conn_id, m),
+        union => ClantoForward { union, ..Default::default() },
+    };
     let engine = {
         let mut engines = ENGINES.lock().unwrap();
         let engines = engines.get_or_insert_with(HashMap::new);
@@ -119,6 +131,7 @@ pub fn on_message(
 
 /// Chiusura della connessione: chiude canali e listener.
 pub fn close(conn_id: i32) {
+    super::camera_host::close(conn_id);
     let engine = ENGINES
         .lock()
         .unwrap()

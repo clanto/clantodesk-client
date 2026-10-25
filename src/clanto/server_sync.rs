@@ -49,6 +49,8 @@ pub const SERVER_PROTECTED_KEYS: &[&str] = &[
     "clanto-forward-reverse",
     "clanto-forward-custom-controller",
     "clanto-forward-custom-controller-targets",
+    "clanto-forward-camera",
+    "clanto-forward-camera-device",
 ];
 
 pub fn filter_sysinfo(v: &mut Value) {

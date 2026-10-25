@@ -1061,6 +1061,11 @@ message ClantoForward {
     ClantoForwardListen listen = 2;
     ClantoForwardListening listening = 3;
     ClantoForwardUnlisten unlisten = 4;
+    ClantoMediaOpen media_open = 5;
+    ClantoMediaOpened media_opened = 6;
+    ClantoMediaFrame media_frame = 7;
+    ClantoMediaAck media_ack = 8;
+    ClantoMediaClose media_close = 9;
   }
 }
 // Controller -> host: ascolta su 127.0.0.1:port dell'host (0 = porta libera)
@@ -1078,4 +1083,38 @@ message ClantoForwardListening {
 }
 message ClantoForwardUnlisten {
   int32 listen_id = 1;
+}
+
+// Flussi media dal controller all'host (oggi: la webcam del controller come
+// camera virtuale dell'host). Il controller invia al massimo pochi frame non
+// ancora confermati: un ack ne libera uno, oppure chiede un keyframe.
+message ClantoMediaOpen {
+  int32 stream_id = 1;
+  string kind = 2;   // "camera"
+  string codec = 3;  // "vp8"
+  int32 width = 4;
+  int32 height = 5;
+  int32 fps = 6;
+  string name = 7;
+}
+message ClantoMediaOpened {
+  int32 stream_id = 1;
+  bool success = 2;
+  string message = 3;
+  string sink = 4;
+}
+message ClantoMediaFrame {
+  int32 stream_id = 1;
+  bytes data = 2;
+  bool key = 3;
+  int64 pts = 4;
+}
+message ClantoMediaAck {
+  int32 stream_id = 1;
+  int64 pts = 2;
+  bool keyframe = 3;
+}
+message ClantoMediaClose {
+  int32 stream_id = 1;
+  string message = 2;
 }

@@ -464,6 +464,8 @@ L'elenco degli ID è l'opzione upstream `id-whitelist` (GPO `IdWhitelist`).
 | `clanto-forward-reverse` | `Y`, `N` | `N` | «Consenti forward verso il controller» | `ForwardReverse` |
 | `clanto-forward-custom-controller` | `Y`, `N` | `N` | «Consenti forward personalizzati dalla rete di questo PC come controller» | `ForwardCustomController` |
 | `clanto-forward-custom-controller-targets` | voci `indirizzo:porte` | vuoto | «Destinazioni ammesse dalla parte del controller» | `ForwardCustomControllerTargets` |
+| `clanto-forward-camera` | `Y`, `N` | `N` | «Consenti la webcam del controller su questo PC» | `ForwardCamera` |
+| `clanto-forward-camera-device` | percorso, es. `/dev/video10` (Linux) | vuoto = primo v4l2loopback | «Dispositivo della camera virtuale» | `ForwardCameraDevice` |
 
 #### Report
 

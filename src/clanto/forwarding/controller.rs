@@ -12,8 +12,10 @@
 //! dall'interfaccia, fuori da qualsiasi runtime.
 
 use super::{
+    camera_capture,
     catalog::{self, Direction},
     engine::{Engine, Hooks, Out, Side, LISTEN_HOST},
+    media::{SendInfo, SendStream, CAMERA_STREAM_ID, DEFAULT_FPS},
     policy,
 };
 use crate::client::Data;
@@ -73,6 +75,8 @@ struct Forwards {
 struct SessionState {
     engine: Arc<Engine>,
     forwards: Arc<Mutex<Forwards>>,
+    out: Out,
+    camera: Option<SendStream>,
 }
 
 struct ControllerHooks {
@@ -136,16 +140,22 @@ fn session(key: u64, sender: &UnboundedSender<Data>) -> (Arc<Engine>, Arc<Mutex<
         let _guard = runtime().enter();
         let engine = Engine::new(
             Side::Controller,
-            out,
+            out.clone(),
             Arc::new(ControllerHooks { forwards: forwards.clone() }),
         );
-        SessionState { engine, forwards }
+        SessionState { engine, forwards, out, camera: None }
     });
     (state.engine.clone(), state.forwards.clone())
 }
 
 /// Messaggio `ClantoForward` dall'host (hook in `io_loop`).
 pub fn on_message(key: u64, sender: &UnboundedSender<Data>, msg: ClantoForward) {
+    let msg = match msg.union {
+        Some(clanto_forward::Union::MediaOpened(m)) => return with_camera(key, |c| c.on_opened(&m)),
+        Some(clanto_forward::Union::MediaAck(m)) => return with_camera(key, |c| c.on_ack(&m)),
+        Some(clanto_forward::Union::MediaClose(m)) => return with_camera(key, |c| c.on_close(&m)),
+        union => ClantoForward { union, ..Default::default() },
+    };
     let (engine, _) = session(key, sender);
     let _guard = runtime().enter();
     engine.on_message(msg);
@@ -155,6 +165,7 @@ pub fn on_message(key: u64, sender: &UnboundedSender<Data>, msg: ClantoForward) 
 pub fn close(key: u64) {
     let state = SESSIONS.lock().unwrap().as_mut().and_then(|s| s.remove(&key));
     if let Some(state) = state {
+        drop(state.camera);
         for (_, f) in state.forwards.lock().unwrap().items.drain() {
             if let Some(task) = f.task {
                 task.abort();
@@ -302,4 +313,52 @@ pub fn remove(key: u64, id: i32) {
 pub fn catalog_services() -> Vec<catalog::Service> {
     runtime().block_on(catalog::refresh_if_stale());
     catalog::current()
+}
+
+fn with_camera(key: u64, f: impl FnOnce(&SendStream)) {
+    let sessions = SESSIONS.lock().unwrap();
+    if let Some(camera) = sessions.as_ref().and_then(|s| s.get(&key)).and_then(|s| s.camera.as_ref()) {
+        f(camera);
+    }
+}
+
+/// Webcam di questo computer.
+pub fn cameras() -> Result<Vec<camera_capture::CameraInfo>, String> {
+    camera_capture::list()
+}
+
+/// Invia la webcam `index` all'host come camera virtuale. Sostituisce quella
+/// già attiva nella sessione.
+pub fn camera_start(key: u64, sender: &UnboundedSender<Data>, index: u32) -> Result<(), String> {
+    if hbb_common::config::Config::get_option(policy::OPT_ENABLED) != "Y" {
+        return Err(policy::DENIED_DISABLED.to_owned());
+    }
+    session(key, sender);
+    let mut sessions = SESSIONS.lock().unwrap();
+    let state = sessions
+        .as_mut()
+        .and_then(|s| s.get_mut(&key))
+        .ok_or("Session closed")?;
+    let factory = Box::new(move || camera_capture::open(index));
+    let previous = state.camera.replace(SendStream::start(CAMERA_STREAM_ID, DEFAULT_FPS, factory, state.out.clone()));
+    drop(sessions);
+    drop(previous);
+    Ok(())
+}
+
+pub fn camera_stop(key: u64) {
+    let camera = SESSIONS
+        .lock()
+        .unwrap()
+        .as_mut()
+        .and_then(|s| s.get_mut(&key))
+        .and_then(|s| s.camera.take());
+    drop(camera);
+}
+
+pub fn camera_status(key: u64) -> Option<SendInfo> {
+    let sessions = SESSIONS.lock().unwrap();
+    let camera = sessions.as_ref()?.get(&key)?.camera.as_ref()?;
+    let info = camera.info.lock().unwrap().clone();
+    Some(info)
 }

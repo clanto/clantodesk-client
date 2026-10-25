@@ -6,6 +6,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,6 +25,8 @@ const String kOptClantoForwardCustomController =
     'clanto-forward-custom-controller';
 const String kOptClantoForwardCustomControllerTargets =
     'clanto-forward-custom-controller-targets';
+const String kOptClantoForwardCamera = 'clanto-forward-camera';
+const String kOptClantoForwardCameraDevice = 'clanto-forward-camera-device';
 
 bool _isY(String key) => bind.mainGetOptionSync(key: key) == 'Y';
 
@@ -44,11 +47,14 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
   final _controllerTargets = TextEditingController(
       text: bind.mainGetOptionSync(
           key: kOptClantoForwardCustomControllerTargets));
+  final _cameraDevice = TextEditingController(
+      text: bind.mainGetOptionSync(key: kOptClantoForwardCameraDevice));
 
   @override
   void dispose() {
     _hostTargets.dispose();
     _controllerTargets.dispose();
+    _cameraDevice.dispose();
     super.dispose();
   }
 
@@ -73,7 +79,8 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
     );
   }
 
-  Widget _targets(String label, String key, TextEditingController c) {
+  Widget _targets(String label, String key, TextEditingController c,
+      {String hint = 'localhost:3389, 192.168.10.0/24:443'}) {
     return Padding(
       padding: const EdgeInsets.only(left: 32, bottom: 8),
       child: TextField(
@@ -81,7 +88,7 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
         enabled: _editable(key),
         decoration: InputDecoration(
           labelText: translate(label),
-          hintText: 'localhost:3389, 192.168.10.0/24:443',
+          hintText: hint,
         ),
         onSubmitted: (v) => bind.mainSetOption(key: key, value: v.trim()),
         onTapOutside: (_) => bind.mainSetOption(key: key, value: c.text.trim()),
@@ -111,6 +118,12 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
           if (_isY(kOptClantoForwardCustomController))
             _targets('Allowed destinations on the controller\'s side',
                 kOptClantoForwardCustomControllerTargets, _controllerTargets),
+          _check('Allow the controller\'s camera on this PC',
+              kOptClantoForwardCamera),
+          if (Platform.isLinux && _isY(kOptClantoForwardCamera))
+            _targets('Virtual camera device (empty = automatic)',
+                kOptClantoForwardCameraDevice, _cameraDevice,
+                hint: '/dev/video10'),
         ],
       ],
     );
@@ -150,10 +163,26 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   final _target = TextEditingController();
   final _localPort = TextEditingController(text: '0');
   String? _error;
+  List<Map<String, dynamic>> _cameras = [];
+  int? _cameraIndex;
+  Map<String, dynamic>? _camera;
+  String? _cameraError;
 
   @override
   void initState() {
     super.initState();
+    bind.mainClantoCameras().then((json) {
+      final res = jsonDecode(json);
+      if (!mounted) return;
+      setState(() {
+        if (res['error'] != null) {
+          _cameraError = translate(res['error']);
+        } else {
+          _cameras = (res['ok'] as List).cast<Map<String, dynamic>>();
+          _cameraIndex = _cameras.isEmpty ? null : _cameras.first['index'];
+        }
+      });
+    });
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
     bind.mainClantoForwardCatalog().then((json) {
@@ -176,7 +205,14 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   void _refresh() {
     final json = bind.sessionClantoForwardList(sessionId: widget.sessionId);
     final list = (jsonDecode(json) as List).cast<Map<String, dynamic>>();
-    if (mounted) setState(() => _forwards = list);
+    final camera = jsonDecode(
+        bind.sessionClantoCameraStatus(sessionId: widget.sessionId));
+    if (mounted) {
+      setState(() {
+        _forwards = list;
+        _camera = camera;
+      });
+    }
   }
 
   void _add() {
@@ -209,6 +245,73 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
     _refresh();
   }
 
+  bool get _cameraRunning =>
+      _camera != null &&
+      ['starting', 'pending', 'active'].contains(_camera!['state']);
+
+  Future<void> _cameraStart() async {
+    final index = _cameraIndex;
+    if (index == null) return;
+    final res = jsonDecode(await bind.sessionClantoCameraStart(
+        sessionId: widget.sessionId, index: index));
+    if (!mounted) return;
+    setState(() =>
+        _cameraError = res['error'] == null ? null : translate(res['error']));
+    _refresh();
+  }
+
+  Widget _cameraSection() {
+    final c = _camera;
+    String? status;
+    if (c != null) {
+      status = translate(c['state'] ?? '');
+      if (c['state'] == 'active') {
+        status += ' ${c['width']}x${c['height']} → ${c['sink']}';
+      }
+      final message = c['message'] ?? '';
+      if (message.isNotEmpty) status += ' ${translate(message)}';
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(translate('My camera on the remote PC'),
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        if (_cameras.isNotEmpty)
+          Row(children: [
+            Expanded(
+              child: DropdownButton<int>(
+                value: _cameraIndex,
+                isExpanded: true,
+                items: _cameras
+                    .map((cam) => DropdownMenuItem<int>(
+                        value: cam['index'], child: Text(cam['name'] ?? '')))
+                    .toList(),
+                onChanged: _cameraRunning
+                    ? null
+                    : (v) => setState(() => _cameraIndex = v),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _cameraRunning
+                ? TextButton(
+                    onPressed: () {
+                      bind.sessionClantoCameraStop(sessionId: widget.sessionId);
+                      _refresh();
+                    },
+                    child: Text(translate('Stop')))
+                : TextButton(
+                    onPressed: _cameraStart, child: Text(translate('Start'))),
+          ])
+        else if (_cameraError == null)
+          Text(translate('No camera found')),
+        if (status != null) Text(status),
+        if (_cameraError != null)
+          Text(_cameraError!, style: const TextStyle(color: Colors.red)),
+        const Divider(),
+      ],
+    );
+  }
+
   String _describe(Map<String, dynamic> f) {
     final target = '${f['target_host']}:${f['target_port']}';
     final port = f['listen_port'];
@@ -229,6 +332,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _cameraSection(),
               if (_forwards.isEmpty) Text(translate('No forwards')),
               ..._forwards.map((f) => ListTile(
                     dense: true,

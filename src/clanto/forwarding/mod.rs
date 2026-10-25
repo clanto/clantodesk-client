@@ -4,11 +4,17 @@
 //! Forwarding Clanto: canali nei due sensi dentro una sessione autorizzata,
 //! separati dal port forward di upstream (che resta spento). Un tipo di
 //! canale per funzione: oggi porte TCP; webcam, audio e USB si aggiungono come
-//! nuovi tipi sullo stesso motore. Vedi CLANTO.md, "Forwarding".
+//! nuovi tipi sullo stesso motore. La webcam del controller viaggia come flusso
+//! media (`media`, `camera_*`). Vedi CLANTO.md, "Forwarding".
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod camera_capture;
+pub mod camera_host;
+pub mod camera_sink;
 pub mod catalog;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod controller;
 pub mod engine;
 pub mod host;
+pub mod media;
 pub mod policy;

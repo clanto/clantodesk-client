@@ -7,6 +7,9 @@ pub use hbb_common::libc;
 extern crate winapi;
 
 pub use common::*;
+// Clanto: cattura della webcam del controller (src/clanto/forwarding/camera).
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub use nokhwa;
 
 #[cfg(quartz)]
 pub mod quartz;

@@ -1841,6 +1841,60 @@ pub fn main_clanto_forward_catalog() -> String {
     "[]".to_owned()
 }
 
+/// Webcam di questo computer: `{"ok":[{"index","name"}]}` o `{"error":..}`.
+pub fn main_clanto_cameras() -> String {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let result = crate::clanto::forwarding::controller::cameras();
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let result: Result<Vec<String>, String> = Err("Not supported".to_owned());
+    match result {
+        Ok(list) => serde_json::json!({ "ok": list }).to_string(),
+        Err(e) => serde_json::json!({ "error": e }).to_string(),
+    }
+}
+
+/// Invia la webcam `index` all'host come camera virtuale: `{"ok":true}` o `{"error":..}`.
+pub fn session_clanto_camera_start(session_id: SessionID, index: i32) -> String {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let result = (|| {
+        let index = u32::try_from(index).map_err(|_| "Invalid camera".to_owned())?;
+        let session = sessions::get_session_by_session_id(&session_id).ok_or("No session")?;
+        let key = session.lc.read().unwrap().session_id;
+        let sender = session.sender.read().unwrap().clone().ok_or("Not connected")?;
+        crate::clanto::forwarding::controller::camera_start(key, &sender, index)
+    })();
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let result: Result<(), String> = {
+        let _ = (session_id, index);
+        Err("Not supported".to_owned())
+    };
+    match result {
+        Ok(()) => serde_json::json!({ "ok": true }).to_string(),
+        Err(e) => serde_json::json!({ "error": e }).to_string(),
+    }
+}
+
+pub fn session_clanto_camera_stop(session_id: SessionID) {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
+        let key = session.lc.read().unwrap().session_id;
+        crate::clanto::forwarding::controller::camera_stop(key);
+    }
+    let _ = session_id;
+}
+
+/// Stato della webcam inviata, JSON o `null`.
+pub fn session_clanto_camera_status(session_id: SessionID) -> SyncReturn<String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
+        let key = session.lc.read().unwrap().session_id;
+        let status = crate::clanto::forwarding::controller::camera_status(key);
+        return SyncReturn(serde_json::to_string(&status).unwrap_or_else(|_| "null".to_owned()));
+    }
+    let _ = session_id;
+    SyncReturn("null".to_owned())
+}
+
 pub fn session_new_rdp(session_id: SessionID) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         session.new_rdp();

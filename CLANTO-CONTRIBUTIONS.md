@@ -28,10 +28,14 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/config.rs`
 - `src/clanto/config_import.rs`
 - `src/clanto/file_scan.rs`
+- `src/clanto/forwarding/camera_capture.rs`
+- `src/clanto/forwarding/camera_host.rs`
+- `src/clanto/forwarding/camera_sink.rs`
 - `src/clanto/forwarding/catalog.rs`
 - `src/clanto/forwarding/controller.rs`
 - `src/clanto/forwarding/engine.rs`
 - `src/clanto/forwarding/host.rs`
+- `src/clanto/forwarding/media.rs`
 - `src/clanto/forwarding/mod.rs`
 - `src/clanto/forwarding/policy.rs`
 - `src/clanto/gpo.rs`
@@ -83,6 +87,8 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoHostWatermark.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoUserKeyStore.kt`
 - `flutter/ios/Runner/ClantoFileExporter.swift`
+- `libs/clanto-vcam/src/lib.rs`, `frame.rs`, `shared.rs`, `control.rs`
+- `libs/clanto-vcam/dll/src/lib.rs`, `source.rs`
 
 L'elenco deve essere aggiornato quando viene aggiunto, rimosso o riclassificato
 un modulo. L'intestazione SPDX del singolo file prevale su questo inventario in
@@ -116,6 +122,8 @@ La logica nuova e separabile viene collocata vicino all'ecosistema che la usa:
 - `src/clanto/` per Rust;
 - `flutter/lib/clanto/` per Dart/Flutter;
 - `it.clanto.clantodesk.clanto` per Kotlin/Android;
+- `libs/clanto-vcam/` per i crate separati (la DLL della camera virtuale deve
+  essere un binario a sé);
 - `flutter/ios/Runner/` per sorgenti Swift che devono appartenere al target
   Xcode.
 

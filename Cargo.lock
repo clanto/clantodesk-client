@@ -1230,6 +1230,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "clanto-vcam"
+version = "0.1.0"
+dependencies = [
+ "windows 0.61.1",
+]
+
+[[package]]
+name = "clanto-vcam-dll"
+version = "0.1.0"
+dependencies = [
+ "clanto-vcam",
+ "windows 0.61.1",
+ "windows-core 0.61.0",
+]
+
+[[package]]
 name = "clap"
 version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7101,6 +7117,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "chrono",
  "cidr-utils",
+ "clanto-vcam",
  "clipboard",
  "clipboard-master",
  "cocoa 0.24.1",

@@ -31,6 +31,8 @@ pub const GPO_KEYS: &[&str] = &[
     "clanto-forward-reverse",
     "clanto-forward-custom-controller",
     "clanto-forward-custom-controller-targets",
+    "clanto-forward-camera",
+    "clanto-forward-camera-device",
     "clanto-temp-password-rotate-minutes",
     "clanto-require-protected-device",
     "clanto-posture-bypass",

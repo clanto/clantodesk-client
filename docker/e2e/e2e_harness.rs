@@ -3,18 +3,19 @@
 
 //! Harness E2E del login 2FA. NON fa parte del prodotto: docker/e2e/run.sh lo
 //! copia in src/ solo dentro il container di test e aggiunge `--e2e` a
-//! core_main. Il controller e' headless e costruisce il LoginRequest da se',
-//! cosi' puo' comportarsi anche da client modificato (ID falso, hwid).
+//! core_main. Il controller è headless e costruisce il LoginRequest da sé,
+//! così può comportarsi anche da client modificato (ID falso, hwid).
 //!
 //!   --e2e host-setup <password> <totp-hex>   host: password, 2FA, approvazione
 //!   --e2e host-trust <elenco>                host: clanto-trusted-controllers via IPC
 //!   --e2e host-option <chiave> <valore>      host: qualsiasi opzione via IPC
 //!   --e2e local-option <chiave> <valore>     controller: opzione dell'utente
 //!   --e2e forward <host-id> <password> to-host:<ip>:<porta> | reverse:<ip>:<porta>:<secondi>
+//!   --e2e camera <host-id> <password> <frame>  webcam di prova verso l'host
 //!   --e2e device-key | my-id                 controller
 //!   --e2e login <host-id> <password> <totp-hex|-> [hwid] [no-key] [as-id=<ID>]
 //!
-//! L'esito del login e' una riga `RESULT=ok|2fa-required|error:<testo>`.
+//! L'esito del login è una riga `RESULT=ok|2fa-required|error:<testo>`.
 
 use crate::client::*;
 use async_trait::async_trait;
@@ -191,7 +192,7 @@ async fn open_session(a: &LoginArgs, conn: ConnType) -> Result<Stream, String> {
     }
 }
 
-/// Hook del controller per l'harness: la policy e' quella vera
+/// Hook del controller per l'harness: la policy è quella vera
 /// (`authorize_target` con le opzioni locali di questo utente).
 struct ForwardHooks {
     reverse_target: (String, i32),
@@ -334,6 +335,73 @@ async fn forward(a: LoginArgs, mode: String) -> String {
     }
 }
 
+/// Sessione di controllo remoto che invia un pattern di prova come webcam:
+/// `ok frames=N` quando l'host ha confermato N frame decodificati.
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
+async fn camera(a: LoginArgs, frames: i64) -> String {
+    use crate::clanto::forwarding::media::{SendStream, TestPattern, CAMERA_STREAM_ID};
+    use hbb_common::tokio::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    let mut stream = match open_session(&a, ConnType::DEFAULT_CONN).await {
+        Ok(s) => s,
+        Err(result) => return result,
+    };
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Message>();
+    let mut camera = SendStream::start(
+        CAMERA_STREAM_ID,
+        15,
+        Box::new(|| Ok(Box::new(TestPattern::new(320, 240)) as _)),
+        Arc::new(move |m| {
+            out_tx.send(m).ok();
+        }),
+    );
+    let deadline = Instant::now() + Duration::from_secs(40);
+    let mut tick = hbb_common::tokio::time::interval(Duration::from_millis(100));
+    let result = loop {
+        hbb_common::tokio::select! {
+            _ = tick.tick() => {
+                let info = camera.info.lock().unwrap().clone();
+                if info.state == "error" || info.state == "closed" {
+                    break format!("error:{}", info.message);
+                }
+                if info.acked >= frames {
+                    break format!("ok frames={} sink={} size={}x{}", info.acked, info.sink, info.width, info.height);
+                }
+                if Instant::now() > deadline {
+                    break format!("error:timeout state={} sent={} acked={}", info.state, info.sent, info.acked);
+                }
+            }
+            Some(m) = out_rx.recv() => {
+                if let Err(e) = stream.send(&m).await {
+                    break format!("error:send {e}");
+                }
+            }
+            res = stream.next_timeout(60_000) => {
+                let Some(Ok(bytes)) = res else {
+                    break "error:session closed".to_owned();
+                };
+                if let Ok(msg) = Message::parse_from_bytes(&bytes) {
+                    if let Some(message::Union::ClantoForward(cf)) = msg.union {
+                        match cf.union {
+                            Some(clanto_forward::Union::MediaOpened(m)) => camera.on_opened(&m),
+                            Some(clanto_forward::Union::MediaAck(m)) => camera.on_ack(&m),
+                            Some(clanto_forward::Union::MediaClose(m)) => camera.on_close(&m),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    };
+    camera.stop();
+    // Il MediaClose del controller arriva all'host prima della chiusura.
+    while let Ok(m) = out_rx.try_recv() {
+        stream.send(&m).await.ok();
+    }
+    result
+}
+
 pub fn run(args: &[String]) {
     let arg = |i: usize| args.get(i).cloned().unwrap_or_default();
     match arg(0).as_str() {
@@ -391,6 +459,21 @@ pub fn run(args: &[String]) {
                     as_id: None,
                 },
                 arg(3),
+            );
+            println!("RESULT={result}");
+        }
+        // camera <host-id> <password> <frame>
+        "camera" => {
+            let result = camera(
+                LoginArgs {
+                    host: arg(1),
+                    password: arg(2),
+                    totp: None,
+                    hwid: false,
+                    no_key: false,
+                    as_id: None,
+                },
+                arg(3).parse().unwrap_or(30),
             );
             println!("RESULT={result}");
         }

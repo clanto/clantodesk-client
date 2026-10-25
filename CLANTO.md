@@ -586,32 +586,57 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
 - **Protocollo.** Un solo messaggio `ClantoForward` (campo `1000` di `Message`, in
   `libs/base/protos/message.proto`, da conservare nei porting). I frame dei canali sono
   `PortForwardChannel` di upstream incapsulati: `engine.rs` riusa senza modificarle finestre, crediti e
-  `run_channel` di `crate::port_forward_mux`. Il motore e' simmetrico: id dispari aperti dal
-  controller, pari dall'host. Un tipo di canale per funzione: oggi porte TCP; webcam, audio e USB si
+  `run_channel` di `crate::port_forward_mux`. Il motore è simmetrico: id dispari aperti dal
+  controller, pari dall'host. Un tipo di canale per funzione: oggi porte TCP e la webcam del controller; audio e USB si
   aggiungono come nuovi tipi.
 - **Direzioni.** `to_host`: il controller ascolta su `127.0.0.1` e raggiunge una destinazione dalla
   parte dell'host. `to_controller`: su richiesta del controller l'host ascolta su `127.0.0.1` e porta
   le connessioni a una destinazione dalla parte del controller (host `clanto-listen`, porta =
-  listen_id). Nessun listener e' mai aperto sulla rete, solo in loopback.
+  listen_id). Nessun listener è mai aperto sulla rete, solo in loopback.
 - **Policy** (`policy.rs`, tutte gestibili via GPO, protette dalla `strategy` del server). Ogni lato
-  decide solo su cio' che espone:
+  decide solo su ciò che espone:
   - `clanto-forward-enabled` (master, spento) su ogni PC;
   - `clanto-forward-catalog` (acceso salvo `N`): servizi del catalogo firmato;
   - `clanto-forward-custom-host` + `-targets`: destinazioni personalizzate dalla parte dell'host;
-  - `clanto-forward-reverse`: l'host puo' aprire listener per `to_controller`;
+  - `clanto-forward-reverse`: l'host può aprire listener per `to_controller`;
   - `clanto-forward-custom-controller` + `-targets`: cosa il controller espone.
   Elenchi `indirizzo:porte` (nome, IP, `[IPv6]`, CIDR o `*`; `N`, `N-M` o `*`); `localhost` vale
   anche per 127.0.0.1 e ::1. Un nome viene risolto e ci si collega solo agli indirizzi verificati.
 - **Catalogo** (`catalog.rs`): `https://clanto.it/api/clantodesk-forward-catalog.json`,
   `{"payload","signature"}` con firma Ed25519 dei byte esatti del payload, `version` 1 e `expires`.
   Chiave pubblica al build da `CLANTO_FORWARD_CATALOG_PK` (secret GitHub); senza chiave o con firma
-  non valida il catalogo e' vuoto. Si firma con `api/sign-forward-catalog.py` (esempio in
+  non valida il catalogo è vuoto. Si firma con `api/sign-forward-catalog.py` (esempio in
   `api/forward-catalog.example.json`); la chiave privata resta a Clanto, mai nel repo.
-- **Audit**: 61170 canale aperto, 61171 canale negato, 61172 listener aperto, 61173 listener negato.
-- **Piattaforme.** Desktop (Windows, macOS, Linux). Su Android e iOS il modulo del controller non e'
+- **Webcam del controller** (`media.rs`, `camera_capture.rs`, `camera_host.rs`, `camera_sink.rs`).
+  Il tecnico invia la propria webcam all'host, dove compare come camera virtuale per Teams, Zoom e
+  simili. Messaggi `ClantoMedia*` dentro `ClantoForward` (campi 5-9). Il controller cattura con
+  nokhwa (Media Foundation, V4L2, AVFoundation; formato più grande fino a 1280x720), codifica in VP8
+  con il codec di scrap e tiene al massimo 3 frame non confermati: se il collegamento rallenta salta
+  i frame prima di codificarli, un errore di decodifica sull'host chiede un keyframe. L'host decodifica
+  in un thread proprio; una sola camera per host.
+  - Host: `clanto-forward-camera` (spento) e, su Linux, `clanto-forward-camera-device`. Controller:
+    serve `clanto-forward-enabled`; la webcam parte solo dal comando «Avvia» nel dialogo Forwarding.
+  - Linux: scrive in YUYV su un dispositivo v4l2loopback già presente (non lo installiamo).
+  - Windows 11: `libs/clanto-vcam`. Il servizio installato registra in HKLM la media source
+    `clanto_vcam.dll` (crate `libs/clanto-vcam/dll`, copiata da `build.py` accanto all'eseguibile),
+    crea la camera con `MFCreateVirtualCamera` per la durata del flusso e scrive i frame NV12 in una
+    memoria condivisa `Global\ClantoDeskVirtualCamera` (lettura solo per LocalService, cioè il Frame
+    Server). La media source adatta il frame a 1280x720 o 640x480 con bande nere. Nessun driver.
+    Con la versione portable (senza servizio) la camera virtuale non è disponibile.
+  - macOS come host: richiede una Camera Extension (target Swift, entitlement `system-extension`,
+    profilo Developer ID); da sviluppare e provare su un Mac. macOS come controller funziona:
+    entitlement `com.apple.security.device.camera` e `NSCameraUsageDescription` aggiunti.
+  - Prove in Docker: VP8 andata e ritorno, conversioni, ABI v4l2, buffer condiviso e adattamento
+    del frame (`cargo test -p clanto-vcam`), type-check dei crate Windows per
+    `x86_64-pc-windows-msvc`. La camera virtuale di Windows va provata su un PC Windows 11 reale.
+- **Audit**: 61170 canale aperto, 61171 canale negato, 61172 listener aperto, 61173 listener negato,
+  61174 webcam del controller aperta, 61175 negata, 61176 chiusa (frame e durata).
+- **Piattaforme.** Desktop (Windows, macOS, Linux). Su Android e iOS il modulo del controller non è
   compilato.
-- **Prova.** `docker/e2e/run.sh`, scenari 14-19, con host Linux su Xvfb: le sessioni di controllo
-  remoto enumerano i monitor e senza display l'host rifiuta il login.
+- **Prova.** `docker/e2e/run.sh`, scenari 14-22, con host Linux su Xvfb: le sessioni di controllo
+  remoto enumerano i monitor e senza display l'host rifiuta il login. Gli scenari 20-22 inviano un
+  pattern di prova VP8; l'host di prova usa un sink nullo (`CLANTO_E2E_CAMERA_SINK=null`, solo nelle
+  build di debug e senza dispositivo scelto).
 
 ## Accesso solo da dispositivi protetti
 

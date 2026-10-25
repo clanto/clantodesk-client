@@ -182,5 +182,11 @@
     <policy name="ForwardCustomControllerTargets" class="Machine" displayName="$(string.ForwardCustomControllerTargets)" explainText="$(string.ForwardCustomControllerTargets_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ForwardCustomControllerTargets)">
       <parentCategory ref="Forwarding" />
       <supportedOn ref="ClantoDesk150" /><elements><text id="ForwardCustomControllerTargetsValue" valueName="clanto-forward-custom-controller-targets" maxLength="4000" /></elements></policy>
+    <policy name="ForwardCamera" class="Machine" displayName="$(string.ForwardCamera)" explainText="$(string.ForwardCamera_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-camera" presentation="$(presentation.ForwardCamera)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ForwardCameraDevice" class="Machine" displayName="$(string.ForwardCameraDevice)" explainText="$(string.ForwardCameraDevice_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ForwardCameraDevice)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="ForwardCameraDeviceValue" valueName="clanto-forward-camera-device" maxLength="260" /></elements></policy>
   </policies>
 </policyDefinitions>

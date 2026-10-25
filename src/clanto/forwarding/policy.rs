@@ -21,6 +21,10 @@ pub const OPT_CUSTOM_HOST_TARGETS: &str = "clanto-forward-custom-host-targets";
 pub const OPT_REVERSE: &str = "clanto-forward-reverse";
 pub const OPT_CUSTOM_CONTROLLER: &str = "clanto-forward-custom-controller";
 pub const OPT_CUSTOM_CONTROLLER_TARGETS: &str = "clanto-forward-custom-controller-targets";
+/// Host: accetta la webcam del controller come camera virtuale.
+pub const OPT_CAMERA: &str = "clanto-forward-camera";
+/// Host Linux: dispositivo v4l2loopback da usare (vuoto = il primo trovato).
+pub const OPT_CAMERA_DEVICE: &str = "clanto-forward-camera-device";
 
 pub const GPO_KEYS: &[&str] = &[
     OPT_ENABLED,
@@ -30,11 +34,14 @@ pub const GPO_KEYS: &[&str] = &[
     OPT_REVERSE,
     OPT_CUSTOM_CONTROLLER,
     OPT_CUSTOM_CONTROLLER_TARGETS,
+    OPT_CAMERA,
+    OPT_CAMERA_DEVICE,
 ];
 
 pub const DENIED_DISABLED: &str = "Forwarding is disabled on this device";
 pub const DENIED_TARGET: &str = "Forwarding target not allowed";
 pub const DENIED_REVERSE: &str = "Forwarding towards the controller is not allowed on this device";
+pub const DENIED_CAMERA: &str = "Receiving the controller's camera is not allowed on this device";
 
 fn on(key: &str) -> bool {
     Config::get_option(key) == "Y"
@@ -280,6 +287,17 @@ pub fn authorize_listen() -> Result<(), String> {
     }
     if !on(OPT_REVERSE) {
         return Err(DENIED_REVERSE.to_owned());
+    }
+    Ok(())
+}
+
+/// Host: può ricevere la webcam del controller?
+pub fn authorize_camera() -> Result<(), String> {
+    if !on(OPT_ENABLED) {
+        return Err(DENIED_DISABLED.to_owned());
+    }
+    if !on(OPT_CAMERA) {
+        return Err(DENIED_CAMERA.to_owned());
     }
     Ok(())
 }

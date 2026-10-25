@@ -448,6 +448,10 @@ def build_flutter_windows(version, features, skip_portable_pack):
     os.chdir('..')
     shutil.copy2('target/release/deps/dylib_virtual_display.dll',
                  flutter_build_dir_2)
+    # Clanto: media source della camera virtuale (libs/clanto-vcam/dll).
+    if not skip_cargo:
+        system2('cargo build --locked --release -p clanto-vcam-dll')
+    shutil.copy2('target/release/clanto_vcam.dll', flutter_build_dir_2)
     if skip_portable_pack:
         return
     os.chdir('libs/portable')

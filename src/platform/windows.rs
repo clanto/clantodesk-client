@@ -1805,9 +1805,11 @@ fn get_before_uninstall(kill_self: bool) -> String {
     taskkill /F /IM {app_name}.exe{filter}
     reg delete HKEY_CLASSES_ROOT\\.{ext} /f
     reg delete HKEY_CLASSES_ROOT\\{ext} /f
+    reg delete HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\CLSID\\{vcam_clsid} /f
     netsh advfirewall firewall delete rule name=\"{app_name} Service\"
     ",
         broker_exe = WIN_TOPMOST_INJECTED_PROCESS_EXE,
+        vcam_clsid = clanto_vcam::CLSID_STR,
     )
 }
 

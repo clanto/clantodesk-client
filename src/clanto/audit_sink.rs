@@ -76,6 +76,9 @@ enum EventKey {
     ForwardDenied,
     ForwardListenOpened,
     ForwardListenDenied,
+    ForwardCameraOpened,
+    ForwardCameraDenied,
+    ForwardCameraClosed,
     Unknown,
 }
 
@@ -293,6 +296,27 @@ const EVENTS: &[EventDefinition] = &[
         cef_severity: 7,
     },
     EventDefinition {
+        key: EventKey::ForwardCameraOpened,
+        id: 61174,
+        name: "Controller camera opened",
+        syslog_severity: 5,
+        cef_severity: 5,
+    },
+    EventDefinition {
+        key: EventKey::ForwardCameraDenied,
+        id: 61175,
+        name: "Controller camera denied",
+        syslog_severity: 4,
+        cef_severity: 7,
+    },
+    EventDefinition {
+        key: EventKey::ForwardCameraClosed,
+        id: 61176,
+        name: "Controller camera closed",
+        syslog_severity: 6,
+        cef_severity: 3,
+    },
+    EventDefinition {
         key: EventKey::Unknown,
         id: 61999,
         name: "Unknown audit event",
@@ -473,6 +497,9 @@ fn event_definition(kind: &str, value: &Value) -> &'static EventDefinition {
         "clanto_forward_denied" => EventKey::ForwardDenied,
         "clanto_forward_listen" => EventKey::ForwardListenOpened,
         "clanto_forward_listen_denied" => EventKey::ForwardListenDenied,
+        "clanto_forward_camera_opened" => EventKey::ForwardCameraOpened,
+        "clanto_forward_camera_denied" => EventKey::ForwardCameraDenied,
+        "clanto_forward_camera_closed" => EventKey::ForwardCameraClosed,
         _ => EventKey::Unknown,
     };
     EVENTS
@@ -1300,6 +1327,9 @@ mod tests {
             ("clanto_forward_denied", EventKey::ForwardDenied, 61171),
             ("clanto_forward_listen", EventKey::ForwardListenOpened, 61172),
             ("clanto_forward_listen_denied", EventKey::ForwardListenDenied, 61173),
+            ("clanto_forward_camera_opened", EventKey::ForwardCameraOpened, 61174),
+            ("clanto_forward_camera_denied", EventKey::ForwardCameraDenied, 61175),
+            ("clanto_forward_camera_closed", EventKey::ForwardCameraClosed, 61176),
         ] {
             let event = event_definition(kind, &json!({}));
             assert_eq!(event.key, key);
