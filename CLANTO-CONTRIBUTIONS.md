@@ -29,6 +29,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/config_import.rs`
 - `src/clanto/file_scan.rs`
 - `src/clanto/forwarding/camera_capture.rs`
+- `src/clanto/forwarding/camera_capture_mobile.rs`
 - `src/clanto/forwarding/camera_host.rs`
 - `src/clanto/forwarding/camera_sink.rs`
 - `src/clanto/forwarding/catalog.rs`
@@ -82,10 +83,12 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `flutter/lib/clanto/two_factor_policy.dart`
 - `flutter/lib/clanto/watermark.dart`
 - `flutter/lib/clanto/watermark_data.dart`
+- `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoCamera.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoChatNotifier.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoDownloads.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoHostWatermark.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoUserKeyStore.kt`
+- `flutter/ios/Runner/ClantoCamera.swift`, `ClantoCamera.h`
 - `flutter/ios/Runner/ClantoFileExporter.swift`
 - `libs/clanto-vcam/src/lib.rs`, `frame.rs`, `shared.rs`, `control.rs`, `mac.rs`
 - `libs/clanto-vcam/dll/src/lib.rs`, `source.rs`

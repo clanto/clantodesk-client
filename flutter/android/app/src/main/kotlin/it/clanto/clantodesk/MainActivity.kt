@@ -8,6 +8,7 @@ package it.clanto.clantodesk
  */
 
 import ffi.FFI
+import it.clanto.clantodesk.clanto.ClantoCamera
 import it.clanto.clantodesk.clanto.ClantoChatNotifier
 import it.clanto.clantodesk.clanto.ClantoDownloads
 
@@ -335,6 +336,14 @@ class MainActivity : FlutterFragmentActivity() {
                     } else {
                         result.success(false)
                     }
+                }
+                // Clanto: webcam del telefono verso l'host (forwarding.dart).
+                "clanto_camera_start" -> {
+                    result.success(ClantoCamera.start(applicationContext, call.arguments == true))
+                }
+                "clanto_camera_stop" -> {
+                    ClantoCamera.stop()
+                    result.success(null)
                 }
                 "check_video_permission" -> {
                     mainService?.let {

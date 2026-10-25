@@ -22,6 +22,8 @@ import Flutter
           result(FlutterMethodNotImplemented)
         }
       }
+      // Clanto: fotocamera come webcam del tecnico (forwarding.dart).
+      ClantoCamera.register(messenger: controller.binaryMessenger)
     }
     dummyMethodToEnforceBundling();
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

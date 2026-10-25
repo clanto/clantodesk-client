@@ -9,7 +9,7 @@ use super::{
     camera_sink,
     engine::{wrap, Out},
     host::{audit, Peer},
-    media::{Decoder, CODEC_VP8, KIND_CAMERA, MAX_FPS, MAX_FRAME_BYTES, MAX_HEIGHT, MAX_WIDTH},
+    media::{size_ok, Decoder, CODEC_VP8, KIND_CAMERA, MAX_FPS, MAX_FRAME_BYTES},
     policy,
 };
 use base::message_proto::*;
@@ -56,7 +56,7 @@ fn validate(msg: &ClantoMediaOpen) -> Result<(usize, usize), String> {
         return Err(format!("Unsupported media {} {}", msg.kind, msg.codec));
     }
     let (w, h) = (msg.width as usize, msg.height as usize);
-    if w == 0 || h == 0 || w > MAX_WIDTH || h > MAX_HEIGHT || w % 2 != 0 || h % 2 != 0 || !(1..=MAX_FPS).contains(&msg.fps) {
+    if !size_ok(w, h) || !(1..=MAX_FPS).contains(&msg.fps) {
         return Err("Unsupported camera format".to_owned());
     }
     Ok((w, h))
@@ -251,6 +251,8 @@ mod tests {
     #[test]
     fn rejects_bad_formats() {
         assert_eq!(validate(&open(640, 480, 15)), Ok((640, 480)));
+        assert_eq!(validate(&open(720, 1280, 15)), Ok((720, 1280)), "telefono in verticale");
+        assert!(validate(&open(1280, 1920, 15)).is_err(), "lato corto oltre 1080");
         assert!(validate(&open(641, 480, 15)).is_err());
         assert!(validate(&open(3840, 2160, 15)).is_err());
         assert!(validate(&open(640, 480, 0)).is_err());

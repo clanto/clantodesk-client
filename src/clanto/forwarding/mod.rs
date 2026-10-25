@@ -9,10 +9,12 @@
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod camera_capture;
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[path = "camera_capture_mobile.rs"]
+pub mod camera_capture;
 pub mod camera_host;
 pub mod camera_sink;
 pub mod catalog;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod controller;
 pub mod engine;
 pub mod host;

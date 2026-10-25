@@ -281,11 +281,50 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   Future<void> _cameraStart() async {
     final index = _cameraIndex;
     if (index == null) return;
+    if (isAndroid &&
+        !await AndroidPermissionManager.request('android.permission.CAMERA')) {
+      if (mounted) {
+        setState(() => _cameraError = translate('Camera access denied'));
+      }
+      return;
+    }
     final res = jsonDecode(await bind.sessionClantoCameraStart(
         sessionId: widget.sessionId, index: index));
+    String? error = res['error'];
+    // Telefoni: la cattura è nativa (ClantoCamera.kt / ClantoCamera.swift);
+    // 1 = camera anteriore.
+    if (error == null && isMobile) {
+      try {
+        error = await _nativeCamera?.$1.invokeMethod<String>(
+            _nativeCamera!.$2, index == 1);
+      } on PlatformException catch (e) {
+        error = e.message ?? e.code;
+      }
+      if (error != null) {
+        bind.sessionClantoCameraStop(sessionId: widget.sessionId);
+      }
+    }
     if (!mounted) return;
-    setState(() =>
-        _cameraError = res['error'] == null ? null : translate(res['error']));
+    setState(() => _cameraError = error == null ? null : translate(error));
+    _refresh();
+  }
+
+  /// Canale e metodo di avvio della cattura nativa; null sul desktop.
+  (MethodChannel, String)? get _nativeCamera {
+    if (isAndroid) return (const MethodChannel('mChannel'), 'clanto_camera_start');
+    if (isIOS) {
+      return (const MethodChannel('it.clanto.clantodesk/camera'), 'start');
+    }
+    return null;
+  }
+
+  void _cameraStop() {
+    bind.sessionClantoCameraStop(sessionId: widget.sessionId);
+    if (isAndroid) {
+      const MethodChannel('mChannel').invokeMethod('clanto_camera_stop');
+    } else if (isIOS) {
+      const MethodChannel('it.clanto.clantodesk/camera').invokeMethod('stop');
+    }
     _refresh();
   }
 
@@ -323,10 +362,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
             const SizedBox(width: 8),
             _cameraRunning
                 ? TextButton(
-                    onPressed: () {
-                      bind.sessionClantoCameraStop(sessionId: widget.sessionId);
-                      _refresh();
-                    },
+                    onPressed: _cameraStop,
                     child: Text(translate('Stop')))
                 : TextButton(
                     onPressed: _cameraStart, child: Text(translate('Start'))),

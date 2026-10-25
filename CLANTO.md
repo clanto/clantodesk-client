@@ -641,13 +641,25 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
     compilato solo dalla CI; prova funzionale su un Mac.
   - macOS come controller: entitlement `com.apple.security.device.camera` e
     `NSCameraUsageDescription`.
+  - iOS come controller: AVFoundation in `flutter/ios/Runner/ClantoCamera.swift` (1280x720 NV12,
+    diritta in verticale) chiama `clanto_camera_push_nv12` (dichiarata in `ClantoCamera.h`, inclusa
+    dal bridging header). `NSCameraUsageDescription` in Info.plist; la fotocamera funziona solo con
+    l'app in primo piano. Compilato solo dal job iOS della CI; prova su iPhone.
+  - Android come controller: il telefono fa da webcam del tecnico. Camera2 in
+    `ClantoCamera.kt` (posteriore o anteriore, fino a 1280x720, raddrizzata con la rotazione del
+    sensore per il telefono in verticale) passa i frame YUV_420_888 a Rust via JNI
+    (`camera_capture_mobile.rs`, conversione in `media::android420_to_i420`). Permesso `CAMERA`
+    nel manifest, chiesto solo al primo «Avvia»; `android.hardware.camera` non obbligatoria, quindi
+    Play non esclude i dispositivi senza camera. Va dichiarato nella sezione Sicurezza dei dati di Play.
   - Prove in Docker: VP8 andata e ritorno, conversioni, ABI v4l2, buffer condiviso e adattamento
     del frame (`cargo test -p clanto-vcam`), type-check dei crate Windows per
     `x86_64-pc-windows-msvc`. La camera virtuale di Windows va provata su un PC Windows 11 reale.
 - **Audit**: 61170 canale aperto, 61171 canale negato, 61172 listener aperto, 61173 listener negato,
   61174 webcam del controller aperta, 61175 negata, 61176 chiusa (frame e durata).
-- **Piattaforme.** Desktop (Windows, macOS, Linux). Su Android e iOS il modulo del controller non è
-  compilato.
+- **Piattaforme.** Controller (porte e webcam): Windows, macOS, Linux, Android e iOS. Su iOS l'app
+  viene sospesa in background: un forward resta attivo solo con ClantoDesk in primo piano (su iPad
+  anche in Split View), quindi è utile soprattutto verso il controller o per brevi verifiche. Host:
+  tutti tranne iOS; la webcam del tecnico si riceve su Linux, Windows 11 e macOS 13+.
 - **Prova.** `docker/e2e/run.sh`, scenari 14-22, con host Linux su Xvfb: le sessioni di controllo
   remoto enumerano i monitor e senza display l'host rifiuta il login. Gli scenari 20-22 inviano un
   pattern di prova VP8; l'host di prova usa un sink nullo (`CLANTO_E2E_CAMERA_SINK=null`, solo nelle

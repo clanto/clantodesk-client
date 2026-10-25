@@ -1770,14 +1770,12 @@ pub fn session_remove_port_forward(session_id: SessionID, local_port: i32) {
 
 /// Forward Clanto della sessione, JSON (vedi `clanto::forwarding::controller`).
 pub fn session_clanto_forward_list(session_id: SessionID) -> SyncReturn<String> {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        let key = session.lc.read().unwrap().session_id;
-        let list = crate::clanto::forwarding::controller::list(key);
-        return SyncReturn(serde_json::to_string(&list).unwrap_or_default());
-    }
-    let _ = session_id;
-    SyncReturn("[]".to_owned())
+    let Some(session) = sessions::get_session_by_session_id(&session_id) else {
+        return SyncReturn("[]".to_owned());
+    };
+    let key = session.lc.read().unwrap().session_id;
+    let list = crate::clanto::forwarding::controller::list(key);
+    SyncReturn(serde_json::to_string(&list).unwrap_or_default())
 }
 
 /// `direction`: "to_host" | "to_controller". Risponde `{"ok":..}` o `{"error":..}`.
@@ -1789,20 +1787,13 @@ pub fn session_clanto_forward_add(
     target_port: i32,
     service: String,
 ) -> SyncReturn<String> {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let result = clanto_forward_add(session_id, direction, local_port, target_host, target_port, service);
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    let result: Result<crate::clanto::forwarding::catalog::Direction, String> = {
-        let _ = (session_id, direction, local_port, target_host, target_port, service);
-        Err("Not supported".to_owned())
-    };
     SyncReturn(match result {
         Ok(info) => serde_json::json!({ "ok": info }).to_string(),
         Err(e) => serde_json::json!({ "error": e }).to_string(),
     })
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn clanto_forward_add(
     session_id: SessionID,
     direction: String,
@@ -1824,38 +1815,29 @@ fn clanto_forward_add(
 }
 
 pub fn session_clanto_forward_remove(session_id: SessionID, id: i32) {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         let key = session.lc.read().unwrap().session_id;
         crate::clanto::forwarding::controller::remove(key, id);
     }
-    let _ = (session_id, id);
 }
 
 /// Servizi del catalogo firmato, JSON.
 pub fn main_clanto_forward_catalog() -> String {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    return serde_json::to_string(&crate::clanto::forwarding::controller::catalog_services())
-        .unwrap_or_else(|_| "[]".to_owned());
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    "[]".to_owned()
+    serde_json::to_string(&crate::clanto::forwarding::controller::catalog_services())
+        .unwrap_or_else(|_| "[]".to_owned())
 }
 
-/// Webcam di questo computer: `{"ok":[{"index","name"}]}` o `{"error":..}`.
+/// Webcam di questo dispositivo: `{"ok":[{"index","name"}]}` o `{"error":..}`.
 pub fn main_clanto_cameras() -> String {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let result = crate::clanto::forwarding::controller::cameras();
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    let result: Result<Vec<String>, String> = Err("Not supported".to_owned());
-    match result {
+    match crate::clanto::forwarding::controller::cameras() {
         Ok(list) => serde_json::json!({ "ok": list }).to_string(),
         Err(e) => serde_json::json!({ "error": e }).to_string(),
     }
 }
 
 /// Invia la webcam `index` all'host come camera virtuale: `{"ok":true}` o `{"error":..}`.
+/// Su Android e iOS la cattura nativa la avvia poi l'interfaccia.
 pub fn session_clanto_camera_start(session_id: SessionID, index: i32) -> String {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let result = (|| {
         let index = u32::try_from(index).map_err(|_| "Invalid camera".to_owned())?;
         let session = sessions::get_session_by_session_id(&session_id).ok_or("No session")?;
@@ -1863,11 +1845,6 @@ pub fn session_clanto_camera_start(session_id: SessionID, index: i32) -> String 
         let sender = session.sender.read().unwrap().clone().ok_or("Not connected")?;
         crate::clanto::forwarding::controller::camera_start(key, &sender, index)
     })();
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    let result: Result<(), String> = {
-        let _ = (session_id, index);
-        Err("Not supported".to_owned())
-    };
     match result {
         Ok(()) => serde_json::json!({ "ok": true }).to_string(),
         Err(e) => serde_json::json!({ "error": e }).to_string(),
@@ -1875,24 +1852,20 @@ pub fn session_clanto_camera_start(session_id: SessionID, index: i32) -> String 
 }
 
 pub fn session_clanto_camera_stop(session_id: SessionID) {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         let key = session.lc.read().unwrap().session_id;
         crate::clanto::forwarding::controller::camera_stop(key);
     }
-    let _ = session_id;
 }
 
 /// Stato della webcam inviata, JSON o `null`.
 pub fn session_clanto_camera_status(session_id: SessionID) -> SyncReturn<String> {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        let key = session.lc.read().unwrap().session_id;
-        let status = crate::clanto::forwarding::controller::camera_status(key);
-        return SyncReturn(serde_json::to_string(&status).unwrap_or_else(|_| "null".to_owned()));
-    }
-    let _ = session_id;
-    SyncReturn("null".to_owned())
+    let Some(session) = sessions::get_session_by_session_id(&session_id) else {
+        return SyncReturn("null".to_owned());
+    };
+    let key = session.lc.read().unwrap().session_id;
+    let status = crate::clanto::forwarding::controller::camera_status(key);
+    SyncReturn(serde_json::to_string(&status).unwrap_or_else(|_| "null".to_owned()))
 }
 
 pub fn session_new_rdp(session_id: SessionID) {

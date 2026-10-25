@@ -333,6 +333,8 @@ pub fn camera_start(key: u64, sender: &UnboundedSender<Data>, index: u32) -> Res
     if hbb_common::config::Config::get_option(policy::OPT_ENABLED) != "Y" {
         return Err(policy::DENIED_DISABLED.to_owned());
     }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    camera_capture::prepare();
     session(key, sender);
     let mut sessions = SESSIONS.lock().unwrap();
     let state = sessions

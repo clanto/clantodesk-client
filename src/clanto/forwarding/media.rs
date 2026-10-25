@@ -28,13 +28,19 @@ use std::{
 pub const KIND_CAMERA: &str = "camera";
 pub const CODEC_VP8: &str = "vp8";
 pub const MAX_IN_FLIGHT: i64 = 3;
-pub const MAX_WIDTH: usize = 1920;
-pub const MAX_HEIGHT: usize = 1080;
+/// Lato lungo e lato corto massimi: vale anche in verticale (telefoni).
+pub const MAX_LONG: usize = 1920;
+pub const MAX_SHORT: usize = 1080;
 pub const MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
 pub const DEFAULT_FPS: i32 = 15;
 pub const MAX_FPS: i32 = 30;
 /// Id dei flussi del controller: dispari, come i canali.
 pub const CAMERA_STREAM_ID: i32 = 1;
+
+/// Dimensioni accettate: pari, non nulle, entro 1920x1080 in orizzontale o in verticale.
+pub fn size_ok(w: usize, h: usize) -> bool {
+    w > 0 && h > 0 && w % 2 == 0 && h % 2 == 0 && w.max(h) <= MAX_LONG && w.min(h) <= MAX_SHORT
+}
 const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Immagine I420 compatta: piano Y, poi U e V a metà risoluzione.
@@ -134,6 +140,90 @@ impl I420 {
     }
 }
 
+/// YUV_420_888 (piani con stride e pixel stride) -> I420 compatto, ruotato di
+/// `rotation` gradi in senso orario. `None` se i parametri non sono coerenti.
+#[allow(clippy::too_many_arguments)]
+pub fn android420_to_i420(
+    y: &[u8],
+    u: &[u8],
+    v: &[u8],
+    y_stride: usize,
+    uv_stride: usize,
+    uv_pixel_stride: usize,
+    width: usize,
+    height: usize,
+    rotation: i32,
+) -> Option<I420> {
+    let (w, h) = (width & !1, height & !1);
+    if w == 0 || h == 0 || !(1..=2).contains(&uv_pixel_stride) || y_stride < w {
+        return None;
+    }
+    // Ultimo byte letto da libyuv in ogni piano.
+    let uv_last = (h / 2 - 1) * uv_stride + (w / 2 - 1) * uv_pixel_stride + 1;
+    if y.len() < (h - 1) * y_stride + w || u.len() < uv_last || v.len() < uv_last {
+        return None;
+    }
+    let mut upright = vec![0u8; I420::len(w, h)];
+    {
+        let (dy, rest) = upright.split_at_mut(w * h);
+        let (du, dv) = rest.split_at_mut((w / 2) * (h / 2));
+        let ret = unsafe {
+            scrap::Android420ToI420(
+                y.as_ptr(),
+                y_stride as _,
+                u.as_ptr(),
+                uv_stride as _,
+                v.as_ptr(),
+                uv_stride as _,
+                uv_pixel_stride as _,
+                dy.as_mut_ptr(),
+                w as _,
+                du.as_mut_ptr(),
+                (w / 2) as _,
+                dv.as_mut_ptr(),
+                (w / 2) as _,
+                w as _,
+                h as _,
+            )
+        };
+        if ret != 0 {
+            return None;
+        }
+    }
+    let mode = match rotation.rem_euclid(360) {
+        90 => scrap::RotationMode::kRotate90,
+        180 => scrap::RotationMode::kRotate180,
+        270 => scrap::RotationMode::kRotate270,
+        _ => return Some(I420 { width: w, height: h, data: upright }),
+    };
+    let (rw, rh) = if matches!(mode, scrap::RotationMode::kRotate180) { (w, h) } else { (h, w) };
+    let mut data = vec![0u8; I420::len(rw, rh)];
+    let src = I420 { width: w, height: h, data: upright };
+    let (sy, su, sv) = src.planes();
+    let (dy, rest) = data.split_at_mut(rw * rh);
+    let (du, dv) = rest.split_at_mut((rw / 2) * (rh / 2));
+    let ret = unsafe {
+        scrap::I420Rotate(
+            sy.as_ptr(),
+            w as _,
+            su.as_ptr(),
+            (w / 2) as _,
+            sv.as_ptr(),
+            (w / 2) as _,
+            dy.as_mut_ptr(),
+            rw as _,
+            du.as_mut_ptr(),
+            (rw / 2) as _,
+            dv.as_mut_ptr(),
+            (rw / 2) as _,
+            w as _,
+            h as _,
+            mode,
+        )
+    };
+    (ret == 0).then_some(I420 { width: rw, height: rh, data })
+}
+
 /// Una sorgente video. Vive nel thread di invio: non serve che sia `Send`.
 pub trait Source {
     fn name(&self) -> String;
@@ -226,7 +316,7 @@ impl Decoder {
         let mut out = Vec::new();
         for img in images {
             let (w, h) = (img.width(), img.height());
-            if w == 0 || h == 0 || w > MAX_WIDTH || h > MAX_HEIGHT || w % 2 != 0 || h % 2 != 0 {
+            if !size_ok(w, h) {
                 return Err(format!("unexpected frame size {w}x{h}"));
             }
             let stride = img.stride();
@@ -380,7 +470,7 @@ fn run_send(
         }
         std::thread::sleep(Duration::from_millis(20));
     };
-    if first.width > MAX_WIDTH || first.height > MAX_HEIGHT {
+    if !size_ok(first.width, first.height) {
         return Err(format!("Camera resolution {}x{} not supported", first.width, first.height));
     }
     {
@@ -460,6 +550,22 @@ fn run_send(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn converts_semi_planar_and_rotates() {
+        // 4x2 NV21 come Camera2 su molti telefoni: U e V interlacciati, pixel stride 2.
+        let y: Vec<u8> = (0..8).collect();
+        let uv = [100u8, 200, 101, 201];
+        let f = android420_to_i420(&y, &uv, &uv[1..], 4, 4, 2, 4, 2, 0).unwrap();
+        assert_eq!((f.width, f.height), (4, 2));
+        assert_eq!(f.planes().0, &y[..]);
+        assert_eq!(f.planes().1, &[100, 101]);
+        assert_eq!(f.planes().2, &[200, 201]);
+        let r = android420_to_i420(&y, &uv, &uv[1..], 4, 4, 2, 4, 2, 90).unwrap();
+        assert_eq!((r.width, r.height), (2, 4));
+        assert!(android420_to_i420(&y, &uv, &uv[1..], 4, 4, 3, 4, 2, 0).is_none(), "bad pixel stride");
+        assert!(android420_to_i420(&y[..4], &uv, &uv[1..], 4, 4, 2, 4, 2, 0).is_none(), "short Y plane");
+    }
 
     #[test]
     fn vp8_roundtrip_keeps_size_and_content() {

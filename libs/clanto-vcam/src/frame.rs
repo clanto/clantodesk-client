@@ -8,8 +8,9 @@
 
 use std::sync::atomic::{fence, AtomicU64, Ordering};
 
-pub const MAX_WIDTH: usize = 1920;
-pub const MAX_HEIGHT: usize = 1080;
+/// Lato lungo e lato corto massimi, anche in verticale (webcam di un telefono).
+pub const MAX_LONG: usize = 1920;
+pub const MAX_SHORT: usize = 1080;
 const MAGIC: u32 = 0x4D41_4356; // "VCAM"
 const VERSION: u32 = 1;
 const OFF_MAGIC: usize = 0;
@@ -19,7 +20,11 @@ const OFF_HEIGHT: usize = 12;
 const OFF_SEQ: usize = 16;
 const OFF_ACTIVE: usize = 24;
 pub const HEADER: usize = 64;
-pub const CAPACITY: usize = MAX_WIDTH * MAX_HEIGHT * 3 / 2;
+pub const CAPACITY: usize = MAX_LONG * MAX_SHORT * 3 / 2;
+
+fn size_ok(w: usize, h: usize) -> bool {
+    w > 0 && h > 0 && w.max(h) <= MAX_LONG && w.min(h) <= MAX_SHORT
+}
 pub const SIZE: usize = HEADER + CAPACITY;
 
 pub fn nv12_len(width: usize, height: usize) -> usize {
@@ -74,7 +79,7 @@ impl View {
 
     /// Un solo scrittore. Frame troppo grandi o malformati vengono rifiutati.
     pub fn write(&self, width: usize, height: usize, nv12: &[u8]) -> bool {
-        if width == 0 || height == 0 || width > MAX_WIDTH || height > MAX_HEIGHT || width % 2 != 0 || height % 2 != 0 {
+        if !size_ok(width, height) || width % 2 != 0 || height % 2 != 0 {
             return false;
         }
         if nv12.len() != nv12_len(width, height) {
@@ -104,7 +109,7 @@ impl View {
                 continue;
             }
             let (w, h) = (self.u32_at(OFF_WIDTH) as usize, self.u32_at(OFF_HEIGHT) as usize);
-            if w == 0 || h == 0 || w > MAX_WIDTH || h > MAX_HEIGHT {
+            if !size_ok(w, h) {
                 return None;
             }
             let len = nv12_len(w, h);

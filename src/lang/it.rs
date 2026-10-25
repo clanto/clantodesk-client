@@ -1010,6 +1010,11 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("The virtual camera requires Windows 11", ""),
         ("Activate the ClantoDesk camera extension in the settings (Forwarding)", ""),
         ("Unsupported camera format", ""),
+        ("Camera access denied", ""),
+        ("The camera was closed", ""),
+        ("Rear camera", ""),
+        ("Front camera", ""),
+        ("Invalid camera", ""),
         ("Camera access denied: allow ClantoDesk in System Settings, Privacy & Security, Camera", "Accesso alla webcam negato: consenti ClantoDesk in Impostazioni di Sistema, Privacy e sicurezza, Fotocamera"),
     ].iter().cloned().collect();
 }
