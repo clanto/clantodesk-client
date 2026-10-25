@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../clanto/privacy_prompt.dart';
 import '../../clanto/inbound_security.dart';
+import '../../clanto/forwarding.dart';
 import '../../clanto/outgoing_security.dart';
 import '../../clanto/trusted_controllers.dart';
 import '../../clanto/two_factor_policy.dart';
@@ -760,6 +761,8 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                     refresh: () => setState(() {})),
               if (!incomingOnly)
                 clantoOutgoingSecurityTile(enabled: !settingsLocked),
+              if (!incomingOnly)
+                clantoForwardingTile(enabled: !settingsLocked),
               if (!incomingOnly) clantoDeviceKeyTile(),
             ],
           ),

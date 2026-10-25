@@ -14,6 +14,7 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/toolbar.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:settings_ui/settings_ui.dart';
 
 const String kOptClantoForwardEnabled = 'clanto-forward-enabled';
 const String kOptClantoForwardCatalog = 'clanto-forward-catalog';
@@ -33,7 +34,11 @@ bool _isY(String key) => bind.mainGetOptionSync(key: key) == 'Y';
 /// Policy del forwarding su questo PC (host e controller).
 class ClantoForwardingSettings extends StatefulWidget {
   final bool enabled;
-  const ClantoForwardingSettings({Key? key, this.enabled = true})
+
+  /// Telefoni: solo le opzioni da controller (non ricevono forward né webcam).
+  final bool controllerOnly;
+  const ClantoForwardingSettings(
+      {Key? key, this.enabled = true, this.controllerOnly = false})
       : super(key: key);
 
   @override
@@ -124,20 +129,23 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
         if (on) ...[
           _check('Use the Clanto service catalog', kOptClantoForwardCatalog,
               onByDefault: true),
-          _check('Allow custom forwards to this PC\'s network',
-              kOptClantoForwardCustomHost),
-          if (_isY(kOptClantoForwardCustomHost))
-            _targets('Allowed destinations on this PC\'s side',
-                kOptClantoForwardCustomHostTargets, _hostTargets),
-          _check('Allow forwards towards the controller',
-              kOptClantoForwardReverse),
+          if (!widget.controllerOnly) ...[
+            _check('Allow custom forwards to this PC\'s network',
+                kOptClantoForwardCustomHost),
+            if (_isY(kOptClantoForwardCustomHost))
+              _targets('Allowed destinations on this PC\'s side',
+                  kOptClantoForwardCustomHostTargets, _hostTargets),
+            _check('Allow forwards towards the controller',
+                kOptClantoForwardReverse),
+          ],
           _check('Allow custom forwards from this PC\'s network as controller',
               kOptClantoForwardCustomController),
           if (_isY(kOptClantoForwardCustomController))
             _targets('Allowed destinations on the controller\'s side',
                 kOptClantoForwardCustomControllerTargets, _controllerTargets),
-          _check('Allow the controller\'s camera on this PC',
-              kOptClantoForwardCamera),
+          if (!widget.controllerOnly)
+            _check('Allow the controller\'s camera on this PC',
+                kOptClantoForwardCamera),
           if (Platform.isLinux && _isY(kOptClantoForwardCamera))
             _targets('Virtual camera device (empty = automatic)',
                 kOptClantoForwardCameraDevice, _cameraDevice,
@@ -157,6 +165,34 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
       ],
     );
   }
+}
+
+/// Voce "Forwarding" nelle impostazioni mobile (sezione Sicurezza).
+SettingsTile clantoForwardingTile({bool enabled = true}) {
+  return SettingsTile(
+    title: Text(translate('Forwarding')),
+    description: Text(translate(
+        'Port forwarding and this phone\'s camera in the sessions you open.')),
+    onPressed: enabled
+        ? (context) => showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                content: ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(maxWidth: 480, maxHeight: 600),
+                  child: SingleChildScrollView(
+                      child: ClantoForwardingSettings(
+                          enabled: enabled, controllerOnly: true)),
+                ),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(translate('Close'))),
+                ],
+              ),
+            )
+        : null,
+  );
 }
 
 /// Voce "Forwarding" nel menu della sessione.

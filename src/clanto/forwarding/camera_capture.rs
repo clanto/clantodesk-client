@@ -22,13 +22,18 @@ pub struct CameraInfo {
 }
 
 /// macOS chiede il permesso alla prima apertura. Su Windows nokhwa inizializza
-/// COM solo nel primo thread che lo usa: qui lo si fa per il thread corrente.
+/// COM (STA) solo nel primo thread che lo usa e rifiuta un thread già in un
+/// altro modo: qui lo si prepara nello stesso modo. Va chiamata solo in thread
+/// creati apposta (`list` e il thread di invio), mai in quelli di Flutter.
 fn prepare_thread() -> Result<(), String> {
     #[cfg(windows)]
     unsafe {
-        use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
-        // S_FALSE o RPC_E_CHANGED_MODE: COM è già pronto in questo thread.
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+        // S_FALSE se nokhwa l'ha già fatto in questo thread.
+        let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        if hr.is_err() {
+            return Err(format!("Camera: COM initialization failed (0x{:08X})", hr.0 as u32));
+        }
     }
     #[cfg(target_os = "macos")]
     {
@@ -47,7 +52,17 @@ fn prepare_thread() -> Result<(), String> {
     Ok(())
 }
 
+/// In un thread nuovo: quello della chiamata (Flutter) può avere COM in un altro modo.
 pub fn list() -> Result<Vec<CameraInfo>, String> {
+    std::thread::Builder::new()
+        .name("clanto-camera-list".to_owned())
+        .spawn(list_on_this_thread)
+        .map_err(|e| e.to_string())?
+        .join()
+        .map_err(|_| "Camera list failed".to_owned())?
+}
+
+fn list_on_this_thread() -> Result<Vec<CameraInfo>, String> {
     prepare_thread()?;
     let cameras = query(ApiBackend::Auto).map_err(|e| format!("Query cameras error: {e}"))?;
     let mut out: Vec<CameraInfo> = cameras
