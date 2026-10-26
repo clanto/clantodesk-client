@@ -504,6 +504,7 @@ riassegnare mai un ID, neppure dopo la rimozione di un evento.
 | 61162 | File transfer blocked by direction policy | 4 (warning) | 7 |
 | 61163 | Incoming file blocked by extension | 4 (warning) | 7 |
 | 61164 | Incoming file scanned clean | 6 (informational) | 3 |
+| 61180 | ClantoDesk binary not signed by Clanto | 3 (error) | 8 |
 | 61170 | Forwarding channel opened (`clanto_forward_opened`) | 5 (notice) | 5 |
 | 61171 | Forwarding channel denied (`clanto_forward_denied`) | 4 (warning) | 7 |
 | 61172 | Forwarding listener opened (`clanto_forward_listen`) | 5 (notice) | 5 |
@@ -1015,6 +1016,21 @@ sono). Si attiva se `WAYLAND_DISPLAY` è impostata, il display GDK è Wayland e 
 clipboard-master (`is_primary_selection_supported`) fallisce; con `GDK_BACKEND=x11`, X11, KDE e wlroots
 il percorso resta quello vecchio. Gli agganci sono in `clipboard.rs` (lettura, scrittura, listener) e
 `client.rs` (`init()`): tutte le chiamate GTK passano da `glib::idle_add_once` sul thread principale.
+
+## Firma del codice
+
+`src/clanto/signature.rs`, attivo sui binari di release (server fissati al build):
+
+- **Aggiornamenti.** Su Windows l'installer scaricato (exe o MSI) si esegue solo con firma
+  Authenticode `Valid` e CN del firmatario uguale a `Clanto Services srl` (sovrascrivibile al build
+  con `CLANTO_WINDOWS_SIGNER`); su macOS il bundle estratto dal DMG deve passare
+  `codesign --verify --deep --strict` con `TeamIdentifier=DCP3L7L7BW`. Altrimenti l'aggiornamento
+  è scartato e registrato nel log.
+- **Servizio Windows.** All'avvio di `--service` verifica la firma dell'eseguibile e di
+  `clanto_vcam.dll` nella cartella d'installazione; se non torna, errore nel log ed evento di audit
+  61180 (`clanto_binary_signature`). Per ora segnala e non blocca.
+- **Limite.** Chi è amministratore può modificare anche il controllo. L'applicazione vera della
+  firma la fa Windows con regole App Control (WDAC) o AppLocker sul firmatario.
 
 ## Debito noto
 

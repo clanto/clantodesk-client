@@ -1080,6 +1080,10 @@ pub fn update_from_dmg_as_root(dmg_path: &str, expected_version: &str) -> Result
     let src_app = format!("{}/{}.app", tmp_dir, app_name);
     log::info!("[root-update] DMG extracted to {}", tmp_dir);
     validate_update_tree(Path::new(&src_app), None)?;
+    if let Err(err) = crate::clanto::signature::verify_macos_app(Path::new(&src_app)) {
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        bail!("[root-update] update refused: {}", err);
+    }
 
     // Bind the downloaded asset to the version returned by the update
     // service before changing plists or executing anything from the staged

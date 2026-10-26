@@ -24,6 +24,7 @@ pub mod session_log;
 pub mod settings_lock;
 pub mod temp_password;
 pub mod trusted_controllers;
+pub mod signature;
 pub mod ticket;
 pub mod two_factor_policy;
 pub mod two_factor_store;

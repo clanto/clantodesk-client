@@ -276,6 +276,11 @@ fn update_new_version(update_msi: bool, version: &str, file_path: &PathBuf) {
         "New version is downloaded, update begin, update msi: {update_msi}, version: {version}, file: {:?}",
         file_path.to_str()
     );
+    if let Err(err) = crate::clanto::signature::verify_windows_file(file_path) {
+        log::error!("Update refused: {err}");
+        std::fs::remove_file(file_path).ok();
+        return;
+    }
     if let Some(p) = file_path.to_str() {
         if let Some(session_id) = crate::platform::get_current_process_session_id() {
             if update_msi {
