@@ -5,7 +5,6 @@ use hbb_common::config::Config;
 use serde_derive::Deserialize;
 use sha2::{Digest, Sha256};
 #[cfg(any(
-    target_os = "windows",
     target_os = "macos",
     target_os = "linux",
     target_os = "android",
@@ -22,9 +21,6 @@ use std::{
 };
 
 const CACHE_TTL: Duration = Duration::from_secs(600);
-#[cfg(target_os = "windows")]
-const COLLECT_TIMEOUT: Duration = Duration::from_secs(8);
-#[cfg(not(target_os = "windows"))]
 const COLLECT_TIMEOUT: Duration = Duration::from_secs(3);
 
 static CACHE: Mutex<Option<(Instant, HashMap<String, String>)>> = Mutex::new(None);
@@ -397,64 +393,27 @@ fn platform_name() -> String {
     }
 }
 
+/// Windows: API native (`libs/clanto-win`), niente PowerShell. In un thread a
+/// parte per COM; se supera la scadenza si usa quello che c'è (nulla).
 #[cfg(target_os = "windows")]
 fn collect_platform(posture: &mut HashMap<String, String>, deadline: Instant) {
-    let script = r#"
-$os = Get-CimInstance Win32_OperatingSystem
-Write-Output ("os_version=" + $os.Version)
-Write-Output ("os_build=" + $os.BuildNumber)
-Write-Output ("os_edition=" + $os.Caption)
-$av = @(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct -ErrorAction SilentlyContinue)
-if ($av.Count -gt 0) { $active = @($av | Where-Object { (([int]$_.productState) -band 0x1000) -eq 0x1000 }); Write-Output ("av_enabled=" + $(if ($active.Count -gt 0) {'true'} else {'false'})); $fresh = @($active | Where-Object { (([int]$_.productState) -band 0x10) -eq 0 }); Write-Output ("av_uptodate=" + $(if ($fresh.Count -gt 0) {'true'} else {'false'})); Write-Output ("av_products=" + (($av | ForEach-Object {$_.displayName}) -join '|')) }
-$secureBoot = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -Name UEFISecureBootEnabled -ErrorAction SilentlyContinue
-if ($null -ne $secureBoot) { Write-Output ("secure_boot=" + $(if ($secureBoot -eq 1) {'true'} else {'false'})) }
-$firmware = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control' -Name PEFirmwareType -ErrorAction SilentlyContinue
-if ($firmware -eq 2) { Write-Output 'firmware_type=uefi' } elseif ($firmware -eq 1) { Write-Output 'firmware_type=bios' }
-$au = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update' -Name AUOptions -ErrorAction SilentlyContinue
-if ($null -ne $au) { Write-Output ("auto_update_enabled=" + $(if ($au -ge 3) {'true'} else {'false'})) }
-$reboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
-Write-Output ("pending_reboot=" + $(if ($reboot) {'true'} else {'false'}))
-$uac = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name EnableLUA -ErrorAction SilentlyContinue
-if ($null -ne $uac) { Write-Output ("uac_enabled=" + $(if ($uac -eq 1) {'true'} else {'false'})) }
-$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-Write-Output ("user_is_admin=" + $(if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {'true'} else {'false'}))
-$proxy = Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -Name ProxyEnable -ErrorAction SilentlyContinue
-if ($null -ne $proxy) { Write-Output ("proxy_set=" + $(if ($proxy -eq 1) {'true'} else {'false'})) }
-$fw = @(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName FirewallProduct -ErrorAction SilentlyContinue)
-$publicFw = Get-NetFirewallProfile -Profile Public -ErrorAction SilentlyContinue
-$fwOn = $null
-if ($fw.Count -gt 0) { $fwOn = (@($fw | Where-Object { (([int]$_.productState) -band 0x1000) -eq 0x1000 }).Count -gt 0) }
-if ($null -ne $publicFw) { $pubOn = [bool]$publicFw.Enabled; Write-Output ("firewall_public=" + $(if ($pubOn) {'true'} else {'false'})); $fwOn = [bool]($fwOn -or $pubOn) }
-if ($null -ne $fwOn) { Write-Output ("firewall_enabled=" + $(if ($fwOn) {'true'} else {'false'})) }
-$volume = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction SilentlyContinue
-if ($null -ne $volume) { Write-Output ("disk_encrypted=" + $(if ($volume.ProtectionStatus -eq 'On') {'true'} else {'false'})) }
-$tpm = Get-Tpm -ErrorAction SilentlyContinue
-if ($null -ne $tpm) { if ($tpm.TpmPresent) { Write-Output ("tpm_version=" + $tpm.SpecVersion.Split(',')[0]) } else { Write-Output 'tpm_version=none' } }
-$dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction SilentlyContinue
-if ($null -ne $dg) { Write-Output ("vbs_enabled=" + $(if ($dg.VirtualizationBasedSecurityStatus -eq 2) {'true'} else {'false'})) }
-$computer = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
-if ($null -ne $computer) { $vm = ($computer.Model + ' ' + $computer.Manufacturer) -match 'Virtual|VMware|VirtualBox|KVM|QEMU|Xen'; Write-Output ("is_vm=" + $(if ($vm) {'true'} else {'false'})) }
-$auth = netsh wlan show interfaces 2>$null | Select-String '^\s*Authentication\s*:' | Select-Object -First 1
-if ($null -ne $auth) { $value = ($auth -split ':', 2)[1].Trim().ToLowerInvariant(); if ($value -match 'wpa3') { Write-Output 'wifi_security=wpa3' } elseif ($value -match 'wpa2') { Write-Output 'wifi_security=wpa2' } elseif ($value -match 'wpa') { Write-Output 'wifi_security=wpa' } elseif ($value -match 'wep') { Write-Output 'wifi_security=wep' } elseif ($value -match 'open') { Write-Output 'wifi_security=open' } elseif ($value -match 'enterprise') { Write-Output 'wifi_security=enterprise' } }
-$adapter = Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | Select-Object -First 1
-if ($null -ne $adapter) { if ($adapter.NdisPhysicalMedium -match 'Wireless') { Write-Output 'net_type=wifi' } elseif ($adapter.MediaType -match '802.3|Ethernet') { Write-Output 'net_type=ethernet' } else { Write-Output 'net_type=other' } }
-$vpn = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq 'Up' -and ($_.InterfaceDescription -match 'VPN|TAP|TUN|WireGuard')}
-Write-Output ("vpn_active=" + $(if ($null -ne $vpn) {'true'} else {'false'}))
-$mp = Get-MpComputerStatus -ErrorAction SilentlyContinue
-if ($null -ne $mp -and $null -ne $mp.AntispywareSignatureLastUpdated) { Write-Output ("av_signature_days=" + [math]::Max(0, [math]::Floor(((Get-Date) - $mp.AntispywareSignatureLastUpdated).TotalDays))) }
-$hotfix = Get-HotFix -ErrorAction SilentlyContinue | Where-Object {$null -ne $_.InstalledOn} | Sort-Object InstalledOn -Descending | Select-Object -First 1
-if ($null -ne $hotfix) { Write-Output ("last_update_days=" + [math]::Max(0, [math]::Floor(((Get-Date) - $hotfix.InstalledOn).TotalDays))) }
-$ubr = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name UBR -ErrorAction SilentlyContinue
-if ($null -ne $ubr) { Write-Output ("os_ubr=" + $ubr) }
-$lcu = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\Packages' -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -like 'Package_for_RollupFix*' } | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($null -ne $p -and $p.CurrentState -eq 112 -and $null -ne $p.InstallTimeHigh) { $hi = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$p.InstallTimeHigh), 0); $lo = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$p.InstallTimeLow), 0); [DateTime]::FromFileTimeUtc(([int64]$hi -shl 32) -bor [int64]$lo) } } | Sort-Object -Descending | Select-Object -First 1
-if ($null -eq $lcu) { $lcu = (Get-HotFix -ErrorAction SilentlyContinue | Where-Object { $null -ne $_.InstalledOn -and $_.Description -eq 'Security Update' } | Sort-Object InstalledOn -Descending | Select-Object -First 1).InstalledOn }
-if ($null -ne $lcu) { Write-Output ("os_patch_days=" + [math]::Max(0, [math]::Floor(((Get-Date).ToUniversalTime() - ([DateTime]$lcu).ToUniversalTime()).TotalDays))) }
-"#;
-    if let Some(output) = command_output(
-        deadline,
-        "powershell",
-        &["-NoProfile", "-NonInteractive", "-Command", script],
-    ) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let spawned = std::thread::Builder::new()
+        .name("clanto-posture".to_owned())
+        .spawn(move || {
+            let _ = tx.send(clanto_win::posture::collect());
+        });
+    if spawned.is_err() {
+        return;
+    }
+    let timeout = deadline.saturating_duration_since(Instant::now());
+    if let Ok(pairs) = rx.recv_timeout(timeout) {
+        let output = pairs
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join("
+");
         apply_lines(posture, &output);
     }
 }
@@ -599,7 +558,6 @@ fn collect_platform(posture: &mut HashMap<String, String>, deadline: Instant) {
 fn collect_platform(_posture: &mut HashMap<String, String>, _deadline: Instant) {}
 
 #[cfg(any(
-    target_os = "windows",
     target_os = "macos",
     target_os = "linux",
     target_os = "android",
