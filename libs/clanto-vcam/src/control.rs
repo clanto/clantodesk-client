@@ -136,10 +136,12 @@ pub struct VirtualCamera {
 unsafe impl Send for VirtualCamera {}
 
 impl VirtualCamera {
-    pub fn start(dll: &Path) -> Result<Self, String> {
+    /// `user_writer`: i frame li scrive l'interfaccia dell'utente, non questo
+    /// processo (vedi `Mapping::create`).
+    pub fn start(dll: &Path, user_writer: bool) -> Result<Self, String> {
         let api = init()?;
         register(dll)?;
-        let mapping = Mapping::create()?;
+        let mapping = Mapping::create(user_writer)?;
         let (name, source) = (HSTRING::from(FRIENDLY_NAME), HSTRING::from(CLSID_STR));
         let mut raw: *mut c_void = std::ptr::null_mut();
         let camera = unsafe {

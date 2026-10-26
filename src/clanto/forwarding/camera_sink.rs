@@ -6,7 +6,9 @@
 //!
 //! - Linux: un dispositivo v4l2loopback già presente (non lo installiamo noi).
 //! - Windows 11: camera virtuale di Media Foundation (`libs/clanto-vcam`), con
-//!   ClantoDesk installato (il servizio registra la media source).
+//!   ClantoDesk installato. La crea sempre il servizio (registra la media
+//!   source in HKLM): sull'host direttamente, sul PC del tecnico su richiesta
+//!   IPC dell'interfaccia, che poi scrive i frame nella memoria condivisa.
 //! - macOS 13+: Camera Extension (flutter/macos/CameraExtension), attivata
 //!   dall'utente dalle impostazioni; l'host scrive nel suo stream sink.
 
@@ -56,21 +58,38 @@ fn platform_open(width: usize, height: usize) -> Result<Box<dyn Sink>, String> {
 }
 
 #[cfg(windows)]
-fn platform_open(width: usize, height: usize) -> Result<Box<dyn Sink>, String> {
+fn vcam_dll() -> Result<std::path::PathBuf, String> {
     // La DLL registrata in HKLM è quella della cartella d'installazione (protetta),
     // non quella accanto a un eseguibile qualsiasi.
     if !crate::platform::is_installed() {
         return Err(NO_SINK.to_owned());
     }
     let (_, install_dir, _, _) = crate::platform::windows::get_install_info();
-    let dll = std::path::Path::new(&install_dir).join(clanto_vcam::DLL_NAME);
-    let camera = clanto_vcam::control::VirtualCamera::start(&dll)?;
-    Ok(Box::new(WindowsSink { camera, width, height, buf: Vec::new() }))
+    Ok(std::path::Path::new(&install_dir).join(clanto_vcam::DLL_NAME))
+}
+
+#[cfg(windows)]
+fn platform_open(width: usize, height: usize) -> Result<Box<dyn Sink>, String> {
+    let target = if crate::platform::is_root() {
+        VcamTarget::Own(clanto_vcam::control::VirtualCamera::start(&vcam_dll()?, false)?)
+    } else {
+        vcam_dll()?;
+        VcamTarget::Service(ServiceCamera::open()?)
+    };
+    Ok(Box::new(WindowsSink { target, width, height, buf: Vec::new() }))
+}
+
+#[cfg(windows)]
+enum VcamTarget {
+    /// Questo processo è il servizio: camera e memoria sono sue.
+    Own(clanto_vcam::control::VirtualCamera),
+    /// Interfaccia del tecnico: camera del servizio, frame scritti qui.
+    Service(ServiceCamera),
 }
 
 #[cfg(windows)]
 struct WindowsSink {
-    camera: clanto_vcam::control::VirtualCamera,
+    target: VcamTarget,
     width: usize,
     height: usize,
     buf: Vec<u8>,
@@ -87,11 +106,114 @@ impl Sink for WindowsSink {
             return Err("frame size mismatch".to_owned());
         }
         frame.to_nv12(&mut self.buf);
-        if !self.camera.write(frame.width, frame.height, &self.buf) {
+        let ok = match &self.target {
+            VcamTarget::Own(camera) => camera.write(frame.width, frame.height, &self.buf),
+            VcamTarget::Service(camera) => camera.mapping.view.write(frame.width, frame.height, &self.buf),
+        };
+        if !ok {
             return Err("Unsupported camera format".to_owned());
         }
         Ok(())
     }
+}
+
+#[cfg(windows)]
+const SERVICE_UNAVAILABLE: &str = "The ClantoDesk service did not start the virtual camera";
+
+/// Camera virtuale tenuta dal servizio per l'interfaccia: un thread tiene
+/// aperta la connessione IPC, chiuderla (drop di `stop`) spegne la camera.
+#[cfg(windows)]
+struct ServiceCamera {
+    mapping: clanto_vcam::shared::Mapping,
+    _stop: std::sync::mpsc::Sender<()>,
+}
+
+#[cfg(windows)]
+impl ServiceCamera {
+    fn open() -> Result<Self, String> {
+        use crate::ipc::Data;
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
+        let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
+        std::thread::Builder::new()
+            .name("clanto-vcam-ipc".to_owned())
+            .spawn(move || {
+                let runtime = match hbb_common::tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let _ = ready_tx.send(Err(e.to_string()));
+                        return;
+                    }
+                };
+                runtime.block_on(async move {
+                    let mut conn = match crate::ipc::connect(1000, "").await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            hbb_common::log::warn!("virtual camera: service not reachable: {e}");
+                            let _ = ready_tx.send(Err(SERVICE_UNAVAILABLE.to_owned()));
+                            return;
+                        }
+                    };
+                    if conn.send(&Data::ClantoVcamStart).await.is_err() {
+                        let _ = ready_tx.send(Err(SERVICE_UNAVAILABLE.to_owned()));
+                        return;
+                    }
+                    match conn.next_timeout(15_000).await {
+                        Ok(Some(Data::ClantoVcamStarted(error))) if error.is_empty() => {
+                            let _ = ready_tx.send(Ok(()));
+                        }
+                        Ok(Some(Data::ClantoVcamStarted(error))) => {
+                            let _ = ready_tx.send(Err(error));
+                            return;
+                        }
+                        _ => {
+                            let _ = ready_tx.send(Err(SERVICE_UNAVAILABLE.to_owned()));
+                            return;
+                        }
+                    }
+                    // Fino al drop di ServiceCamera.
+                    let _ = stop_rx.recv();
+                    let _ = conn.send(&Data::ClantoVcamStop).await;
+                });
+            })
+            .map_err(|e| e.to_string())?;
+        ready_rx
+            .recv_timeout(std::time::Duration::from_secs(20))
+            .map_err(|_| SERVICE_UNAVAILABLE.to_owned())??;
+        let mapping = clanto_vcam::shared::Mapping::open_write()?;
+        Ok(Self { mapping, _stop: stop_tx })
+    }
+}
+
+/// Servizio: camera virtuale per l'interfaccia del tecnico, attiva finché la
+/// connessione IPC resta aperta o arriva `ClantoVcamStop`.
+#[cfg(windows)]
+pub async fn serve_ipc(stream: &mut crate::ipc::Connection) {
+    use crate::ipc::Data;
+    use hbb_common::tokio::task::spawn_blocking;
+    let started = spawn_blocking(|| {
+        clanto_vcam::control::VirtualCamera::start(&vcam_dll()?, true)
+    })
+    .await
+    .map_err(|e| e.to_string())
+    .and_then(|r| r);
+    let error = started.as_ref().err().cloned().unwrap_or_default();
+    if !error.is_empty() {
+        hbb_common::log::warn!("virtual camera for the interface: {error}");
+    }
+    let replied = stream.send(&Data::ClantoVcamStarted(error)).await.is_ok();
+    let Ok(camera) = started else {
+        return;
+    };
+    if replied {
+        loop {
+            match stream.next().await {
+                Ok(Some(Data::ClantoVcamStop)) | Ok(None) | Err(_) => break,
+                Ok(Some(_)) => {}
+            }
+        }
+    }
+    // Il drop rimuove la camera: chiamate COM bloccanti, fuori dal runtime.
+    let _ = spawn_blocking(move || drop(camera)).await;
 }
 
 #[cfg(target_os = "macos")]

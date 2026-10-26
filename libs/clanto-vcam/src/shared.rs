@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
-//! La memoria condivisa fra il servizio ClantoDesk (scrive) e il Frame Server
-//! (legge). Lettura solo per LocalService: il flusso è il volto del tecnico.
+//! La memoria condivisa fra chi scrive i frame e il Frame Server (legge).
+//! Scrive il servizio ClantoDesk; quando la camera serve all'interfaccia del
+//! tecnico, il servizio la crea e l'interfaccia (utente interattivo) scrive.
+//! Lettura solo per LocalService: il flusso è un volto.
 
 use crate::{
     frame::{View, SIZE},
@@ -17,7 +19,7 @@ use windows::{
             PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES,
         },
         System::Memory::{
-            CreateFileMappingW, MapViewOfFile, OpenFileMappingW, UnmapViewOfFile, FILE_MAP_ALL_ACCESS, FILE_MAP_READ,
+            CreateFileMappingW, MapViewOfFile, OpenFileMappingW, UnmapViewOfFile, FILE_MAP_ALL_ACCESS, FILE_MAP_READ, FILE_MAP_WRITE,
             MEMORY_MAPPED_VIEW_ADDRESS, PAGE_READWRITE,
         },
     },
@@ -25,6 +27,8 @@ use windows::{
 
 /// SYSTEM e amministratori: tutto; LocalService (Frame Server): lettura.
 const SDDL: &str = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GR;;;LS)";
+/// In più gli utenti interattivi scrivono: è l'interfaccia del tecnico.
+const SDDL_USER_WRITER: &str = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GR;;;LS)(A;;GRGW;;;IU)";
 
 pub struct Mapping {
     handle: HANDLE,
@@ -35,11 +39,13 @@ pub struct Mapping {
 unsafe impl Send for Mapping {}
 
 impl Mapping {
-    /// Lato servizio: crea la memoria condivisa.
-    pub fn create() -> Result<Self, String> {
+    /// Lato servizio: crea la memoria condivisa; `user_writer` la fa scrivere
+    /// anche all'interfaccia dell'utente.
+    pub fn create(user_writer: bool) -> Result<Self, String> {
+        let sddl = if user_writer { SDDL_USER_WRITER } else { SDDL };
         unsafe {
             let mut sd = PSECURITY_DESCRIPTOR::default();
-            ConvertStringSecurityDescriptorToSecurityDescriptorW(&HSTRING::from(SDDL), SDDL_REVISION_1, &mut sd, None)
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(&HSTRING::from(sddl), SDDL_REVISION_1, &mut sd, None)
                 .map_err(|e| format!("security descriptor: {e}"))?;
             let sa = SECURITY_ATTRIBUTES {
                 nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
@@ -67,6 +73,15 @@ impl Mapping {
         unsafe {
             let handle = OpenFileMappingW(FILE_MAP_READ.0, false, &HSTRING::from(MAPPING_NAME)).ok()?;
             Self::map(handle, FILE_MAP_READ.0).ok()
+        }
+    }
+
+    /// Lato interfaccia: apre in scrittura la memoria creata dal servizio.
+    pub fn open_write() -> Result<Self, String> {
+        unsafe {
+            let handle = OpenFileMappingW(FILE_MAP_WRITE.0, false, &HSTRING::from(MAPPING_NAME))
+                .map_err(|e| format!("OpenFileMapping: {e}"))?;
+            Self::map(handle, FILE_MAP_WRITE.0)
         }
     }
 

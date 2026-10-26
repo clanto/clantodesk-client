@@ -423,6 +423,12 @@ pub enum Data {
     /// chiede il consenso e risponde con ClantoCameraResponse.
     ClantoCameraRequest,
     ClantoCameraResponse(bool),
+    /// Clanto, Windows: l'interfaccia del tecnico chiede al servizio la camera
+    /// virtuale (serve l'amministratore); resta attiva finché la connessione
+    /// IPC è aperta o arriva ClantoVcamStop. Risposta: errore, vuoto se attiva.
+    ClantoVcamStart,
+    ClantoVcamStarted(String),
+    ClantoVcamStop,
     #[cfg(windows)]
     SyncWinCpuUsage(Option<f64>),
     FileTransferLog((String, String)),
@@ -1108,6 +1114,8 @@ async fn handle(data: Data, stream: &mut Connection) {
             let t = Config::get_nat_type();
             allow_err!(stream.send(&Data::NatType(Some(t))).await);
         }
+        #[cfg(windows)]
+        Data::ClantoVcamStart => crate::clanto::forwarding::camera_sink::serve_ipc(stream).await,
         Data::SyncConfig(Some(configs)) => {
             let (config, config2) = *configs;
             let _chk = CheckIfRestart::new();

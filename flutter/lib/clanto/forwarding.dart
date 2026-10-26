@@ -16,6 +16,7 @@ import 'package:flutter_hbb/common/widgets/toolbar.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:settings_ui/settings_ui.dart';
+import 'package:window_manager/window_manager.dart';
 
 const String kOptClantoForwardEnabled = 'clanto-forward-enabled';
 const String kOptClantoForwardServicesHost = 'clanto-forward-services-host';
@@ -869,9 +870,16 @@ class _WebcamDialogState extends State<_WebcamDialog> {
 
 /// Gestione connessioni dell'host: il tecnico chiede la webcam di questo PC.
 void clantoCameraConsentDialog(int connId, String peer) {
+  // La finestra di gestione può essere nascosta o dietro ad altre: la
+  // richiesta va in primo piano finché l'utente non risponde.
+  if (isDesktop) {
+    windowOnTop(null);
+    windowManager.setAlwaysOnTop(true);
+  }
   gFFI.dialogManager.show((setState, close, context) {
     void answer(bool accept) {
       bind.cmClantoCameraResponse(id: connId, accept: accept);
+      if (isDesktop) windowManager.setAlwaysOnTop(false);
       close();
     }
 
