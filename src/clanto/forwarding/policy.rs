@@ -21,8 +21,12 @@ pub const OPT_CUSTOM_HOST_TARGETS: &str = "clanto-forward-custom-host-targets";
 pub const OPT_REVERSE: &str = "clanto-forward-reverse";
 pub const OPT_CUSTOM_CONTROLLER: &str = "clanto-forward-custom-controller";
 pub const OPT_CUSTOM_CONTROLLER_TARGETS: &str = "clanto-forward-custom-controller-targets";
-/// Host: accetta la webcam del controller come camera virtuale.
-pub const OPT_CAMERA: &str = "clanto-forward-camera";
+/// Forwarding webcam, separato da quello di rete: va acceso su entrambi i PC.
+pub const OPT_WEBCAM: &str = "clanto-forward-webcam";
+/// Controller: può inviare la propria webcam al PC controllato.
+pub const OPT_WEBCAM_SEND: &str = "clanto-forward-webcam-send";
+/// Controller: può usare la webcam del PC controllato (con il consenso di chi è lì).
+pub const OPT_WEBCAM_RECEIVE: &str = "clanto-forward-webcam-receive";
 /// Host Linux: dispositivo v4l2loopback da usare (vuoto = il primo trovato).
 pub const OPT_CAMERA_DEVICE: &str = "clanto-forward-camera-device";
 
@@ -34,14 +38,19 @@ pub const GPO_KEYS: &[&str] = &[
     OPT_REVERSE,
     OPT_CUSTOM_CONTROLLER,
     OPT_CUSTOM_CONTROLLER_TARGETS,
-    OPT_CAMERA,
+    OPT_WEBCAM,
+    OPT_WEBCAM_SEND,
+    OPT_WEBCAM_RECEIVE,
     OPT_CAMERA_DEVICE,
 ];
 
 pub const DENIED_DISABLED: &str = "Forwarding is disabled on this device";
 pub const DENIED_TARGET: &str = "Forwarding target not allowed";
 pub const DENIED_REVERSE: &str = "Forwarding towards the controller is not allowed on this device";
-pub const DENIED_CAMERA: &str = "Receiving the controller's camera is not allowed on this device";
+pub const DENIED_WEBCAM: &str = "Webcam forwarding is disabled on this device";
+pub const DENIED_WEBCAM_SEND: &str = "Sending this PC's webcam is not allowed on this device";
+pub const DENIED_WEBCAM_RECEIVE: &str = "Using the remote PC's webcam is not allowed on this device";
+pub const DENIED_WEBCAM_CONSENT: &str = "The remote user did not allow the webcam";
 pub const DENIED_PERMISSION: &str = "Forwarding is not allowed for this connection";
 
 fn on(key: &str) -> bool {
@@ -302,13 +311,29 @@ pub fn authorize_listen() -> Result<(), String> {
     Ok(())
 }
 
-/// Host: può ricevere la webcam del controller?
+/// Host: forwarding webcam acceso (ricevere quella del controller, o dare la
+/// propria dopo il consenso).
 pub fn authorize_camera() -> Result<(), String> {
-    if !on(OPT_ENABLED) {
-        return Err(DENIED_DISABLED.to_owned());
+    if !on(OPT_WEBCAM) {
+        return Err(DENIED_WEBCAM.to_owned());
     }
-    if !on(OPT_CAMERA) {
-        return Err(DENIED_CAMERA.to_owned());
+    Ok(())
+}
+
+/// Controller: può inviare la propria webcam?
+pub fn authorize_webcam_send() -> Result<(), String> {
+    authorize_camera()?;
+    if !on(OPT_WEBCAM_SEND) {
+        return Err(DENIED_WEBCAM_SEND.to_owned());
+    }
+    Ok(())
+}
+
+/// Controller: può usare la webcam del PC controllato?
+pub fn authorize_webcam_receive() -> Result<(), String> {
+    authorize_camera()?;
+    if !on(OPT_WEBCAM_RECEIVE) {
+        return Err(DENIED_WEBCAM_RECEIVE.to_owned());
     }
     Ok(())
 }

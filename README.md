@@ -27,7 +27,7 @@ mantenuto come mirror di upstream.
   un catalogo firmato o destinazioni personalizzate ammesse dalla policy;
 - mostrare la webcam del tecnico (anche la fotocamera di un telefono Android o
   di un iPhone) come camera virtuale sul computer assistito, per Teams, Zoom e
-  simili;
+  simili, oppure usare con il consenso la webcam del computer assistito;
 - gestire sessioni, autorizzazioni e configurazioni centralizzate.
 
 Su Android e iOS, i file da inviare vengono scelti con il selettore documenti
@@ -167,11 +167,12 @@ tocchi, scorrimenti e input da tastiera durante una sessione autorizzata; non è
 usato per automazioni autonome. Prima di aprire le impostazioni Android,
 l'applicazione mostra un'informativa separata e richiede un consenso esplicito.
 
-La fotocamera (Android, iOS, macOS e desktop) viene aperta solo quando il
-tecnico avvia «La mia webcam sul PC remoto» nel menu Forwarding e si chiude a
-fine flusso o sessione. Il flusso va soltanto al computer della sessione, che
-lo accetta solo con `clanto-forward-camera` attivo; apertura, rifiuto e
-chiusura finiscono nell'audit dell'host.
+La fotocamera viene aperta solo da un comando esplicito nel menu «Forwarding
+webcam» e si chiude a fine flusso o sessione. La webcam del tecnico arriva al
+PC controllato solo se lì il forwarding webcam è attivo. La webcam del PC
+controllato arriva al tecnico solo dopo il consenso di chi è davanti a quel PC,
+chiesto ogni volta. Richieste, consensi, rifiuti e chiusure finiscono
+nell'audit dell'host.
 
 - [Informativa privacy ClantoDesk](https://supporto.clanto.it/documentazione/privacy-clantodesk/)
 - [Documentazione e supporto](https://supporto.clanto.it/documentazione/)
@@ -339,24 +340,34 @@ Una configurazione non valida applica la sola visualizzazione.
 
 ### Forwarding
 
-Menu «Forwarding» della sessione di controllo remoto, separato dal port forward
-di upstream (che resta spento). Tutto è disattivato di default e gestibile via
-GPO e dal server; ogni lato decide su ciò che espone:
+Due funzioni separate, ciascuna con la propria voce nelle impostazioni
+(«Abilita forwarding rete», «Abilita forwarding webcam») e nel menu ⚡ della
+sessione («Forwarding rete», «Forwarding webcam»), visibile solo se attiva.
+Tutto è disattivato di default e gestibile via GPO e dal server. Il port forward
+di RustDesk (`enable-tunnel`) resta indipendente e spento.
+
+**Forwarding rete.** Ogni lato decide su ciò che espone:
 
 - **porte verso l'host**: il controller ascolta su `127.0.0.1` e l'host si
   collega alla destinazione, se è nel catalogo firmato di Clanto o
   nell'elenco personalizzato dell'host;
 - **porte verso il controller**: l'host ascolta su `127.0.0.1` e il controller
-  raggiunge solo le destinazioni del proprio elenco;
-- **webcam del tecnico**: compare sull'host come «ClantoDesk Camera»
-  (v4l2loopback su Linux, Windows 11 con ClantoDesk installato, macOS 13+ dopo
-  l'attivazione della Camera Extension); il tecnico può usare la webcam del PC
-  o la fotocamera di un telefono Android o di un iPhone.
+  raggiunge solo le destinazioni del proprio elenco.
 
-Se all'ID del controller è assegnato un profilo di permessi, serve anche il
-permesso «Tunnel» del profilo: con «Sola visualizzazione» non si aprono forward
-né si invia la webcam. L'opzione `enable-tunnel` (port forward di RustDesk)
-resta indipendente e spenta.
+**Forwarding webcam.** Va attivato su entrambi i PC. Le webcam arrivano come
+camera virtuale «ClantoDesk Camera»: v4l2loopback su Linux, Windows 11 con
+ClantoDesk installato, macOS 13+ dopo l'attivazione della Camera Extension.
+
+- **Webcam di questo PC verso il PC controllato**: il tecnico dà la propria
+  webcam (anche la fotocamera di un telefono Android o di un iPhone);
+- **Webcam del PC controllato verso questo PC**: il tecnico chiede la webcam
+  del PC controllato; lì compare una richiesta di consenso e, se accettata,
+  il tecnico sceglie quale webcam ricevere. Solo da un desktop (serve una
+  camera virtuale) e verso un host Windows, macOS o Linux.
+
+Se all'ID del controller è assegnato un profilo di permessi, il forwarding rete
+richiede il permesso «Tunnel» e la webcam il permesso «Fotocamera» del profilo:
+con «Sola visualizzazione» non si apre nessuno dei due.
 
 Nessun listener è aperto sulla rete. Ogni canale, listener e flusso webcam,
 concesso o negato, va nell'audit (eventi 61170-61176). Su iOS un forward resta
@@ -509,14 +520,16 @@ L'elenco degli ID è l'opzione upstream `id-whitelist` (GPO `IdWhitelist`).
 
 | Chiave | Valori | Default | Interfaccia | GPO |
 | --- | --- | --- | --- | --- |
-| `clanto-forward-enabled` | `Y`, `N` | `N` | «Abilita il forwarding» (Forwarding) | `ForwardEnabled` |
+| `clanto-forward-enabled` | `Y`, `N` | `N` | «Abilita forwarding rete» (Forwarding) | `ForwardEnabled` |
 | `clanto-forward-catalog` | `Y`, `N` | acceso | «Usa il catalogo servizi Clanto» | `ForwardCatalog` |
 | `clanto-forward-custom-host` | `Y`, `N` | `N` | «Consenti forward personalizzati verso la rete di questo PC» | `ForwardCustomHost` |
 | `clanto-forward-custom-host-targets` | voci `indirizzo:porte` | vuoto | «Destinazioni ammesse dalla parte di questo PC» | `ForwardCustomHostTargets` |
 | `clanto-forward-reverse` | `Y`, `N` | `N` | «Consenti forward verso il controller» | `ForwardReverse` |
 | `clanto-forward-custom-controller` | `Y`, `N` | `N` | «Consenti forward personalizzati dalla rete di questo PC come controller» | `ForwardCustomController` |
 | `clanto-forward-custom-controller-targets` | voci `indirizzo:porte` | vuoto | «Destinazioni ammesse dalla parte del controller» | `ForwardCustomControllerTargets` |
-| `clanto-forward-camera` | `Y`, `N` | `N` | «Consenti la webcam del controller su questo PC» | `ForwardCamera` |
+| `clanto-forward-webcam` | `Y`, `N` | `N` | «Abilita forwarding webcam» (Forwarding) | `ForwardWebcam` |
+| `clanto-forward-webcam-send` | `Y`, `N` | `N` | «Webcam di questo PC verso il PC controllato» | `ForwardWebcamSend` |
+| `clanto-forward-webcam-receive` | `Y`, `N` | `N` | «Webcam del PC controllato verso questo PC» | `ForwardWebcamReceive` |
 | `clanto-forward-camera-device` | percorso, es. `/dev/video10` (Linux) | vuoto = primo v4l2loopback | «Dispositivo della camera virtuale» | `ForwardCameraDevice` |
 
 #### Report

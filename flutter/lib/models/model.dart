@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_hbb/clanto/chat_notification.dart';
+import 'package:flutter_hbb/clanto/forwarding.dart' show clantoCameraConsentDialog;
 import 'package:flutter_hbb/clanto/posture_login_error.dart';
 import 'package:flutter_hbb/clanto/privacy_prompt.dart';
 import 'package:flutter_hbb/common/widgets/peers_view.dart';
@@ -444,6 +445,10 @@ class FfiModel with ChangeNotifier {
                 .changePersonalHashPassword(id.toString(), hash.toString());
           }
         }
+      } else if (name == 'clanto_camera_request') {
+        // Clanto: il tecnico chiede la webcam di questo PC (forwarding.dart).
+        clantoCameraConsentDialog(
+            int.tryParse(evt['id'] ?? '') ?? 0, evt['peer'] ?? '');
       } else if (name == "cm_file_transfer_log") {
         if (isDesktop) {
           gFFI.cmFileModel.onFileTransferLog(evt);

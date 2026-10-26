@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
-//! Host: riceve la webcam del controller e la scrive sulla camera virtuale.
-//! Una sola camera per host: la camera virtuale è una sola. Decodifica in un
+//! Riceve una webcam dal peer e la scrive sulla camera virtuale di questo PC:
+//! sull'host quella del controller, sul controller quella dell'host (dopo il
+//! consenso). Una sola camera virtuale per PC. Camera virtuale e decoder in un
 //! thread proprio, così il ciclo della connessione non aspetta il codec.
 
 use super::{
@@ -10,7 +11,6 @@ use super::{
     engine::{wrap, Out},
     host::{audit, audit_denied, Peer},
     media::{size_ok, Decoder, CODEC_VP8, KIND_CAMERA, MAX_FPS, MAX_FRAME_BYTES},
-    policy,
 };
 use base::message_proto::*;
 use hbb_common::log;
@@ -24,7 +24,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Frame in coda oltre i quali il controller non rispetta il credito.
+/// Chi riceve: una connessione sull'host o una sessione sul controller.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum Key {
+    Host(i32),
+    Controller(u64),
+}
+
+/// Frame in coda oltre i quali il peer non rispetta il credito.
 const MAX_QUEUED: usize = 16;
 
 static BUSY: AtomicBool = AtomicBool::new(false);
@@ -35,7 +42,27 @@ struct Stream {
     out: Out,
 }
 
-static STREAMS: Mutex<Option<HashMap<i32, Stream>>> = Mutex::new(None);
+static STREAMS: Mutex<Option<HashMap<Key, Stream>>> = Mutex::new(None);
+
+/// Stato per l'interfaccia del controller (sull'host lo racconta l'audit).
+#[derive(Clone, Debug, Default, serde_derive::Serialize)]
+pub struct Status {
+    pub state: &'static str,
+    pub message: String,
+    pub sink: String,
+    pub width: usize,
+    pub height: usize,
+}
+
+static STATUS: Mutex<Option<HashMap<Key, Status>>> = Mutex::new(None);
+
+fn set_status(key: Key, status: Status) {
+    STATUS.lock().unwrap().get_or_insert_with(HashMap::new).insert(key, status);
+}
+
+pub fn status(key: Key) -> Option<Status> {
+    STATUS.lock().unwrap().as_ref().and_then(|m| m.get(&key).cloned())
+}
 
 fn reply(out: &Out, stream_id: i32, result: Result<String, String>) {
     let (success, message, sink) = match result {
@@ -69,19 +96,7 @@ impl Busy {
     fn acquire() -> Option<Self> {
         BUSY.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).ok().map(|_| Busy)
     }
-}
 
-impl Drop for Busy {
-    fn drop(&mut self) {
-        BUSY.store(false, Ordering::SeqCst);
-    }
-}
-
-/// Tempo per cui si aspetta che la camera virtuale di un flusso appena chiuso
-/// si liberi (Stop e subito Avvia).
-const BUSY_WAIT: Duration = Duration::from_secs(3);
-
-impl Busy {
     fn acquire_within(wait: Duration) -> Option<Self> {
         let deadline = Instant::now() + wait;
         loop {
@@ -96,6 +111,16 @@ impl Busy {
     }
 }
 
+impl Drop for Busy {
+    fn drop(&mut self) {
+        BUSY.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Tempo per cui si aspetta che la camera virtuale di un flusso appena chiuso
+/// si liberi (Stop e subito Avvia).
+const BUSY_WAIT: Duration = Duration::from_secs(3);
+
 /// Larghezza e altezza dichiarate da un keyframe VP8 (RFC 6386, 9.1), senza
 /// decodificarlo: un peer non può far allocare al decoder immagini enormi.
 fn vp8_keyframe_size(data: &[u8]) -> Option<(usize, usize)> {
@@ -107,17 +132,22 @@ fn vp8_keyframe_size(data: &[u8]) -> Option<(usize, usize)> {
     Some((w as usize, h as usize))
 }
 
-pub fn on_open(peer: &Peer, out: Out, msg: ClantoMediaOpen) {
+/// Un `MediaOpen` dal peer. `authorized` è la decisione del lato (policy,
+/// permessi, consenso); `peer` c'è solo sull'host, per l'audit.
+pub fn on_open(key: Key, peer: Option<&Peer>, authorized: Result<(), String>, out: Out, msg: ClantoMediaOpen) {
     let denied = |reason: String| {
-        log::warn!("controller camera from {} denied: {reason}", peer.id);
-        audit_denied(
-            "clanto_forward_camera_denied",
-            peer,
-            json!({"stream": msg.name, "width": msg.width, "height": msg.height, "fps": msg.fps, "reason": reason}),
-        );
+        log::warn!("incoming camera denied: {reason}");
+        if let Some(peer) = peer {
+            audit_denied(
+                "clanto_forward_camera_denied",
+                peer,
+                json!({"stream": msg.name, "width": msg.width, "height": msg.height, "fps": msg.fps, "reason": reason}),
+            );
+        }
+        set_status(key, Status { state: "error", message: reason.clone(), ..Default::default() });
         reply(&out, msg.stream_id, Err(reason));
     };
-    if let Err(e) = super::host::allowed(peer.conn_id).and_then(|_| policy::authorize_camera()) {
+    if let Err(e) = authorized {
         return denied(e);
     }
     let (w, h) = match validate(&msg) {
@@ -128,16 +158,17 @@ pub fn on_open(peer: &Peer, out: Out, msg: ClantoMediaOpen) {
     {
         let mut guard = STREAMS.lock().unwrap();
         let streams = guard.get_or_insert_with(HashMap::new);
-        if streams.contains_key(&peer.conn_id) {
+        if streams.contains_key(&key) {
             drop(guard);
             return denied("Camera already active in this session".to_owned());
         }
-        streams.insert(peer.conn_id, Stream { stream_id: msg.stream_id, tx, out: out.clone() });
+        streams.insert(key, Stream { stream_id: msg.stream_id, tx, out: out.clone() });
     }
+    set_status(key, Status { state: "starting", width: w, height: h, ..Default::default() });
     // Camera virtuale e decoder in un thread proprio: la creazione (registro,
     // Media Foundation, CoreMediaIO) può richiedere tempo e inizializza COM, e
     // non deve farlo il thread della connessione.
-    let (peer, conn_id, stream_id, fps) = (peer.clone(), peer.conn_id, msg.stream_id, msg.fps);
+    let (peer, stream_id, fps) = (peer.cloned(), msg.stream_id, msg.fps);
     let name = msg.name.chars().take(128).collect::<String>();
     let spawned = std::thread::Builder::new().name("clanto-camera-recv".to_owned()).spawn(move || {
         let opened = Busy::acquire_within(BUSY_WAIT)
@@ -146,52 +177,68 @@ pub fn on_open(peer: &Peer, out: Out, msg: ClantoMediaOpen) {
         let (_busy, sink) = match opened {
             Ok(v) => v,
             Err(reason) => {
-                log::warn!("controller camera from {} denied: {reason}", peer.id);
-                remove_stream(conn_id, stream_id);
-                audit_denied(
-                    "clanto_forward_camera_denied",
-                    &peer,
-                    json!({"stream": name, "width": w, "height": h, "fps": fps, "reason": reason}),
-                );
+                log::warn!("incoming camera denied: {reason}");
+                remove_stream(key, stream_id);
+                if let Some(peer) = &peer {
+                    audit_denied(
+                        "clanto_forward_camera_denied",
+                        peer,
+                        json!({"stream": name, "width": w, "height": h, "fps": fps, "reason": reason}),
+                    );
+                }
+                set_status(key, Status { state: "error", message: reason.clone(), ..Default::default() });
                 reply(&out, stream_id, Err(reason));
                 return;
             }
         };
         let sink_name = sink.name();
-        audit(
-            "clanto_forward_camera_opened",
-            &peer,
-            json!({"stream": name, "width": w, "height": h, "fps": fps, "sink": sink_name}),
-        );
+        if let Some(peer) = &peer {
+            audit(
+                "clanto_forward_camera_opened",
+                peer,
+                json!({"stream": name, "width": w, "height": h, "fps": fps, "sink": sink_name}),
+            );
+        }
+        set_status(key, Status { state: "active", sink: sink_name.clone(), width: w, height: h, ..Default::default() });
         reply(&out, stream_id, Ok(sink_name));
         let started = Instant::now();
         let (frames, error) = receive(rx, sink, (w, h), &out, stream_id);
         if let Some(e) = &error {
-            log::warn!("controller camera from {}: {e}", peer.id);
+            log::warn!("incoming camera: {e}");
             out(wrap(clanto_forward::Union::MediaClose(ClantoMediaClose {
                 stream_id,
                 message: e.clone(),
                 ..Default::default()
             })));
         }
-        remove_stream(conn_id, stream_id);
-        audit(
-            "clanto_forward_camera_closed",
-            &peer,
-            json!({"frames": frames, "seconds": started.elapsed().as_secs(), "reason": error.unwrap_or_default()}),
+        remove_stream(key, stream_id);
+        set_status(
+            key,
+            Status {
+                state: if error.is_some() { "error" } else { "closed" },
+                message: error.clone().unwrap_or_default(),
+                ..Default::default()
+            },
         );
+        if let Some(peer) = &peer {
+            audit(
+                "clanto_forward_camera_closed",
+                peer,
+                json!({"frames": frames, "seconds": started.elapsed().as_secs(), "reason": error.unwrap_or_default()}),
+            );
+        }
     });
     if let Err(e) = spawned {
         log::error!("camera receiver thread: {e}");
-        remove_stream(conn_id, stream_id);
+        remove_stream(key, stream_id);
     }
 }
 
 /// Il flusso può essere già stato sostituito: si toglie solo il proprio.
-fn remove_stream(conn_id: i32, stream_id: i32) {
+fn remove_stream(key: Key, stream_id: i32) {
     if let Some(streams) = STREAMS.lock().unwrap().as_mut() {
-        if streams.get(&conn_id).is_some_and(|s| s.stream_id == stream_id) {
-            streams.remove(&conn_id);
+        if streams.get(&key).is_some_and(|s| s.stream_id == stream_id) {
+            streams.remove(&key);
         }
     }
 }
@@ -251,14 +298,14 @@ fn receive(
     (frames, None)
 }
 
-pub fn on_frame(conn_id: i32, msg: ClantoMediaFrame) {
+pub fn on_frame(key: Key, msg: ClantoMediaFrame) {
     let mut guard = STREAMS.lock().unwrap();
     let Some(streams) = guard.as_mut() else { return };
-    let Some(stream) = streams.get(&conn_id).filter(|s| s.stream_id == msg.stream_id) else {
+    let Some(stream) = streams.get(&key).filter(|s| s.stream_id == msg.stream_id) else {
         return;
     };
     let stream_id = stream.stream_id;
-    // Frame troppo grande, coda piena (il controller ignora il credito) o
+    // Frame troppo grande, coda piena (il peer ignora il credito) o
     // ricevitore finito: il flusso si chiude.
     let rejected = if msg.data.len() > MAX_FRAME_BYTES {
         Some("Camera frame too large")
@@ -268,7 +315,7 @@ pub fn on_frame(conn_id: i32, msg: ClantoMediaFrame) {
         None
     };
     if let Some(reason) = rejected {
-        if let Some(s) = streams.remove(&conn_id) {
+        if let Some(s) = streams.remove(&key) {
             (s.out)(wrap(clanto_forward::Union::MediaClose(ClantoMediaClose {
                 stream_id,
                 message: reason.to_owned(),
@@ -278,26 +325,36 @@ pub fn on_frame(conn_id: i32, msg: ClantoMediaFrame) {
     }
 }
 
-pub fn on_close(conn_id: i32, msg: ClantoMediaClose) {
-    let mut guard = STREAMS.lock().unwrap();
-    if let Some(streams) = guard.as_mut() {
-        if streams.get(&conn_id).is_some_and(|s| s.stream_id == msg.stream_id) {
-            streams.remove(&conn_id);
-        }
+/// Il peer ha chiuso il flusso `stream_id`.
+pub fn on_close(key: Key, stream_id: i32) {
+    remove_stream(key, stream_id);
+}
+
+/// Chiusura da questo lato (Ferma): si avvisa il peer.
+pub fn stop(key: Key) {
+    let stream = STREAMS.lock().unwrap().as_mut().and_then(|s| s.remove(&key));
+    if let Some(s) = stream {
+        (s.out)(wrap(clanto_forward::Union::MediaClose(ClantoMediaClose {
+            stream_id: s.stream_id,
+            ..Default::default()
+        })));
     }
 }
 
-/// Fine della connessione: il ricevitore esce quando la coda si chiude.
-pub fn close(conn_id: i32) {
+/// Fine della connessione o della sessione: il ricevitore esce quando la coda si chiude.
+pub fn close(key: Key) {
     if let Some(streams) = STREAMS.lock().unwrap().as_mut() {
-        streams.remove(&conn_id);
+        streams.remove(&key);
+    }
+    if let Some(status) = STATUS.lock().unwrap().as_mut() {
+        status.remove(&key);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::media::I420;
+    use super::*;
 
     fn open(w: i32, h: i32, fps: i32) -> ClantoMediaOpen {
         ClantoMediaOpen {

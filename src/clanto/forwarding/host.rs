@@ -6,8 +6,10 @@
 //! nell'audit.
 
 use super::{
+    camera_receiver::{self, Key},
     catalog::Direction,
-    engine::{Engine, Hooks, Out, Side, LISTEN_HOST},
+    engine::{wrap, Engine, Hooks, Out, Side, LISTEN_HOST},
+    media::{SendStream, DEFAULT_FPS},
     policy,
 };
 use base::message_proto::*;
@@ -95,17 +97,34 @@ impl Hooks for HostHooks {
     }
 }
 
-/// Permesso di tunnel della connessione (profilo per ID compreso), aggiornato a
-/// ogni messaggio: senza, nessun forward né webcam.
-static ALLOWED: Mutex<Option<HashMap<i32, bool>>> = Mutex::new(None);
+/// Permessi della connessione dal profilo per ID, aggiornati a ogni messaggio:
+/// `forward` (Tunnel) per la rete, `camera` (Fotocamera) per la webcam.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Permissions {
+    pub forward: bool,
+    pub camera: bool,
+}
+
+static ALLOWED: Mutex<Option<HashMap<i32, Permissions>>> = Mutex::new(None);
+
+fn permissions(conn_id: i32) -> Permissions {
+    ALLOWED.lock().unwrap().as_ref().and_then(|m| m.get(&conn_id).copied()).unwrap_or_default()
+}
 
 pub(super) fn allowed(conn_id: i32) -> Result<(), String> {
-    let ok = ALLOWED.lock().unwrap().as_ref().and_then(|m| m.get(&conn_id).copied()).unwrap_or(false);
-    if ok {
+    if permissions(conn_id).forward {
         Ok(())
     } else {
         Err(policy::DENIED_PERMISSION.to_owned())
     }
+}
+
+/// Webcam (in entrambi i sensi): permesso del profilo e forwarding webcam acceso.
+fn camera_allowed(conn_id: i32) -> Result<(), String> {
+    if !permissions(conn_id).camera {
+        return Err(policy::DENIED_PERMISSION.to_owned());
+    }
+    policy::authorize_camera()
 }
 
 /// Eventi di rifiuto per connessione e minuto: oltre, solo log (un peer non
@@ -132,25 +151,111 @@ pub(super) fn audit_denied(kind: &str, peer: &Peer, extra: serde_json::Value) {
 
 static ENGINES: Mutex<Option<HashMap<i32, Arc<Engine>>>> = Mutex::new(None);
 
+/// Webcam dell'host verso il controller: richiesta in attesa di consenso,
+/// consenso dato (vale per la sessione) e flusso in uscita.
+struct Share {
+    pending: Option<(i32, Out, Instant)>,
+    granted: bool,
+    sender: Option<SendStream>,
+}
+
+static SHARES: Mutex<Option<HashMap<i32, Share>>> = Mutex::new(None);
+/// Senza risposta entro questo tempo la richiesta è negata.
+const CONSENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+fn with_share<R>(conn_id: i32, f: impl FnOnce(&mut Share) -> R) -> R {
+    let mut guard = SHARES.lock().unwrap();
+    let share = guard
+        .get_or_insert_with(HashMap::new)
+        .entry(conn_id)
+        .or_insert(Share { pending: None, granted: false, sender: None });
+    f(share)
+}
+
+fn grant(out: &Out, request_id: i32, result: Result<Vec<ClantoCameraInfo>, String>) {
+    let (accepted, message, cameras) = match result {
+        Ok(cameras) => (true, String::new(), cameras),
+        Err(e) => (false, e, Vec::new()),
+    };
+    out(wrap(clanto_forward::Union::CameraGrant(ClantoCameraGrant {
+        request_id,
+        accepted,
+        message,
+        cameras,
+        ..Default::default()
+    })));
+}
+
+/// Cosa deve fare la connessione dopo un messaggio.
+pub enum Action {
+    None,
+    /// Chiedere all'utente dell'host il consenso alla webcam (finestra di gestione).
+    AskCameraConsent,
+}
+
 /// Messaggio `ClantoForward` da una connessione autorizzata. `tx` è il canale
-/// della connessione verso il peer; `allowed` = permesso di tunnel della connessione.
+/// della connessione verso il peer.
 pub fn on_message(
     peer: Peer,
-    allowed: bool,
+    perms: Permissions,
     tx: &hbb_common::tokio::sync::mpsc::UnboundedSender<(Instant, Arc<Message>)>,
     msg: ClantoForward,
-) {
-    ALLOWED.lock().unwrap().get_or_insert_with(HashMap::new).insert(peer.conn_id, allowed);
+) -> Action {
+    ALLOWED.lock().unwrap().get_or_insert_with(HashMap::new).insert(peer.conn_id, perms);
     let media_out = || -> Out {
         let tx = tx.clone();
         Arc::new(move |m: Message| {
             tx.send((Instant::now(), Arc::new(m))).ok();
         })
     };
+    let key = Key::Host(peer.conn_id);
+    // Id dispari: flussi del controller (webcam ricevuta); pari: dell'host.
+    let from_controller = |id: i32| id % 2 != 0;
     let msg = match msg.union {
-        Some(clanto_forward::Union::MediaOpen(m)) => return super::camera_host::on_open(&peer, media_out(), m),
-        Some(clanto_forward::Union::MediaFrame(m)) => return super::camera_host::on_frame(peer.conn_id, m),
-        Some(clanto_forward::Union::MediaClose(m)) => return super::camera_host::on_close(peer.conn_id, m),
+        Some(clanto_forward::Union::MediaOpen(m)) if from_controller(m.stream_id) => {
+            camera_receiver::on_open(key, Some(&peer), camera_allowed(peer.conn_id), media_out(), m);
+            return Action::None;
+        }
+        Some(clanto_forward::Union::MediaFrame(m)) if from_controller(m.stream_id) => {
+            camera_receiver::on_frame(key, m);
+            return Action::None;
+        }
+        Some(clanto_forward::Union::MediaClose(m)) => {
+            if from_controller(m.stream_id) {
+                camera_receiver::on_close(key, m.stream_id);
+            } else {
+                with_share(peer.conn_id, |s| {
+                    if s.sender.as_ref().is_some_and(|x| x.stream_id == m.stream_id) {
+                        if let Some(sender) = s.sender.take() {
+                            sender.on_close(&m);
+                        }
+                    }
+                });
+            }
+            return Action::None;
+        }
+        Some(clanto_forward::Union::MediaOpened(m)) => {
+            with_share(peer.conn_id, |s| {
+                if let Some(sender) = s.sender.as_ref().filter(|x| x.stream_id == m.stream_id) {
+                    sender.on_opened(&m);
+                }
+            });
+            return Action::None;
+        }
+        Some(clanto_forward::Union::MediaAck(m)) => {
+            with_share(peer.conn_id, |s| {
+                if let Some(sender) = s.sender.as_ref().filter(|x| x.stream_id == m.stream_id) {
+                    sender.on_ack(&m);
+                }
+            });
+            return Action::None;
+        }
+        Some(clanto_forward::Union::CameraRequest(r)) => return on_camera_request(&peer, media_out(), r),
+        Some(clanto_forward::Union::CameraPull(p)) => {
+            on_camera_pull(&peer, media_out(), p);
+            return Action::None;
+        }
+        Some(clanto_forward::Union::MediaOpen(_) | clanto_forward::Union::MediaFrame(_)) => return Action::None,
         union => ClantoForward { union, ..Default::default() },
     };
     let engine = {
@@ -168,11 +273,119 @@ pub fn on_message(
             .clone()
     };
     engine.on_message(msg);
+    Action::None
 }
 
-/// Chiusura della connessione: chiude canali e listener.
+fn on_camera_request(peer: &Peer, out: Out, req: ClantoCameraRequest) -> Action {
+    if let Err(e) = camera_allowed(peer.conn_id) {
+        audit_denied("clanto_forward_camera_denied", peer, json!({"direction": "to_controller", "reason": e}));
+        grant(&out, req.request_id, Err(e));
+        return Action::None;
+    }
+    // Telefoni come host: la cattura nativa parte dall'interfaccia, non da qui.
+    if cfg!(any(target_os = "android", target_os = "ios")) {
+        grant(&out, req.request_id, Err("Not supported on this device".to_owned()));
+        return Action::None;
+    }
+    if with_share(peer.conn_id, |s| s.granted) {
+        let cameras = camera_list();
+        grant(&out, req.request_id, cameras);
+        return Action::None;
+    }
+    with_share(peer.conn_id, |s| s.pending = Some((req.request_id, out, Instant::now())));
+    // Nessuna risposta: negata dopo il timeout.
+    let conn_id = peer.conn_id;
+    std::thread::spawn(move || {
+        std::thread::sleep(CONSENT_TIMEOUT);
+        let expired = with_share(conn_id, |s| {
+            let stale = s.pending.as_ref().is_some_and(|p| p.0 == req.request_id && p.2.elapsed() >= CONSENT_TIMEOUT);
+            if stale {
+                s.pending.take()
+            } else {
+                None
+            }
+        });
+        if let Some((request_id, out, _)) = expired {
+            grant(&out, request_id, Err(policy::DENIED_WEBCAM_CONSENT.to_owned()));
+        }
+    });
+    Action::AskCameraConsent
+}
+
+fn camera_list() -> Result<Vec<ClantoCameraInfo>, String> {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Ok(super::camera_capture::list()?
+            .into_iter()
+            .map(|c| ClantoCameraInfo { index: c.index as i32, name: c.name, ..Default::default() })
+            .collect())
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    Err("Not supported on this device".to_owned())
+}
+
+/// Risposta dell'utente dell'host (finestra di gestione) alla richiesta webcam.
+pub fn camera_consent(conn_id: i32, peer: &Peer, accepted: bool) {
+    let pending = with_share(conn_id, |s| {
+        let p = s.pending.take();
+        if p.is_some() && accepted {
+            s.granted = true;
+        }
+        p
+    });
+    let Some((request_id, out, _)) = pending else { return };
+    if accepted {
+        audit("clanto_forward_camera_opened", peer, json!({"direction": "to_controller", "consent": true}));
+        grant(&out, request_id, camera_list());
+    } else {
+        audit_denied(
+            "clanto_forward_camera_denied",
+            peer,
+            json!({"direction": "to_controller", "reason": policy::DENIED_WEBCAM_CONSENT}),
+        );
+        grant(&out, request_id, Err(policy::DENIED_WEBCAM_CONSENT.to_owned()));
+    }
+}
+
+fn on_camera_pull(peer: &Peer, out: Out, pull: ClantoCameraPull) {
+    let refuse = |out: &Out, e: String| {
+        out(wrap(clanto_forward::Union::MediaClose(ClantoMediaClose {
+            stream_id: pull.stream_id,
+            message: e,
+            ..Default::default()
+        })));
+    };
+    if let Err(e) = camera_allowed(peer.conn_id) {
+        return refuse(&out, e);
+    }
+    if !with_share(peer.conn_id, |s| s.granted) {
+        return refuse(&out, policy::DENIED_WEBCAM_CONSENT.to_owned());
+    }
+    if pull.stream_id <= 0 || pull.stream_id % 2 != 0 || pull.index < 0 {
+        return refuse(&out, "Invalid camera".to_owned());
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let index = pull.index as u32;
+        audit(
+            "clanto_forward_camera_opened",
+            peer,
+            json!({"direction": "to_controller", "camera": index}),
+        );
+        let factory = Box::new(move || super::camera_capture::open(index));
+        let sender = SendStream::start(pull.stream_id, DEFAULT_FPS, factory, out);
+        let previous = with_share(peer.conn_id, |s| s.sender.replace(sender));
+        drop(previous);
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    refuse(&out, "Not supported on this device".to_owned());
+}
+
+/// Chiusura della connessione: chiude canali, listener e webcam.
 pub fn close(conn_id: i32) {
-    super::camera_host::close(conn_id);
+    camera_receiver::close(Key::Host(conn_id));
+    let share = SHARES.lock().unwrap().as_mut().and_then(|m| m.remove(&conn_id));
+    drop(share);
     if let Some(m) = ALLOWED.lock().unwrap().as_mut() {
         m.remove(&conn_id);
     }

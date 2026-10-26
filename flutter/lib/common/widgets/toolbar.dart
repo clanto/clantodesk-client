@@ -467,11 +467,6 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     );
     v.add(
       TTextMenu(
-          child: Text(translate('View camera')),
-          onPressed: () => connectWithToken(isViewCamera: true)),
-    );
-    v.add(
-      TTextMenu(
           child: Text('${translate('Terminal')} (beta)'),
           onPressed: () => connectWithToken(isTerminal: true)),
     );
@@ -481,9 +476,9 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
           onPressed: () => connectWithToken(isTcpTunneling: true)),
     );
   }
-  // Clanto: Forwarding anche da telefono (porte e fotocamera come webcam).
+  // Clanto: Forwarding rete e Forwarding webcam, separati e solo se attivi qui.
   if (isDefaultConn) {
-    v.add(clantoForwardingMenu(context, ffi));
+    v.addAll(clantoForwardingMenus(context, ffi));
   }
   // note
   if (isDefaultConn && !bind.isDisableAccount()) {

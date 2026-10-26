@@ -419,6 +419,10 @@ pub enum Data {
     StartVoiceCall,
     VoiceCallResponse(bool),
     CloseVoiceCall(String),
+    /// Clanto: il controller chiede la webcam di questo PC; la finestra di gestione
+    /// chiede il consenso e risponde con ClantoCameraResponse.
+    ClantoCameraRequest,
+    ClantoCameraResponse(bool),
     #[cfg(windows)]
     SyncWinCpuUsage(Option<f64>),
     FileTransferLog((String, String)),

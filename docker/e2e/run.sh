@@ -208,12 +208,21 @@ expect_cam() { # descrizione atteso(prefisso) utente frame
   if [ "${got#"$2"}" != "$got" ]; then PASS=$((PASS+1)); echo "  OK    $1 -> $got"
   else FAIL=$((FAIL+1)); echo "  FAIL  $1 -> atteso '$2...', ottenuto '$got'"; fi
 }
-expect_cam "20 webcam non consentita dall'host" "error:Receiving the controller's camera is not allowed" tech1 10
-hopt clanto-forward-camera Y
+expect_cam "20 forwarding webcam spento sull'host" "error:Webcam forwarding is disabled on this device" tech1 10
+hopt clanto-forward-webcam Y
 hopt clanto-forward-camera-device /dev/null
 expect_cam "21 dispositivo che non è v4l2loopback" "error:/dev/null is not a v4l2loopback device" tech1 10
 hopt clanto-forward-camera-device ""
 expect_cam "22 webcam decodificata dall'host" "ok frames=" tech1 45
+expect_ask() { # descrizione atteso modo
+  local got; got="$(ctrl tech1 camera-ask "$HOST_ID" "$PASSWORD" "$3" 2>/dev/null | sed -n 's/^RESULT=//p')"
+  if [ "$got" = "$2" ]; then PASS=$((PASS+1)); echo "  OK    $1 -> $got"
+  else FAIL=$((FAIL+1)); echo "  FAIL  $1 -> atteso $2, ottenuto '$got'"; fi
+}
+hopt clanto-forward-webcam N
+expect_ask "23 webcam dell'host chiesta con forwarding webcam spento" "denied:Webcam forwarding is disabled on this device" request
+hopt clanto-forward-webcam Y
+expect_ask "24 webcam dell'host scelta senza consenso" "closed:The remote user did not allow the webcam" pull
 
 echo
 echo "E2E 2FA, forwarding e webcam: $PASS superati, $FAIL falliti"

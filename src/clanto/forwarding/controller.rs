@@ -15,6 +15,7 @@ use super::{
     camera_capture,
     catalog::{self, Direction},
     engine::{Engine, Hooks, Out, Side, LISTEN_HOST},
+    camera_receiver::{self, Key},
     media::{SendInfo, SendStream, DEFAULT_FPS},
     policy,
 };
@@ -77,6 +78,26 @@ struct SessionState {
     forwards: Arc<Mutex<Forwards>>,
     out: Out,
     camera: Option<SendStream>,
+    remote: RemoteCamera,
+}
+
+/// Webcam del PC controllato verso questo PC: richiesta, consenso e flusso.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct RemoteCamera {
+    /// "none", "pending", "granted", "denied".
+    pub request: &'static str,
+    pub message: String,
+    pub cameras: Vec<RemoteCameraInfo>,
+    #[serde(skip)]
+    request_id: i32,
+    #[serde(skip)]
+    stream_id: Option<i32>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RemoteCameraInfo {
+    pub index: i32,
+    pub name: String,
 }
 
 struct ControllerHooks {
@@ -151,17 +172,59 @@ fn session(key: u64, sender: &UnboundedSender<Data>) -> Option<(Arc<Engine>, Arc
             out.clone(),
             Arc::new(ControllerHooks { forwards: forwards.clone() }),
         );
-        SessionState { engine, forwards, out, camera: None }
+        SessionState { engine, forwards, out, camera: None, remote: RemoteCamera { request: "none", ..Default::default() } }
     });
     Some((state.engine.clone(), state.forwards.clone()))
 }
 
 /// Messaggio `ClantoForward` dall'host (hook in `io_loop`).
 pub fn on_message(key: u64, sender: &UnboundedSender<Data>, msg: ClantoForward) {
+    // Id pari: flussi dell'host (la sua webcam verso di noi); dispari: i nostri.
+    let from_host = |id: i32| id > 0 && id % 2 == 0;
+    let rkey = Key::Controller(key);
     let msg = match msg.union {
         Some(clanto_forward::Union::MediaOpened(m)) => return with_camera(key, |c| c.on_opened(&m)),
         Some(clanto_forward::Union::MediaAck(m)) => return with_camera(key, |c| c.on_ack(&m)),
+        Some(clanto_forward::Union::MediaClose(m)) if from_host(m.stream_id) => {
+            camera_receiver::on_close(rkey, m.stream_id);
+            with_remote(key, |r| {
+                if r.stream_id == Some(m.stream_id) {
+                    r.stream_id = None;
+                    r.message = m.message.clone();
+                }
+            });
+            return;
+        }
         Some(clanto_forward::Union::MediaClose(m)) => return with_camera(key, |c| c.on_close(&m)),
+        Some(clanto_forward::Union::MediaOpen(m)) if from_host(m.stream_id) => {
+            // Solo il flusso chiesto da noi, con l'opzione ancora accesa.
+            let expected = with_remote(key, |r| r.stream_id == Some(m.stream_id)).unwrap_or(false);
+            let authorized = policy::authorize_webcam_receive()
+                .and_then(|_| if expected { Ok(()) } else { Err("Unexpected camera stream".to_owned()) });
+            let Some(out) = session_out(key) else { return };
+            camera_receiver::on_open(rkey, None, authorized, out, m);
+            return;
+        }
+        Some(clanto_forward::Union::MediaFrame(m)) if from_host(m.stream_id) => {
+            camera_receiver::on_frame(rkey, m);
+            return;
+        }
+        Some(clanto_forward::Union::CameraGrant(g)) => {
+            with_remote(key, |r| {
+                if r.request_id == g.request_id {
+                    r.request = if g.accepted { "granted" } else { "denied" };
+                    r.message = g.message.clone();
+                    r.cameras = g
+                        .cameras
+                        .iter()
+                        .map(|c| RemoteCameraInfo { index: c.index, name: c.name.chars().take(128).collect() })
+                        .take(16)
+                        .collect();
+                }
+            });
+            return;
+        }
+        Some(clanto_forward::Union::MediaOpen(_) | clanto_forward::Union::MediaFrame(_)) => return,
         union => ClantoForward { union, ..Default::default() },
     };
     let Some((engine, _)) = session(key, sender) else { return };
@@ -172,6 +235,7 @@ pub fn on_message(key: u64, sender: &UnboundedSender<Data>, msg: ClantoForward) 
 /// Fine della sessione: chiude canali e listener locali.
 pub fn close(key: u64) {
     CLOSED.lock().unwrap().get_or_insert_with(Default::default).insert(key);
+    camera_receiver::close(Key::Controller(key));
     let state = SESSIONS.lock().unwrap().as_mut().and_then(|s| s.remove(&key));
     if let Some(state) = state {
         drop(state.camera);
@@ -353,9 +417,7 @@ pub fn cameras() -> Result<Vec<camera_capture::CameraInfo>, String> {
 /// Invia la webcam `index` all'host come camera virtuale. Sostituisce quella
 /// già attiva nella sessione.
 pub fn camera_start(key: u64, sender: &UnboundedSender<Data>, index: u32) -> Result<(), String> {
-    if hbb_common::config::Config::get_option(policy::OPT_ENABLED) != "Y" {
-        return Err(policy::DENIED_DISABLED.to_owned());
-    }
+    policy::authorize_webcam_send()?;
     #[cfg(any(target_os = "android", target_os = "ios"))]
     camera_capture::prepare();
     session(key, sender).ok_or("Session closed")?;
@@ -386,4 +448,78 @@ pub fn camera_status(key: u64) -> Option<SendInfo> {
     let camera = sessions.as_ref()?.get(&key)?.camera.as_ref()?;
     let info = camera.info.lock().unwrap().clone();
     Some(info)
+}
+
+fn with_remote<R>(key: u64, f: impl FnOnce(&mut RemoteCamera) -> R) -> Option<R> {
+    let mut sessions = SESSIONS.lock().unwrap();
+    sessions.as_mut()?.get_mut(&key).map(|s| f(&mut s.remote))
+}
+
+fn session_out(key: u64) -> Option<Out> {
+    SESSIONS.lock().unwrap().as_ref()?.get(&key).map(|s| s.out.clone())
+}
+
+/// Id dei flussi chiesti all'host: pari, nuovi a ogni avvio.
+static NEXT_REMOTE_STREAM: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(2);
+static NEXT_REQUEST: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(1);
+
+/// Chiede al PC controllato di usare la sua webcam: lì compare la richiesta di consenso.
+pub fn camera_request(key: u64, sender: &UnboundedSender<Data>) -> Result<(), String> {
+    policy::authorize_webcam_receive()?;
+    let (engine, _) = session(key, sender).ok_or("Session closed")?;
+    let request_id = NEXT_REQUEST.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    with_remote(key, |r| {
+        r.request = "pending";
+        r.message.clear();
+        r.cameras.clear();
+        r.request_id = request_id;
+    });
+    let _guard = runtime().enter();
+    engine.send(clanto_forward::Union::CameraRequest(ClantoCameraRequest { request_id, ..Default::default() }));
+    Ok(())
+}
+
+/// Dopo il consenso: riceve la webcam `index` del PC controllato sulla camera
+/// virtuale di questo PC.
+pub fn remote_camera_start(key: u64, index: i32) -> Result<(), String> {
+    policy::authorize_webcam_receive()?;
+    let granted = with_remote(key, |r| r.request == "granted").ok_or("Session closed")?;
+    if !granted {
+        return Err(policy::DENIED_WEBCAM_CONSENT.to_owned());
+    }
+    camera_receiver::stop(Key::Controller(key));
+    let stream_id = NEXT_REMOTE_STREAM.fetch_add(2, std::sync::atomic::Ordering::SeqCst);
+    with_remote(key, |r| {
+        r.stream_id = Some(stream_id);
+        r.message.clear();
+    });
+    let engine = SESSIONS
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|s| s.get(&key))
+        .map(|s| s.engine.clone())
+        .ok_or("Session closed")?;
+    let _guard = runtime().enter();
+    engine.send(clanto_forward::Union::CameraPull(ClantoCameraPull { stream_id, index, ..Default::default() }));
+    Ok(())
+}
+
+pub fn remote_camera_stop(key: u64) {
+    camera_receiver::stop(Key::Controller(key));
+    with_remote(key, |r| r.stream_id = None);
+}
+
+/// Stato della webcam del PC controllato per l'interfaccia.
+#[derive(Serialize)]
+pub struct RemoteCameraStatus {
+    #[serde(flatten)]
+    pub remote: RemoteCamera,
+    pub receiver: Option<camera_receiver::Status>,
+}
+
+pub fn remote_camera_status(key: u64) -> Option<RemoteCameraStatus> {
+    let remote = with_remote(key, |r| r.clone())?;
+    let receiver = camera_receiver::status(Key::Controller(key));
+    Some(RemoteCameraStatus { remote, receiver })
 }

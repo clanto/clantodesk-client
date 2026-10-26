@@ -605,10 +605,10 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
   listen_id). Nessun listener è mai aperto sulla rete, solo in loopback; sull'host solo porta libera
   scelta dal sistema o ≥ 1024. Eliminare un forward chiude anche le connessioni già aperte.
 - **Permesso della connessione.** Se all'ID del controller è assegnato un profilo di permessi, l'host
-  accetta canali, listener e webcam solo se il profilo concede «Tunnel»: un profilo «Sola
-  visualizzazione» non apre forward. Non conta l'opzione globale `enable-tunnel`, che è il port
+  accetta canali e listener solo se il profilo concede «Tunnel», e la webcam (nei due sensi) solo se
+  concede «Fotocamera»: un profilo «Sola visualizzazione» non apre né l'una né l'altra. Non conta l'opzione globale `enable-tunnel`, che è il port
   forward di upstream (spento di default). Il valore arriva con ogni messaggio
-  (`clanto_forward_profile` in `connection.rs`, `host::on_message`).
+  (`clanto_forward_profile` e `clanto_camera_profile` in `connection.rs`, `host::Permissions`).
 - **Policy** (`policy.rs`, tutte gestibili via GPO, protette dalla `strategy` del server). Ogni lato
   decide solo su ciò che espone:
   - `clanto-forward-enabled` (master, spento) su ogni PC;
@@ -627,15 +627,26 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
   `api/forward-catalog.example.json`); la chiave privata resta a Clanto, mai nel repo. La scadenza
   vale anche per la copia in cache: se l'aggiornamento non riesce più, dopo `expires` il catalogo è
   vuoto. Un solo aggiornamento alla volta.
-- **Webcam del controller** (`media.rs`, `camera_capture.rs`, `camera_host.rs`, `camera_sink.rs`).
-  Il tecnico invia la propria webcam all'host, dove compare come camera virtuale per Teams, Zoom e
-  simili. Messaggi `ClantoMedia*` dentro `ClantoForward` (campi 5-9). Il controller cattura con
-  nokhwa (Media Foundation, V4L2, AVFoundation; formato più grande fino a 1280x720), codifica in VP8
-  con il codec di scrap e tiene al massimo 3 frame non confermati: se il collegamento rallenta salta
-  i frame prima di codificarli, un errore di decodifica sull'host chiede un keyframe. L'host decodifica
-  in un thread proprio; una sola camera per host.
-  - Host: `clanto-forward-camera` (spento) e, su Linux, `clanto-forward-camera-device`. Controller:
-    serve `clanto-forward-enabled`; la webcam parte solo dal comando «Avvia» nel dialogo Forwarding.
+- **Forwarding webcam** (`media.rs`, `camera_capture.rs`, `camera_receiver.rs`, `camera_sink.rs`),
+  separato dal forwarding rete: opzione propria `clanto-forward-webcam` (spenta, va accesa su
+  entrambi i PC) e menu ⚡ «Forwarding webcam» (`forwarding.dart`, `_WebcamDialog`). Due modalità:
+  - **Dare la propria webcam** (`clanto-forward-webcam-send` sul tecnico): il controller cattura e
+    invia, l'host la mostra come camera virtuale. Flussi con id dispari.
+  - **Usare la webcam del PC controllato** (`clanto-forward-webcam-receive` sul tecnico, solo
+    desktop): `ClantoCameraRequest` (campo 10) → l'host passa la richiesta alla finestra di
+    gestione (`ipc::Data::ClantoCameraRequest`, evento `clanto_camera_request`, dialogo
+    `clantoCameraConsentDialog`); senza risposta entro 60 s è negata. Con il consenso
+    `ClantoCameraGrant` (11) porta l'elenco delle webcam dell'host, il tecnico sceglie e
+    `ClantoCameraPull` (12) avvia l'invio dall'host (flussi con id pari) verso la camera virtuale
+    del controller. Il consenso vale per la sessione. Host Android e iOS: non supportato (nessuna
+    richiesta all'utente).
+  Messaggi `ClantoMedia*` dentro `ClantoForward` (campi 5-9). La cattura usa nokhwa (Media
+  Foundation, V4L2, AVFoundation; formato più grande fino a 1280x720), codifica VP8 con il codec di
+  scrap e al massimo 3 frame non confermati: se il collegamento rallenta salta i frame prima di
+  codificarli, un errore di decodifica chiede un keyframe. Chi riceve (`camera_receiver`, chiave
+  `Host(conn)` o `Controller(sessione)`) decodifica in un thread proprio; una sola camera virtuale per
+  PC. Il menu «View camera» di RustDesk è tolto dall'interfaccia del controller.
+  - Linux: `clanto-forward-camera-device` sceglie il dispositivo v4l2loopback.
   - Linux: scrive in YUYV su un dispositivo v4l2loopback già presente (non lo installiamo).
     Il Flatpak concede solo `--device=dri`: per la webcam (invio o ricezione) l'amministratore la
     abilita in modo esplicito con `flatpak override --device=all it.clanto.clantodesk`; di default
@@ -675,7 +686,7 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
     del frame (`cargo test -p clanto-vcam`), type-check dei crate Windows per
     `x86_64-pc-windows-msvc`. La camera virtuale di Windows va provata su un PC Windows 11 reale.
 - **Audit**: 61170 canale aperto, 61171 canale negato, 61172 listener aperto, 61173 listener negato,
-  61174 webcam del controller aperta, 61175 negata, 61176 chiusa (frame e durata). Gli eventi di
+  61174 webcam aperta o consenso dato, 61175 negata (anche consenso rifiutato), 61176 chiusa (frame e durata); il campo `direction` vale `to_controller` per la webcam dell'host. Gli eventi di
   rifiuto sono limitati a 30 al minuto per connessione; oltre, solo nel log.
 - **Robustezza webcam.** L'host crea la camera virtuale e decodifica in un thread proprio, mai in
   quello della connessione; legge le dimensioni del keyframe VP8 prima di decodificarlo e scarta

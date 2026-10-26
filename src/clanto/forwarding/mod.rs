@@ -12,7 +12,7 @@ pub mod camera_capture;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 #[path = "camera_capture_mobile.rs"]
 pub mod camera_capture;
-pub mod camera_host;
+pub mod camera_receiver;
 pub mod camera_sink;
 pub mod catalog;
 pub mod controller;

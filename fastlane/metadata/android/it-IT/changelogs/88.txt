@@ -1,0 +1,6 @@
+- Basato su RustDesk 1.5.0, con le sue correzioni di stabilità e audio.
+- Richiede Android 7.0 o successivo.
+- Credenziali cifrate con una chiave nell'Android Keystore; password locale facoltativa per le impostazioni.
+- Filigrana con tecnico, ora e codice sessione se il PC remoto la richiede.
+- Modalità privacy proposta all'ingresso in un PC; disattivabile.
+- Menu Forwarding rete e Forwarding webcam: porte nei due sensi e fotocamera del telefono come webcam sul PC remoto.

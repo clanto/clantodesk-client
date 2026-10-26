@@ -49,7 +49,9 @@ pub const SERVER_PROTECTED_KEYS: &[&str] = &[
     "clanto-forward-reverse",
     "clanto-forward-custom-controller",
     "clanto-forward-custom-controller-targets",
-    "clanto-forward-camera",
+    "clanto-forward-webcam",
+    "clanto-forward-webcam-send",
+    "clanto-forward-webcam-receive",
     "clanto-forward-camera-device",
 ];
 

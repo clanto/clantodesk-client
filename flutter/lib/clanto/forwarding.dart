@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
-// Forwarding Clanto (src/clanto/forwarding): impostazioni della policy e
-// gestione dei forward di una sessione. Il port forward di upstream resta a parte.
+// Forwarding Clanto (src/clanto/forwarding): impostazioni e menu della sessione.
+// Due funzioni separate: Forwarding rete (porte) e Forwarding webcam. Il port
+// forward di upstream resta a parte.
 
 import 'dart:async';
 import 'dart:convert';
@@ -26,12 +27,18 @@ const String kOptClantoForwardCustomController =
     'clanto-forward-custom-controller';
 const String kOptClantoForwardCustomControllerTargets =
     'clanto-forward-custom-controller-targets';
-const String kOptClantoForwardCamera = 'clanto-forward-camera';
+const String kOptClantoForwardWebcam = 'clanto-forward-webcam';
+const String kOptClantoForwardWebcamSend = 'clanto-forward-webcam-send';
+const String kOptClantoForwardWebcamReceive = 'clanto-forward-webcam-receive';
 const String kOptClantoForwardCameraDevice = 'clanto-forward-camera-device';
 
 bool _isY(String key) => bind.mainGetOptionSync(key: key) == 'Y';
 
-/// Policy del forwarding su questo PC (host e controller).
+/// La webcam del PC controllato arriva su una camera virtuale di questo PC:
+/// solo sul desktop.
+bool get _canReceiveWebcam => isDesktop;
+
+/// Impostazioni del forwarding su questo PC: rete e webcam, separate.
 class ClantoForwardingSettings extends StatefulWidget {
   final bool enabled;
 
@@ -60,8 +67,9 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
   Future<void> _activateMacCamera() async {
     String status;
     try {
-      final res = await const MethodChannel('it.clanto.clantodesk/camera_extension')
-          .invokeMethod<String>('activate');
+      final res =
+          await const MethodChannel('it.clanto.clantodesk/camera_extension')
+              .invokeMethod<String>('activate');
       status = translate(res == 'approval'
           ? 'Approve ClantoDesk Camera in System Settings, General, Login Items & Extensions'
           : 'Virtual camera active');
@@ -83,15 +91,16 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
 
   bool _editable(String key) => widget.enabled && !isOptionFixed(key);
 
-  Widget _check(String label, String key, {bool onByDefault = false}) {
-    final value = onByDefault
-        ? bind.mainGetOptionSync(key: key) != 'N'
-        : _isY(key);
+  Widget _check(String label, String key,
+      {bool onByDefault = false, bool bold = false}) {
+    final value =
+        onByDefault ? bind.mainGetOptionSync(key: key) != 'N' : _isY(key);
     return CheckboxListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
       controlAffinity: ListTileControlAffinity.leading,
-      title: Text(translate(label)),
+      title: Text(translate(label),
+          style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null),
       value: value,
       onChanged: _editable(key)
           ? (v) async {
@@ -101,6 +110,12 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
           : null,
     );
   }
+
+  Widget _indent(List<Widget> children) => Padding(
+        padding: const EdgeInsets.only(left: 24),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      );
 
   Widget _targets(String label, String key, TextEditingController c,
       {String hint = 'localhost:3389, 192.168.10.0/24:443'}) {
@@ -121,47 +136,58 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
 
   @override
   Widget build(BuildContext context) {
-    final on = _isY(kOptClantoForwardEnabled);
+    final network = _isY(kOptClantoForwardEnabled);
+    final webcam = _isY(kOptClantoForwardWebcam);
+    // La camera virtuale di questo PC serve per ricevere una webcam: quella
+    // del tecnico quando questo PC è controllato, quella del PC controllato
+    // quando lo si usa da qui.
+    final virtualCamera = webcam && !widget.controllerOnly;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _check('Enable forwarding', kOptClantoForwardEnabled),
-        if (on) ...[
-          _check('Use the Clanto service catalog', kOptClantoForwardCatalog,
-              onByDefault: true),
-          if (!widget.controllerOnly) ...[
-            _check('Allow custom forwards to this PC\'s network',
-                kOptClantoForwardCustomHost),
-            if (_isY(kOptClantoForwardCustomHost))
-              _targets('Allowed destinations on this PC\'s side',
-                  kOptClantoForwardCustomHostTargets, _hostTargets),
-            _check('Allow forwards towards the controller',
-                kOptClantoForwardReverse),
-          ],
-          _check('Allow custom forwards from this PC\'s network as controller',
-              kOptClantoForwardCustomController),
-          if (_isY(kOptClantoForwardCustomController))
-            _targets('Allowed destinations on the controller\'s side',
-                kOptClantoForwardCustomControllerTargets, _controllerTargets),
-          if (!widget.controllerOnly)
-            _check('Allow the controller\'s camera on this PC',
-                kOptClantoForwardCamera),
-          if (Platform.isLinux && _isY(kOptClantoForwardCamera))
-            _targets('Virtual camera device (empty = automatic)',
-                kOptClantoForwardCameraDevice, _cameraDevice,
-                hint: '/dev/video10'),
-          if (Platform.isMacOS && _isY(kOptClantoForwardCamera))
-            Padding(
-              padding: const EdgeInsets.only(left: 32, bottom: 8),
-              child: Row(children: [
+        _check('Enable network forwarding', kOptClantoForwardEnabled,
+            bold: true),
+        if (network)
+          _indent([
+            _check('Use the Clanto service catalog', kOptClantoForwardCatalog,
+                onByDefault: true),
+            if (!widget.controllerOnly) ...[
+              _check('Allow custom forwards to this PC\'s network',
+                  kOptClantoForwardCustomHost),
+              if (_isY(kOptClantoForwardCustomHost))
+                _targets('Allowed destinations on this PC\'s side',
+                    kOptClantoForwardCustomHostTargets, _hostTargets),
+              _check('Allow forwards towards the controller',
+                  kOptClantoForwardReverse),
+            ],
+            _check(
+                'Allow custom forwards from this PC\'s network as controller',
+                kOptClantoForwardCustomController),
+            if (_isY(kOptClantoForwardCustomController))
+              _targets('Allowed destinations on the controller\'s side',
+                  kOptClantoForwardCustomControllerTargets, _controllerTargets),
+          ]),
+        _check('Enable webcam forwarding', kOptClantoForwardWebcam, bold: true),
+        if (webcam)
+          _indent([
+            _check('This PC\'s webcam to the controlled PC',
+                kOptClantoForwardWebcamSend),
+            if (_canReceiveWebcam)
+              _check('The controlled PC\'s webcam to this PC',
+                  kOptClantoForwardWebcamReceive),
+            if (virtualCamera && Platform.isLinux)
+              _targets('Virtual camera device (empty = automatic)',
+                  kOptClantoForwardCameraDevice, _cameraDevice,
+                  hint: '/dev/video10'),
+            if (virtualCamera && Platform.isMacOS)
+              Row(children: [
                 TextButton(
                     onPressed: widget.enabled ? _activateMacCamera : null,
                     child: Text(translate('Activate the virtual camera'))),
                 if (_macCameraStatus != null)
                   Flexible(child: Text(_macCameraStatus!)),
               ]),
-            ),
-        ],
+          ]),
       ],
     );
   }
@@ -195,15 +221,27 @@ SettingsTile clantoForwardingTile({bool enabled = true}) {
   );
 }
 
-/// Voce "Forwarding" nel menu della sessione.
-TTextMenu clantoForwardingMenu(BuildContext context, FFI ffi) {
-  return TTextMenu(
-    child: Text(translate('Forwarding')),
-    onPressed: () => showDialog<void>(
-      context: context,
-      builder: (_) => _ForwardingDialog(sessionId: ffi.sessionId),
-    ),
-  );
+/// Voci del menu della sessione: "Forwarding rete" e "Forwarding webcam",
+/// ciascuna solo se attiva su questo PC.
+List<TTextMenu> clantoForwardingMenus(BuildContext context, FFI ffi) {
+  return [
+    if (_isY(kOptClantoForwardEnabled))
+      TTextMenu(
+        child: Text(translate('Network forwarding')),
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => _ForwardingDialog(sessionId: ffi.sessionId),
+        ),
+      ),
+    if (_isY(kOptClantoForwardWebcam))
+      TTextMenu(
+        child: Text(translate('Webcam forwarding')),
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => _WebcamDialog(sessionId: ffi.sessionId),
+        ),
+      ),
+  ];
 }
 
 class _Service {
@@ -228,26 +266,10 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   final _target = TextEditingController();
   final _localPort = TextEditingController(text: '0');
   String? _error;
-  List<Map<String, dynamic>> _cameras = [];
-  int? _cameraIndex;
-  Map<String, dynamic>? _camera;
-  String? _cameraError;
 
   @override
   void initState() {
     super.initState();
-    bind.mainClantoCameras().then((json) {
-      final res = jsonDecode(json);
-      if (!mounted) return;
-      setState(() {
-        if (res['error'] != null) {
-          _cameraError = translate(res['error']);
-        } else {
-          _cameras = (res['ok'] as List).cast<Map<String, dynamic>>();
-          _cameraIndex = _cameras.isEmpty ? null : _cameras.first['index'];
-        }
-      });
-    });
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
     bind.mainClantoForwardCatalog().then((json) {
@@ -270,14 +292,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   void _refresh() {
     final json = bind.sessionClantoForwardList(sessionId: widget.sessionId);
     final list = (jsonDecode(json) as List).cast<Map<String, dynamic>>();
-    final camera = jsonDecode(
-        bind.sessionClantoCameraStatus(sessionId: widget.sessionId));
-    if (mounted) {
-      setState(() {
-        _forwards = list;
-        _camera = camera;
-      });
-    }
+    if (mounted) setState(() => _forwards = list);
   }
 
   Future<void> _add() async {
@@ -307,111 +322,9 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
       service: _serviceId,
     ));
     if (!mounted) return;
-    setState(() => _error = res['error'] == null ? null : translate(res['error']));
+    setState(
+        () => _error = res['error'] == null ? null : translate(res['error']));
     _refresh();
-  }
-
-  bool get _cameraRunning =>
-      _camera != null &&
-      ['starting', 'pending', 'active'].contains(_camera!['state']);
-
-  Future<void> _cameraStart() async {
-    final index = _cameraIndex;
-    if (index == null) return;
-    if (isAndroid &&
-        !await AndroidPermissionManager.request('android.permission.CAMERA')) {
-      if (mounted) {
-        setState(() => _cameraError = translate('Camera access denied'));
-      }
-      return;
-    }
-    final res = jsonDecode(await bind.sessionClantoCameraStart(
-        sessionId: widget.sessionId, index: index));
-    String? error = res['error'];
-    // Telefoni: la cattura è nativa (ClantoCamera.kt / ClantoCamera.swift);
-    // 1 = camera anteriore.
-    if (error == null && isMobile) {
-      try {
-        error = await _nativeCamera?.$1.invokeMethod<String>(
-            _nativeCamera!.$2, index == 1);
-      } on PlatformException catch (e) {
-        error = e.message ?? e.code;
-      }
-      if (error != null) {
-        bind.sessionClantoCameraStop(sessionId: widget.sessionId);
-      }
-    }
-    if (!mounted) return;
-    setState(() => _cameraError = error == null ? null : translate(error));
-    _refresh();
-  }
-
-  /// Canale e metodo di avvio della cattura nativa; null sul desktop.
-  (MethodChannel, String)? get _nativeCamera {
-    if (isAndroid) return (const MethodChannel('mChannel'), 'clanto_camera_start');
-    if (isIOS) {
-      return (const MethodChannel('it.clanto.clantodesk/camera'), 'start');
-    }
-    return null;
-  }
-
-  void _cameraStop() {
-    bind.sessionClantoCameraStop(sessionId: widget.sessionId);
-    if (isAndroid) {
-      const MethodChannel('mChannel').invokeMethod('clanto_camera_stop');
-    } else if (isIOS) {
-      const MethodChannel('it.clanto.clantodesk/camera').invokeMethod('stop');
-    }
-    _refresh();
-  }
-
-  Widget _cameraSection() {
-    final c = _camera;
-    String? status;
-    if (c != null) {
-      status = translate(c['state'] ?? '');
-      if (c['state'] == 'active') {
-        status += ' ${c['width']}x${c['height']} → ${c['sink']}';
-      }
-      final message = c['message'] ?? '';
-      if (message.isNotEmpty) status += ' ${translate(message)}';
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(translate('My camera on the remote PC'),
-            style: const TextStyle(fontWeight: FontWeight.bold)),
-        if (_cameras.isNotEmpty)
-          Row(children: [
-            Expanded(
-              child: DropdownButton<int>(
-                value: _cameraIndex,
-                isExpanded: true,
-                items: _cameras
-                    .map((cam) => DropdownMenuItem<int>(
-                        value: cam['index'], child: Text(cam['name'] ?? '')))
-                    .toList(),
-                onChanged: _cameraRunning
-                    ? null
-                    : (v) => setState(() => _cameraIndex = v),
-              ),
-            ),
-            const SizedBox(width: 8),
-            _cameraRunning
-                ? TextButton(
-                    onPressed: _cameraStop,
-                    child: Text(translate('Stop')))
-                : TextButton(
-                    onPressed: _cameraStart, child: Text(translate('Start'))),
-          ])
-        else if (_cameraError == null)
-          Text(translate('No camera found')),
-        if (status != null) Text(status),
-        if (_cameraError != null)
-          Text(_cameraError!, style: const TextStyle(color: Colors.red)),
-        const Divider(),
-      ],
-    );
   }
 
   String _describe(Map<String, dynamic> f) {
@@ -426,7 +339,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   Widget build(BuildContext context) {
     final services = _catalog.where((s) => s.direction == _direction).toList();
     return AlertDialog(
-      title: Text(translate('Forwarding')),
+      title: Text(translate('Network forwarding')),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 600),
         child: SingleChildScrollView(
@@ -434,7 +347,6 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _cameraSection(),
               if (_forwards.isEmpty) Text(translate('No forwards')),
               ..._forwards.map((f) => ListTile(
                     dense: true,
@@ -460,10 +372,12 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
                 items: [
                   DropdownMenuItem(
                       value: 'to_host',
-                      child: Text(translate('From this PC to the remote PC\'s network'))),
+                      child: Text(translate(
+                          'From this PC to the remote PC\'s network'))),
                   DropdownMenuItem(
                       value: 'to_controller',
-                      child: Text(translate('From the remote PC to this PC\'s network'))),
+                      child: Text(translate(
+                          'From the remote PC to this PC\'s network'))),
                 ],
                 onChanged: (v) => setState(() {
                   _direction = v ?? 'to_host';
@@ -476,7 +390,8 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
                   isExpanded: true,
                   items: [
                     DropdownMenuItem(
-                        value: '', child: Text(translate('Custom destination'))),
+                        value: '',
+                        child: Text(translate('Custom destination'))),
                     ...services.map((s) => DropdownMenuItem(
                         value: s.id, child: Text('${s.name} (${s.target})'))),
                   ],
@@ -502,7 +417,8 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                  child:
+                      Text(_error!, style: const TextStyle(color: Colors.red)),
                 ),
             ],
           ),
@@ -517,4 +433,351 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
       ],
     );
   }
+}
+
+/// Forwarding webcam: dare la propria webcam al PC controllato, oppure usare
+/// qui quella del PC controllato (con il consenso di chi è lì).
+class _WebcamDialog extends StatefulWidget {
+  final SessionID sessionId;
+  const _WebcamDialog({required this.sessionId});
+
+  @override
+  State<_WebcamDialog> createState() => _WebcamDialogState();
+}
+
+enum _WebcamMode { send, receive }
+
+class _WebcamDialogState extends State<_WebcamDialog> {
+  final bool _canSend = _isY(kOptClantoForwardWebcamSend);
+  final bool _canReceive =
+      _canReceiveWebcam && _isY(kOptClantoForwardWebcamReceive);
+  late _WebcamMode _mode =
+      _canSend || !_canReceive ? _WebcamMode.send : _WebcamMode.receive;
+  Timer? _timer;
+
+  // Invio della propria webcam.
+  List<Map<String, dynamic>> _cameras = [];
+  int? _cameraIndex;
+  Map<String, dynamic>? _sendStatus;
+  String? _sendError;
+
+  // Webcam del PC controllato.
+  Map<String, dynamic>? _remote;
+  int? _remoteIndex;
+  String? _receiveError;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_canSend) {
+      bind.mainClantoCameras().then((json) {
+        final res = jsonDecode(json);
+        if (!mounted) return;
+        setState(() {
+          if (res['error'] != null) {
+            _sendError = translate(res['error']);
+          } else {
+            _cameras = (res['ok'] as List).cast<Map<String, dynamic>>();
+            _cameraIndex = _cameras.isEmpty ? null : _cameras.first['index'];
+          }
+        });
+      });
+    }
+    _refresh();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _refresh() {
+    final send =
+        jsonDecode(bind.sessionClantoCameraStatus(sessionId: widget.sessionId));
+    final remote = jsonDecode(
+        bind.sessionClantoRemoteCameraStatus(sessionId: widget.sessionId));
+    if (!mounted) return;
+    setState(() {
+      _sendStatus = send;
+      _remote = remote;
+      final cams = (_remote?['cameras'] as List?) ?? [];
+      if (_remoteIndex == null && cams.isNotEmpty) {
+        _remoteIndex = cams.first['index'];
+      }
+    });
+  }
+
+  // --- Invio ---
+
+  bool get _sending =>
+      _sendStatus != null &&
+      ['starting', 'pending', 'active'].contains(_sendStatus!['state']);
+
+  /// Canale e metodo di avvio della cattura nativa; null sul desktop.
+  (MethodChannel, String)? get _nativeCamera {
+    if (isAndroid) {
+      return (const MethodChannel('mChannel'), 'clanto_camera_start');
+    }
+    if (isIOS) {
+      return (const MethodChannel('it.clanto.clantodesk/camera'), 'start');
+    }
+    return null;
+  }
+
+  Future<void> _sendStart() async {
+    final index = _cameraIndex;
+    if (index == null) return;
+    if (isAndroid &&
+        !await AndroidPermissionManager.request('android.permission.CAMERA')) {
+      if (mounted) {
+        setState(() => _sendError = translate('Camera access denied'));
+      }
+      return;
+    }
+    final res = jsonDecode(await bind.sessionClantoCameraStart(
+        sessionId: widget.sessionId, index: index));
+    String? error = res['error'];
+    // Telefoni: la cattura è nativa (ClantoCamera.kt / ClantoCamera.swift);
+    // 1 = camera anteriore.
+    if (error == null && isMobile) {
+      try {
+        error = await _nativeCamera?.$1
+            .invokeMethod<String>(_nativeCamera!.$2, index == 1);
+      } on PlatformException catch (e) {
+        error = e.message ?? e.code;
+      }
+      if (error != null) {
+        bind.sessionClantoCameraStop(sessionId: widget.sessionId);
+      }
+    }
+    if (!mounted) return;
+    setState(() => _sendError = error == null ? null : translate(error));
+    _refresh();
+  }
+
+  void _sendStop() {
+    bind.sessionClantoCameraStop(sessionId: widget.sessionId);
+    if (isAndroid) {
+      const MethodChannel('mChannel').invokeMethod('clanto_camera_stop');
+    } else if (isIOS) {
+      const MethodChannel('it.clanto.clantodesk/camera').invokeMethod('stop');
+    }
+    _refresh();
+  }
+
+  String? _statusText(Map<String, dynamic>? s) {
+    if (s == null) return null;
+    var text = translate(s['state'] ?? '');
+    if (s['state'] == 'active') {
+      text += ' ${s['width']}x${s['height']} → ${s['sink']}';
+    }
+    final message = (s['message'] ?? '') as String;
+    if (message.isNotEmpty) text += ' ${translate(message)}';
+    return text;
+  }
+
+  Widget _sendSection() {
+    final status = _statusText(_sendStatus);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(translate(
+            'Your webcam appears on the remote PC as «ClantoDesk Camera».')),
+        const SizedBox(height: 8),
+        if (_cameras.isNotEmpty)
+          Row(children: [
+            Expanded(
+              child: DropdownButton<int>(
+                value: _cameraIndex,
+                isExpanded: true,
+                items: _cameras
+                    .map((cam) => DropdownMenuItem<int>(
+                        value: cam['index'], child: Text(cam['name'] ?? '')))
+                    .toList(),
+                onChanged:
+                    _sending ? null : (v) => setState(() => _cameraIndex = v),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _sending
+                ? TextButton(
+                    onPressed: _sendStop, child: Text(translate('Stop')))
+                : TextButton(
+                    onPressed: _sendStart, child: Text(translate('Start'))),
+          ])
+        else if (_sendError == null)
+          Text(translate('No camera found')),
+        if (status != null) Text(status),
+        if (_sendError != null)
+          Text(_sendError!, style: const TextStyle(color: Colors.red)),
+      ],
+    );
+  }
+
+  // --- Webcam del PC controllato ---
+
+  Future<void> _request() async {
+    final res = jsonDecode(
+        await bind.sessionClantoCameraRequest(sessionId: widget.sessionId));
+    if (!mounted) return;
+    setState(() => _receiveError =
+        res['error'] == null ? null : translate(res['error']));
+    _refresh();
+  }
+
+  Future<void> _receiveStart() async {
+    final index = _remoteIndex;
+    if (index == null) return;
+    final res = jsonDecode(await bind.sessionClantoRemoteCameraStart(
+        sessionId: widget.sessionId, index: index));
+    if (!mounted) return;
+    setState(() => _receiveError =
+        res['error'] == null ? null : translate(res['error']));
+    _refresh();
+  }
+
+  void _receiveStop() {
+    bind.sessionClantoRemoteCameraStop(sessionId: widget.sessionId);
+    _refresh();
+  }
+
+  Widget _receiveSection() {
+    final request = (_remote?['request'] ?? 'none') as String;
+    final message = (_remote?['message'] ?? '') as String;
+    final cams = ((_remote?['cameras'] as List?) ?? [])
+        .cast<Map<String, dynamic>>();
+    final receiver = _remote?['receiver'] as Map<String, dynamic>?;
+    final receiving = receiver != null &&
+        ['starting', 'active'].contains(receiver['state']);
+    final children = <Widget>[
+      Text(translate(
+          'The remote PC\'s webcam appears on this PC as «ClantoDesk Camera».')),
+      const SizedBox(height: 8),
+    ];
+    switch (request) {
+      case 'pending':
+        children.add(Text(
+            translate('Waiting for the remote user to allow the webcam…')));
+        break;
+      case 'granted':
+        if (cams.isEmpty) {
+          children.add(Text(translate('No camera found')));
+        } else {
+          children.add(Row(children: [
+            Expanded(
+              child: DropdownButton<int>(
+                value: _remoteIndex,
+                isExpanded: true,
+                items: cams
+                    .map((cam) => DropdownMenuItem<int>(
+                        value: cam['index'], child: Text(cam['name'] ?? '')))
+                    .toList(),
+                onChanged:
+                    receiving ? null : (v) => setState(() => _remoteIndex = v),
+              ),
+            ),
+            const SizedBox(width: 8),
+            receiving
+                ? TextButton(
+                    onPressed: _receiveStop, child: Text(translate('Stop')))
+                : TextButton(
+                    onPressed: _receiveStart,
+                    child: Text(translate('Start'))),
+          ]));
+        }
+        break;
+      default:
+        children.add(TextButton(
+            onPressed: _request,
+            child: Text(translate('Ask to use the remote webcam'))));
+        if (request == 'denied' && message.isNotEmpty) {
+          children.add(Text(translate(message),
+              style: const TextStyle(color: Colors.red)));
+        }
+    }
+    final status = _statusText(receiver);
+    if (status != null && request == 'granted') children.add(Text(status));
+    if (request == 'granted' && message.isNotEmpty && !receiving) {
+      children.add(
+          Text(translate(message), style: const TextStyle(color: Colors.red)));
+    }
+    if (_receiveError != null) {
+      children.add(Text(_receiveError!,
+          style: const TextStyle(color: Colors.red)));
+    }
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.start, children: children);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget body;
+    if (!_canSend && !_canReceive) {
+      body = Text(translate(
+          'Enable the webcam options in Settings, Forwarding, on this PC.'));
+    } else {
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_canSend)
+            RadioListTile<_WebcamMode>(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              value: _WebcamMode.send,
+              groupValue: _mode,
+              title: Text(translate('Give my webcam to the remote PC')),
+              onChanged: (v) => setState(() => _mode = v ?? _mode),
+            ),
+          if (_canReceive)
+            RadioListTile<_WebcamMode>(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              value: _WebcamMode.receive,
+              groupValue: _mode,
+              title: Text(translate('Use the remote PC\'s webcam here')),
+              onChanged: (v) => setState(() => _mode = v ?? _mode),
+            ),
+          const Divider(),
+          _mode == _WebcamMode.send ? _sendSection() : _receiveSection(),
+        ],
+      );
+    }
+    return AlertDialog(
+      title: Text(translate('Webcam forwarding')),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
+        child: SingleChildScrollView(child: body),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(translate('Close')),
+        ),
+      ],
+    );
+  }
+}
+
+/// Gestione connessioni dell'host: il tecnico chiede la webcam di questo PC.
+void clantoCameraConsentDialog(int connId, String peer) {
+  gFFI.dialogManager.show((setState, close, context) {
+    void answer(bool accept) {
+      bind.cmClantoCameraResponse(id: connId, accept: accept);
+      close();
+    }
+
+    return CustomAlertDialog(
+      title: Text(translate('Webcam request')),
+      content: Text(
+          '${translate('The technician asks to use the webcam of this PC.')}\n\n$peer'),
+      actions: [
+        dialogButton('Deny', onPressed: () => answer(false), isOutline: true),
+        dialogButton('Allow', onPressed: () => answer(true)),
+      ],
+      onCancel: () => answer(false),
+    );
+  }, tag: 'clanto-camera-consent-$connId');
 }

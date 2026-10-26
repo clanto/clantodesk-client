@@ -1870,6 +1870,55 @@ pub fn session_clanto_camera_status(session_id: SessionID) -> SyncReturn<String>
     SyncReturn(serde_json::to_string(&status).unwrap_or_else(|_| "null".to_owned()))
 }
 
+/// Chiede la webcam del PC controllato (lì compare il consenso): `{"ok":true}` o `{"error":..}`.
+pub fn session_clanto_camera_request(session_id: SessionID) -> String {
+    let result = (|| {
+        let session = sessions::get_session_by_session_id(&session_id).ok_or("No session")?;
+        let key = session.lc.read().unwrap().session_id;
+        let sender = session.sender.read().unwrap().clone().ok_or("Not connected")?;
+        crate::clanto::forwarding::controller::camera_request(key, &sender)
+    })();
+    match result {
+        Ok(()) => serde_json::json!({ "ok": true }).to_string(),
+        Err(e) => serde_json::json!({ "error": e }).to_string(),
+    }
+}
+
+/// Dopo il consenso, riceve la webcam `index` del PC controllato.
+pub fn session_clanto_remote_camera_start(session_id: SessionID, index: i32) -> String {
+    let result = (|| {
+        let session = sessions::get_session_by_session_id(&session_id).ok_or("No session")?;
+        let key = session.lc.read().unwrap().session_id;
+        crate::clanto::forwarding::controller::remote_camera_start(key, index)
+    })();
+    match result {
+        Ok(()) => serde_json::json!({ "ok": true }).to_string(),
+        Err(e) => serde_json::json!({ "error": e }).to_string(),
+    }
+}
+
+pub fn session_clanto_remote_camera_stop(session_id: SessionID) {
+    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
+        let key = session.lc.read().unwrap().session_id;
+        crate::clanto::forwarding::controller::remote_camera_stop(key);
+    }
+}
+
+/// Stato della webcam del PC controllato, JSON o `null`.
+pub fn session_clanto_remote_camera_status(session_id: SessionID) -> SyncReturn<String> {
+    let Some(session) = sessions::get_session_by_session_id(&session_id) else {
+        return SyncReturn("null".to_owned());
+    };
+    let key = session.lc.read().unwrap().session_id;
+    let status = crate::clanto::forwarding::controller::remote_camera_status(key);
+    SyncReturn(serde_json::to_string(&status).unwrap_or_else(|_| "null".to_owned()))
+}
+
+/// Gestione connessioni dell'host: l'utente consente o nega la propria webcam.
+pub fn cm_clanto_camera_response(id: i32, accept: bool) {
+    crate::ui_cm_interface::handle_clanto_camera_response(id, accept);
+}
+
 pub fn session_new_rdp(session_id: SessionID) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         session.new_rdp();

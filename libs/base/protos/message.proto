@@ -1066,6 +1066,9 @@ message ClantoForward {
     ClantoMediaFrame media_frame = 7;
     ClantoMediaAck media_ack = 8;
     ClantoMediaClose media_close = 9;
+    ClantoCameraRequest camera_request = 10;
+    ClantoCameraGrant camera_grant = 11;
+    ClantoCameraPull camera_pull = 12;
   }
 }
 // Controller -> host: ascolta su 127.0.0.1:port dell'host (0 = porta libera)
@@ -1117,4 +1120,25 @@ message ClantoMediaAck {
 message ClantoMediaClose {
   int32 stream_id = 1;
   string message = 2;
+}
+
+// Webcam dell'host verso il controller: il controller chiede, l'host chiede il
+// consenso all'utente e risponde con le sue webcam; poi il controller sceglie
+// quale ricevere (stream_id pari) e l'host la invia con ClantoMedia*.
+message ClantoCameraRequest {
+  int32 request_id = 1;
+}
+message ClantoCameraInfo {
+  int32 index = 1;
+  string name = 2;
+}
+message ClantoCameraGrant {
+  int32 request_id = 1;
+  bool accepted = 2;
+  string message = 3;
+  repeated ClantoCameraInfo cameras = 4;
+}
+message ClantoCameraPull {
+  int32 stream_id = 1;
+  int32 index = 2;
 }

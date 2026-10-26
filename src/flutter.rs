@@ -1583,6 +1583,11 @@ pub mod connection_manager {
         fn file_transfer_log(&self, action: &str, log: &str) {
             self.push_event("cm_file_transfer_log", &[(action, log)]);
         }
+
+        // Clanto: richiesta della webcam di questo PC (clanto/webcam_consent.dart).
+        fn clanto_camera_request(&self, id: i32, peer: &str) {
+            self.push_event("clanto_camera_request", &[("id", id.to_string().as_str()), ("peer", peer)]);
+        }
     }
 
     impl FlutterHandler {

@@ -182,7 +182,13 @@
     <policy name="ForwardCustomControllerTargets" class="Machine" displayName="$(string.ForwardCustomControllerTargets)" explainText="$(string.ForwardCustomControllerTargets_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ForwardCustomControllerTargets)">
       <parentCategory ref="Forwarding" />
       <supportedOn ref="ClantoDesk150" /><elements><text id="ForwardCustomControllerTargetsValue" valueName="clanto-forward-custom-controller-targets" maxLength="4000" /></elements></policy>
-    <policy name="ForwardCamera" class="Machine" displayName="$(string.ForwardCamera)" explainText="$(string.ForwardCamera_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-camera" presentation="$(presentation.ForwardCamera)">
+    <policy name="ForwardWebcam" class="Machine" displayName="$(string.ForwardWebcam)" explainText="$(string.ForwardWebcam_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-webcam" presentation="$(presentation.ForwardWebcam)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ForwardWebcamSend" class="Machine" displayName="$(string.ForwardWebcamSend)" explainText="$(string.ForwardWebcamSend_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-webcam-send" presentation="$(presentation.ForwardWebcamSend)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="ForwardWebcamReceive" class="Machine" displayName="$(string.ForwardWebcamReceive)" explainText="$(string.ForwardWebcamReceive_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-webcam-receive" presentation="$(presentation.ForwardWebcamReceive)">
       <parentCategory ref="Forwarding" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
     <policy name="ForwardCameraDevice" class="Machine" displayName="$(string.ForwardCameraDevice)" explainText="$(string.ForwardCameraDevice_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ForwardCameraDevice)">

@@ -30,7 +30,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/file_scan.rs`
 - `src/clanto/forwarding/camera_capture.rs`
 - `src/clanto/forwarding/camera_capture_mobile.rs`
-- `src/clanto/forwarding/camera_host.rs`
+- `src/clanto/forwarding/camera_receiver.rs`
 - `src/clanto/forwarding/camera_sink.rs`
 - `src/clanto/forwarding/catalog.rs`
 - `src/clanto/forwarding/controller.rs`

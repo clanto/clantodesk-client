@@ -199,6 +199,10 @@ pub trait InvokeUiCM: Send + Clone + 'static + Sized {
     fn update_voice_call_state(&self, client: &Client);
 
     fn file_transfer_log(&self, action: &str, log: &str);
+
+    /// Clanto: il controller `id` chiede la webcam di questo PC. Senza finestra
+    /// (Sciter) nessuna risposta: la richiesta scade negata.
+    fn clanto_camera_request(&self, _id: i32, _peer: &str) {}
 }
 
 impl<T: InvokeUiCM> Deref for ConnectionManager<T> {
@@ -373,6 +377,16 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
             client.in_voice_call = true;
             self.ui_handler.update_voice_call_state(client);
         }
+    }
+
+    fn clanto_camera_requested(&self, id: i32) {
+        let peer = CLIENTS
+            .read()
+            .unwrap()
+            .get(&id)
+            .map(|c| format!("{} ({})", c.name, c.peer_id))
+            .unwrap_or_default();
+        self.ui_handler.clanto_camera_request(id, &peer);
     }
 
     #[cfg(not(target_os = "ios"))]
@@ -753,6 +767,9 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                 Data::VoiceCallIncoming => {
                                     self.cm.voice_call_incoming(self.conn_id);
                                 }
+                                Data::ClantoCameraRequest => {
+                                    self.cm.clanto_camera_requested(self.conn_id);
+                                }
                                 Data::CloseVoiceCall(reason) => {
                                     self.cm.voice_call_closed(self.conn_id, reason.as_str());
                                 }
@@ -1061,6 +1078,9 @@ pub async fn start_listen<T: InvokeUiCM>(
             }
             Some(Data::VoiceCallIncoming) => {
                 cm.voice_call_incoming(current_id);
+            }
+            Some(Data::ClantoCameraRequest) => {
+                cm.clanto_camera_requested(current_id);
             }
             Some(Data::CloseVoiceCall(reason)) => {
                 cm.voice_call_closed(current_id, reason.as_str());
@@ -1923,6 +1943,14 @@ pub fn elevate_portable(_id: i32) {
             )));
         }
     }
+}
+
+/// Clanto: risposta dell'utente alla richiesta della webcam di questo PC.
+#[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
+pub fn handle_clanto_camera_response(id: i32, accept: bool) {
+    if let Some(client) = CLIENTS.read().unwrap().get(&id) {
+        allow_err!(client.tx.send(Data::ClantoCameraResponse(accept)));
+    };
 }
 
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]

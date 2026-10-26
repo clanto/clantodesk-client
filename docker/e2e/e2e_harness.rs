@@ -402,6 +402,41 @@ async fn camera(a: LoginArgs, frames: i64) -> String {
     result
 }
 
+/// Webcam dell'host verso il controller, senza finestra di consenso:
+///   request -> `granted` | `denied:<motivo>` (risposta dell'host entro 10 s)
+///   pull    -> `closed:<motivo>` (scelta della webcam senza consenso)
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
+async fn camera_ask(a: LoginArgs, mode: String) -> String {
+    use crate::clanto::forwarding::engine::wrap;
+    let mut stream = match open_session(&a, ConnType::DEFAULT_CONN).await {
+        Ok(s) => s,
+        Err(result) => return result,
+    };
+    let first = match mode.as_str() {
+        "request" => clanto_forward::Union::CameraRequest(ClantoCameraRequest { request_id: 7, ..Default::default() }),
+        "pull" => clanto_forward::Union::CameraPull(ClantoCameraPull { stream_id: 2, index: 0, ..Default::default() }),
+        _ => return "error:bad mode".to_owned(),
+    };
+    if let Err(e) = stream.send(&wrap(first)).await {
+        return format!("error:send {e}");
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
+        let Some(Ok(bytes)) = stream.next_timeout(10_000).await else {
+            return "error:session closed".to_owned();
+        };
+        let Ok(msg) = Message::parse_from_bytes(&bytes) else { continue };
+        let Some(message::Union::ClantoForward(cf)) = msg.union else { continue };
+        match cf.union {
+            Some(clanto_forward::Union::CameraGrant(g)) if g.accepted => return "granted".to_owned(),
+            Some(clanto_forward::Union::CameraGrant(g)) => return format!("denied:{}", g.message),
+            Some(clanto_forward::Union::MediaClose(c)) => return format!("closed:{}", c.message),
+            _ => {}
+        }
+    }
+    "error:timeout".to_owned()
+}
+
 pub fn run(args: &[String]) {
     let arg = |i: usize| args.get(i).cloned().unwrap_or_default();
     match arg(0).as_str() {
@@ -474,6 +509,21 @@ pub fn run(args: &[String]) {
                     as_id: None,
                 },
                 arg(3).parse().unwrap_or(30),
+            );
+            println!("RESULT={result}");
+        }
+        // camera-ask <host-id> <password> <request|pull>
+        "camera-ask" => {
+            let result = camera_ask(
+                LoginArgs {
+                    host: arg(1),
+                    password: arg(2),
+                    totp: None,
+                    hwid: false,
+                    no_key: false,
+                    as_id: None,
+                },
+                arg(3),
             );
             println!("RESULT={result}");
         }
