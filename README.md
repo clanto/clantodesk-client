@@ -361,7 +361,9 @@ L'elenco servizi Clanto è un JSON pubblicato su
 `api/forward-catalog.example.json`): serve a scegliere, non attiva nulla. Nelle
 impostazioni ogni servizio ha la sua casella; spuntandolo si salva anche la sua
 destinazione, così una modifica dell'elenco pubblicato non cambia ciò che è già
-attivo.
+attivo. Le stesse voci (`id=destinazione;...`) si impostano sempre anche da GPO
+e dall'API server, pure con le impostazioni bloccate; se le imposta la GPO, vale
+la GPO.
 
 **Forwarding webcam.** Va attivato su entrambi i PC. Le webcam arrivano come
 camera virtuale «ClantoDesk Camera»: v4l2loopback su Linux, Windows 11 con

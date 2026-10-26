@@ -595,7 +595,11 @@ sull'host**. Hook in `src/clanto/server_sync.rs`:
   dall'amministratore (`preset-device-name`, `preset-device-username`) partono sempre.
 - **In entrata** la `strategy` non può mai scrivere le chiavi di `SERVER_PROTECTED_KEYS` (2FA,
   allowlist, controller fidati, postura, filigrane, blocco impostazioni, conservazione dei report,
-  policy dei file). Con `clanto-lock-settings` attivo viene ignorata del tutto: decide la GPO.
+  policy dei file). Con `clanto-lock-settings` attivo viene ignorata, salvo le chiavi di
+  `SERVER_MANAGED_KEYS`: i servizi del forwarding (`clanto-forward-services-host`, `-controller`)
+  si impostano sempre da GPO e da API. Se la GPO imposta la stessa chiave vale la GPO
+  (`OVERWRITE_SETTINGS`); da soli non aprono nulla senza `clanto-forward-enabled`, che resta
+  protetta.
   Un server compromesso non può quindi abbassare la sicurezza degli host. Il pannello di gestione
   dovrà usare un canale firmato, non questo.
 
@@ -639,7 +643,8 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
   `api/forward-catalog.example.json`). Aiuta a scegliere e non autorizza: le impostazioni mostrano
   una casella per servizio e spuntarlo salva `id=destinazione` nell'opzione della sua direzione.
   L'host autorizza solo su quelle voci, senza scaricare nulla, quindi un elenco pubblicato
-  modificato non allarga ciò che è già attivo; una voce attiva non più nell'elenco (o con altra
+  modificato non allarga ciò che è già attivo. Le due opzioni si impostano anche da GPO
+  (`ForwardServicesHost`, `ForwardServicesController`) e dalla `strategy` dell'API server; una voce attiva non più nell'elenco (o con altra
   destinazione) resta visibile per toglierla. Id ammessi: lettere, cifre, `-`, `_`, `.`.
   Aggiornamento ogni ora, uno alla volta, solo dalla UI.
 - **Forwarding webcam** (`media.rs`, `camera_capture.rs`, `camera_receiver.rs`, `camera_sink.rs`),

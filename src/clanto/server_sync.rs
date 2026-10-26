@@ -8,8 +8,9 @@
 //!   impostate dall'amministratore (`preset-device-name`, `preset-device-username`)
 //!   restano: sono una scelta esplicita.
 //! - In entrata: la `strategy` del server scrive opzioni sull'host. Il server non
-//!   puo' mai toccare le chiavi che proteggono l'accesso, e con il blocco delle
-//!   impostazioni (GPO) non puo' cambiare nulla.
+//!   può mai toccare le chiavi che proteggono l'accesso, e con il blocco delle
+//!   impostazioni (GPO) può cambiare solo le chiavi gestite (`SERVER_MANAGED_KEYS`).
+//!   Una chiave impostata anche dalla GPO resta comunque quella della GPO.
 
 use hbb_common::{config::Config, log};
 use serde_json::Value;
@@ -18,7 +19,7 @@ use std::collections::HashMap;
 pub const OPT_SHARE_DEVICE_IDENTITY: &str = "clanto-share-device-identity";
 const IDENTITY_FIELDS: &[&str] = &["hostname", "username"];
 
-/// Chiavi che una `strategy` remota non puo' impostare: un server compromesso
+/// Chiavi che una `strategy` remota non può impostare: un server compromesso
 /// non deve poter spegnere 2FA, allowlist, postura o filigrane degli host.
 pub const SERVER_PROTECTED_KEYS: &[&str] = &[
     "2fa",
@@ -44,8 +45,6 @@ pub const SERVER_PROTECTED_KEYS: &[&str] = &[
     "clanto-file-direction",
     "clanto-file-blocked-ext",
     "clanto-forward-enabled",
-    "clanto-forward-services-host",
-    "clanto-forward-services-controller",
     "clanto-forward-custom-host",
     "clanto-forward-custom-host-targets",
     "clanto-forward-reverse",
@@ -56,6 +55,21 @@ pub const SERVER_PROTECTED_KEYS: &[&str] = &[
     "clanto-forward-webcam-receive",
     "clanto-forward-camera-device",
 ];
+
+/// Chiavi che la `strategy` può impostare sempre, anche con il blocco delle
+/// impostazioni: i servizi del forwarding si gestiscono da GPO e da API. Da
+/// soli non aprono nulla: serve `clanto-forward-enabled`, che resta protetta.
+pub const SERVER_MANAGED_KEYS: &[&str] = &[
+    "clanto-forward-services-host",
+    "clanto-forward-services-controller",
+];
+
+fn strategy_may_set(key: &str, locked: bool) -> bool {
+    if SERVER_MANAGED_KEYS.contains(&key) {
+        return true;
+    }
+    !locked && !SERVER_PROTECTED_KEYS.contains(&key)
+}
 
 pub fn filter_sysinfo(v: &mut Value) {
     if Config::get_option(OPT_SHARE_DEVICE_IDENTITY) == "Y" {
@@ -69,17 +83,11 @@ pub fn filter_sysinfo(v: &mut Value) {
 }
 
 pub fn filter_strategy(options: &mut HashMap<String, String>) {
-    if !super::settings_lock::user_write_allowed_now() {
-        if !options.is_empty() {
-            log::warn!("Server strategy ignored: settings are managed by policy");
-        }
-        options.clear();
-        return;
-    }
+    let locked = !super::settings_lock::user_write_allowed_now();
     options.retain(|key, _| {
-        let allowed = !SERVER_PROTECTED_KEYS.contains(&key.as_str());
+        let allowed = strategy_may_set(key, locked);
         if !allowed {
-            log::warn!("Server strategy cannot set protected option {key}");
+            log::warn!("Server strategy cannot set option {key}");
         }
         allowed
     });
@@ -111,5 +119,16 @@ mod tests {
         filter_strategy(&mut options);
         assert_eq!(options.len(), 1);
         assert_eq!(options.get("enable-clipboard").map(String::as_str), Some("N"));
+    }
+
+    #[test]
+    fn forward_services_are_always_managed_by_the_server() {
+        for locked in [false, true] {
+            assert!(strategy_may_set("clanto-forward-services-host", locked));
+            assert!(strategy_may_set("clanto-forward-services-controller", locked));
+            assert!(!strategy_may_set("clanto-forward-enabled", locked));
+        }
+        assert!(strategy_may_set("enable-clipboard", false));
+        assert!(!strategy_may_set("enable-clipboard", true));
     }
 }
