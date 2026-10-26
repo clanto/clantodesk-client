@@ -56,6 +56,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/temp_password.rs`
 - `src/clanto/trusted_controllers.rs`
 - `src/clanto/two_factor_policy.rs`
+- `src/clanto/two_factor_store.rs`
 - `src/clanto/watermark.rs`
 - `flutter/lib/clanto/about_links.dart`
 - `flutter/lib/clanto/accessibility_disclosure.dart`

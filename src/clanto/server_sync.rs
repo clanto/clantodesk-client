@@ -22,6 +22,7 @@ const IDENTITY_FIELDS: &[&str] = &["hostname", "username"];
 /// non deve poter spegnere 2FA, allowlist, postura o filigrane degli host.
 pub const SERVER_PROTECTED_KEYS: &[&str] = &[
     "2fa",
+    "bot",
     "verification-method",
     "approve-mode",
     "temporary-password-length",

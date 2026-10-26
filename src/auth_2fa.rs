@@ -128,10 +128,15 @@ pub fn verify2fa(code: String) -> bool {
     if let Some((info, totp)) = CURRENT_2FA.lock().unwrap().as_ref() {
         if let Ok(res) = totp.check_current(&code) {
             if res {
+                #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                if let Ok(plain) = serde_json::to_string(info) {
+                    return crate::clanto::two_factor_store::save(
+                        crate::clanto::two_factor_store::IPC_2FA,
+                        plain,
+                    );
+                }
+                #[cfg(any(target_os = "android", target_os = "ios"))]
                 if let Ok(v) = info.into_string() {
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                    crate::ipc::set_option("2fa", &v);
-                    #[cfg(any(target_os = "android", target_os = "ios"))]
                     Config::set_option("2fa".to_owned(), v);
                     return res;
                 }
@@ -139,6 +144,22 @@ pub fn verify2fa(code: String) -> bool {
         }
     }
     false
+}
+
+/// Cifra nel servizio un TOTPInfo ricevuto in chiaro dalla UI.
+pub(crate) fn encrypt_plain_2fa(plain: &str) -> ResultType<String> {
+    let info = serde_json::from_str::<TOTPInfo>(plain)?;
+    if info.secret.is_empty() {
+        bail!("empty 2fa secret");
+    }
+    info.new_totp()?;
+    info.into_string()
+}
+
+/// TOTPInfo in chiaro da un valore cifrato con la chiave di questo processo.
+pub(crate) fn plain_2fa(data: &str) -> Option<String> {
+    let (info, _, _) = TOTPInfo::from_str_with_migration(data).ok()?;
+    serde_json::to_string(&info).ok()
 }
 
 pub fn get_2fa(raw: Option<String>) -> Option<TOTP> {
@@ -180,12 +201,36 @@ impl TelegramBot {
     }
 
     fn save(&self) -> ResultType<()> {
-        let s = self.into_string()?;
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        crate::ipc::set_option("bot", &s);
+        if !crate::clanto::two_factor_store::save(
+            crate::clanto::two_factor_store::IPC_BOT,
+            self.plain(),
+        ) {
+            bail!("the service did not store the telegram bot");
+        }
         #[cfg(any(target_os = "android", target_os = "ios"))]
-        Config::set_option("bot".to_owned(), s);
+        Config::set_option("bot".to_owned(), self.into_string()?);
         Ok(())
+    }
+
+    /// Formato in chiaro per l'IPC locale: `chat_id\ntoken`.
+    pub(crate) fn plain(&self) -> String {
+        format!("{}\n{}", self.chat_id, self.token_str)
+    }
+
+    pub(crate) fn encrypt_plain(plain: &str) -> ResultType<String> {
+        let Some((chat_id, token)) = plain.split_once('\n') else {
+            bail!("invalid telegram bot data");
+        };
+        if chat_id.is_empty() || token.is_empty() {
+            bail!("invalid telegram bot data");
+        }
+        TelegramBot {
+            token_str: token.to_owned(),
+            chat_id: chat_id.to_owned(),
+            ..Default::default()
+        }
+        .into_string()
     }
 
     pub fn get() -> ResultType<Option<TelegramBot>> {

@@ -24,4 +24,5 @@ pub mod settings_lock;
 pub mod temp_password;
 pub mod trusted_controllers;
 pub mod two_factor_policy;
+pub mod two_factor_store;
 pub mod watermark;

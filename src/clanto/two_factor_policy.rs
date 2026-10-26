@@ -3,7 +3,7 @@
 
 //! 2FA obbligatorio per policy (`clanto-require-2fa=Y`, di norma via GPO).
 //!
-//! Il segreto TOTP e' per macchina e va registrato dall'utente con l'app di
+//! Il segreto TOTP è per macchina e va registrato dall'utente con l'app di
 //! autenticazione: non si distribuisce. La policy quindi non attiva il 2FA ma
 //! impedisce di accedere a un host che non lo ha configurato.
 
@@ -16,13 +16,17 @@ pub fn required() -> bool {
     Config::get_option(OPT_REQUIRE_2FA) == "Y"
 }
 
-/// Vero se la policy chiede il 2FA ma sull'host non e' configurato. Un
+/// Motivo del rifiuto, già tradotto, se l'accesso va bloccato: 2FA presente
+/// ma illeggibile, oppure richiesto dalla policy e non configurato. Un
 /// controller fidato non cambia l'esito: l'esenzione presuppone un 2FA attivo.
-pub fn blocks_login() -> bool {
-    required() && crate::auth_2fa::get_2fa(None).is_none()
+pub fn login_block() -> Option<String> {
+    if let Some(reason) = crate::clanto::two_factor_store::login_block() {
+        return Some(reason);
+    }
+    (required() && crate::auth_2fa::get_2fa(None).is_none()).then(login_error)
 }
 
-/// Testo gia' tradotto dall'host, come per i rifiuti della postura.
+/// Testo già tradotto dall'host, come per i rifiuti della postura.
 pub fn login_error() -> String {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     return crate::lang::translate(LOGIN_ERROR.to_owned());

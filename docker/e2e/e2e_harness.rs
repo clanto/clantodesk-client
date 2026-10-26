@@ -9,6 +9,8 @@
 //!   --e2e host-setup <password> <totp-hex>   host: password, 2FA, approvazione
 //!   --e2e host-trust <elenco>                host: clanto-trusted-controllers via IPC
 //!   --e2e host-option <chiave> <valore>      host: qualsiasi opzione via IPC
+//!   --e2e host-2fa-foreign                   host: 2FA cifrato con un'altra chiave
+//!   --e2e ui-2fa <totp-hex>                  UI: 2FA salvato tramite il servizio
 //!   --e2e local-option <chiave> <valore>     controller: opzione dell'utente
 //!   --e2e forward <host-id> <password> to-host:<ip>:<porta> | reverse:<ip>:<porta>:<secondi>
 //!   --e2e camera <host-id> <password> <frame>  webcam di prova verso l'host
@@ -471,6 +473,30 @@ pub fn run(args: &[String]) {
             crate::ipc::set_option(&arg(1), &arg(2));
             let stored = crate::ipc::get_options().get(&arg(1)).cloned().unwrap_or_default();
             println!("OPTION {}={}", arg(1), if arg(1) == "2fa" { "<redacted>".to_owned() } else { stored });
+        }
+        "host-2fa-foreign" => {
+            // Come un segreto cifrato dalla UI con un altro machine.key.
+            let mut secret = hbb_common::password_security::MACHINE_ENC_VERSION.as_bytes().to_vec();
+            secret.extend(
+                hbb_common::sodiumoxide::base64::encode(&[7u8; 72], hbb_common::sodiumoxide::base64::Variant::Original)
+                    .into_bytes(),
+            );
+            let info = crate::auth_2fa::TOTPInfo { name: Config::get_id(), secret, digits: 6, created_at: 0 };
+            crate::ipc::set_option("2fa", &serde_json::to_string(&info).unwrap_or_default());
+            println!("STATE={:?}", crate::clanto::two_factor_store::service_state());
+        }
+        "ui-2fa" => {
+            let info = crate::auth_2fa::TOTPInfo {
+                name: Config::get_id(),
+                secret: decode_hex(&arg(1)),
+                digits: 6,
+                created_at: hbb_common::get_time(),
+            };
+            let saved = crate::clanto::two_factor_store::save(
+                crate::clanto::two_factor_store::IPC_2FA,
+                serde_json::to_string(&info).unwrap_or_default(),
+            );
+            println!("SAVED={saved} STATE={:?}", crate::clanto::two_factor_store::service_state());
         }
         "device-key" => println!(
             "DEVICE_KEY={}",

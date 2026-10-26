@@ -961,6 +961,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Device key unavailable", ""),
         ("Copy", ""),
         ("clanto_2fa_policy_error", ""),
+        ("clanto_2fa_unreadable_error", ""),
         ("clanto-require-2fa-tip", ""),
         ("Forwarding", ""),
         ("Use the Clanto service catalog", ""),

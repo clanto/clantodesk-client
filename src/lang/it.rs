@@ -962,6 +962,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Device key unavailable", "Chiave del dispositivo non disponibile: l'archivio protetto delle credenziali non è accessibile."),
         ("Copy", "Copia"),
         ("clanto_2fa_policy_error", "Il PC remoto richiede l'autenticazione a due fattori, ma non l'ha ancora configurata. Contatta l'amministratore del PC remoto."),
+        ("clanto_2fa_unreadable_error", "Il PC remoto ha l'autenticazione a due fattori attiva ma non riesce a leggerne la configurazione. Chiedi all'utente del PC remoto di disattivarla e riattivarla in Impostazioni, Sicurezza."),
         ("clanto-require-2fa-tip", "La policy richiede l'autenticazione a due fattori: finché non la attivi, ogni connessione in entrata viene rifiutata."),
         ("Forwarding", "Forwarding"),
         ("Use the Clanto service catalog", "Usa il catalogo servizi Clanto"),

@@ -3278,9 +3278,8 @@ impl Connection {
                 return false;
             }
             self.apply_id_permissions().await;
-            if crate::clanto::two_factor_policy::blocks_login() {
-                log::warn!("Login rejected: 2FA required by policy but not configured");
-                let reason = crate::clanto::two_factor_policy::login_error();
+            if let Some(reason) = crate::clanto::two_factor_policy::login_block() {
+                log::warn!("Login rejected: {}", reason);
                 self.send_login_error(&reason).await;
                 self.remember_close_reason(&reason);
                 return false;

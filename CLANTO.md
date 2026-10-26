@@ -571,6 +571,19 @@ dopo allowlist e permessi per ID e prima della postura; il controller riceve il 
 `clanto_2fa_policy_error` già tradotto dall'host. Con la policy attiva e il 2FA spento, le
 impostazioni host mostrano un avviso rosso nella sezione 2FA.
 
+### Segreto 2FA cifrato dal servizio
+
+Segreto TOTP e token del bot Telegram sono cifrati con `machine.key`, che è per utente di
+sistema: su Windows il servizio (SYSTEM) ha una chiave diversa da quella della UI. Se cifrasse la
+UI, il servizio non leggerebbe il segreto e accetterebbe la sola password. In
+`src/clanto/two_factor_store.rs` la UI desktop manda il valore in chiaro sull'IPC locale
+(`clanto-2fa`, `clanto-bot`) e il servizio lo cifra con la propria chiave; `clanto-2fa-state`
+riporta lo stato visto dal servizio alle impostazioni. Fail-closed: un segreto presente ma
+illeggibile fa rifiutare ogni login con `clanto_2fa_unreadable_error` (stesso hook della policy).
+All'avvio la UI reinvia al servizio i valori salvati dalle versioni precedenti, se lei riesce a
+leggerli; altrimenti va disattivato e riattivato il 2FA sull'host. `bot` è tra le
+`SERVER_PROTECTED_KEYS`: un server non può dirottare i codici su un altro bot.
+
 ## Canale verso `api-server`
 
 Con `API_SERVER` al build il client manda a quel server heartbeat e `sysinfo`

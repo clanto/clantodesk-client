@@ -436,6 +436,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("device-key-tip", "Give this key to the administrator of the remote PC to be added to its trusted controllers. It identifies this user on this device and is not a secret."),
         ("Device key unavailable", "Device key unavailable: the protected credential store cannot be accessed."),
         ("clanto_2fa_policy_error", "The remote PC requires two-factor authentication but has not configured it yet. Contact the remote PC's administrator."),
+        ("clanto_2fa_unreadable_error", "The remote PC has two-factor authentication enabled but cannot read its configuration. Ask the remote PC's user to turn two-factor authentication off and on again in Settings, Security."),
         ("clanto-require-2fa-tip", "Policy requires two-factor authentication: every incoming connection is rejected until you enable it."),
     ].iter().cloned().collect();
 }

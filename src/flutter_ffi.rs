@@ -1209,6 +1209,8 @@ pub fn main_get_connect_status() -> String {
 pub fn main_check_connect_status() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     start_option_status_sync(); // avoid multi calls
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    crate::clanto::two_factor_store::repair_once();
 }
 
 pub fn main_is_using_public_server() -> bool {

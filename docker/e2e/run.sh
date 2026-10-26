@@ -130,6 +130,14 @@ expect_prefix() { # descrizione prefisso utente args...
 expect_prefix "12 policy 2FA senza 2FA: accesso rifiutato" "error:The remote PC requires two-factor" tech1 "$HOST_ID" "$PASSWORD" "$TOTP_HEX"
 hopt clanto-require-2fa N
 expect "13 senza policy e senza 2FA: solo password" ok tech1 "$HOST_ID" "$PASSWORD" -
+echo "    host: 2FA presente ma illeggibile dal servizio"
+docker exec e2e-host $BIN --e2e host-2fa-foreign | sed 's/^/    /'
+expect_prefix "13b 2FA illeggibile: accesso rifiutato" "error:The remote PC has two-factor authentication enabled but cannot" tech1 "$HOST_ID" "$PASSWORD" "$TOTP_HEX"
+echo "    host: 2FA attivato dalla UI, cifrato dal servizio"
+docker exec e2e-host $BIN --e2e ui-2fa "$TOTP_HEX" | sed 's/^/    /'
+expect "13c 2FA salvato dal servizio: chiede il codice" 2fa-required tech1 "$HOST_ID" "$PASSWORD" -
+expect "13d 2FA salvato dal servizio: codice corretto" ok tech1 "$HOST_ID" "$PASSWORD" "$TOTP_HEX"
+hopt 2fa ""
 
 echo "==> forwarding (sessione di controllo remoto)"
 ECHO_PY='import socket,sys,threading

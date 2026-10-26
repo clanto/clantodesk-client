@@ -1701,8 +1701,14 @@ pub fn support_remove_wallpaper() -> bool {
 }
 
 pub fn has_valid_2fa() -> bool {
-    let raw = get_option("2fa");
-    crate::auth_2fa::get_2fa(Some(raw)).is_some()
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    return crate::clanto::two_factor_store::service_state().0
+        == crate::clanto::two_factor_store::State::Valid;
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let raw = get_option("2fa");
+        crate::auth_2fa::get_2fa(Some(raw)).is_some()
+    }
 }
 
 pub fn generate2fa() -> String {
@@ -1724,6 +1730,10 @@ pub fn verify2fa(code: String) -> bool {
 }
 
 pub fn has_valid_bot() -> bool {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    return crate::clanto::two_factor_store::service_state().1
+        == crate::clanto::two_factor_store::State::Valid;
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     crate::auth_2fa::TelegramBot::get().map_or(false, |bot| bot.is_some())
 }
 

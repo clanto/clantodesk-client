@@ -1016,6 +1016,8 @@ async fn handle(data: Data, stream: &mut Connection) {
                     let from_ms = values.next().and_then(|v| v.parse().ok()).unwrap_or(0);
                     let to_ms = values.next().and_then(|v| v.parse().ok()).unwrap_or(0);
                     value = Some(crate::clanto::session_log::report_json(from_ms, to_ms));
+                } else if let Some(v) = crate::clanto::two_factor_store::on_ipc_get(&name) {
+                    value = Some(v);
                 } else {
                     value = None;
                 }
@@ -1065,6 +1067,10 @@ async fn handle(data: Data, stream: &mut Connection) {
                     crate::audio_service::set_voice_call_input_device(Some(value), true);
                 } else if name == "unlock-pin" {
                     Config::set_unlock_pin(&value);
+                } else if let Some(ok) = crate::clanto::two_factor_store::on_ipc_set(&name, &value) {
+                    let ack = if ok { "Y" } else { "N" }.to_owned();
+                    allow_err!(stream.send(&Data::Config((name.clone(), Some(ack)))).await);
+                    return;
                 } else {
                     return;
                 }
