@@ -164,9 +164,12 @@
     <policy name="ForwardEnabled" class="Machine" displayName="$(string.ForwardEnabled)" explainText="$(string.ForwardEnabled_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-enabled" presentation="$(presentation.ForwardEnabled)">
       <parentCategory ref="Forwarding" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
-    <policy name="ForwardCatalog" class="Machine" displayName="$(string.ForwardCatalog)" explainText="$(string.ForwardCatalog_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-catalog" presentation="$(presentation.ForwardCatalog)">
+    <policy name="ForwardServicesHost" class="Machine" displayName="$(string.ForwardServicesHost)" explainText="$(string.ForwardServicesHost_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ForwardServicesHost)">
       <parentCategory ref="Forwarding" />
-      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+      <supportedOn ref="ClantoDesk150" /><elements><text id="ForwardServicesHostValue" valueName="clanto-forward-services-host" maxLength="4000" /></elements></policy>
+    <policy name="ForwardServicesController" class="Machine" displayName="$(string.ForwardServicesController)" explainText="$(string.ForwardServicesController_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ForwardServicesController)">
+      <parentCategory ref="Forwarding" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="ForwardServicesControllerValue" valueName="clanto-forward-services-controller" maxLength="4000" /></elements></policy>
     <policy name="ForwardCustomHost" class="Machine" displayName="$(string.ForwardCustomHost)" explainText="$(string.ForwardCustomHost_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-forward-custom-host" presentation="$(presentation.ForwardCustomHost)">
       <parentCategory ref="Forwarding" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>

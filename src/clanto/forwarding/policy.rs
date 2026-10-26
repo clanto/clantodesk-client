@@ -15,7 +15,11 @@ use hbb_common::config::Config;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 pub const OPT_ENABLED: &str = "clanto-forward-enabled";
-pub const OPT_CATALOG: &str = "clanto-forward-catalog";
+/// Servizi del catalogo spuntati su questo PC, `id=destinazione` separati da
+/// `;`: come host (raggiungibili dal controller sulla rete di questo PC) e come
+/// controller (raggiungibili dal PC controllato sulla rete di questo PC).
+pub const OPT_SERVICES_HOST: &str = "clanto-forward-services-host";
+pub const OPT_SERVICES_CONTROLLER: &str = "clanto-forward-services-controller";
 pub const OPT_CUSTOM_HOST: &str = "clanto-forward-custom-host";
 pub const OPT_CUSTOM_HOST_TARGETS: &str = "clanto-forward-custom-host-targets";
 pub const OPT_REVERSE: &str = "clanto-forward-reverse";
@@ -32,7 +36,8 @@ pub const OPT_CAMERA_DEVICE: &str = "clanto-forward-camera-device";
 
 pub const GPO_KEYS: &[&str] = &[
     OPT_ENABLED,
-    OPT_CATALOG,
+    OPT_SERVICES_HOST,
+    OPT_SERVICES_CONTROLLER,
     OPT_CUSTOM_HOST,
     OPT_CUSTOM_HOST_TARGETS,
     OPT_REVERSE,
@@ -57,9 +62,24 @@ fn on(key: &str) -> bool {
     Config::get_option(key) == "Y"
 }
 
-/// Il catalogo vale solo se non è stato spento esplicitamente.
-fn catalog_on() -> bool {
-    Config::get_option(OPT_CATALOG) != "N"
+/// Servizi attivi: `(id, pattern)` dalle voci valide; le altre si ignorano.
+pub fn parse_services(value: &str) -> Vec<(String, Pattern)> {
+    value
+        .split(';')
+        .filter_map(|entry| {
+            let (id, target) = entry.trim().split_once('=')?;
+            let id = id.trim();
+            catalog::valid_id(id).then_some(())?;
+            Some((id.to_owned(), parse_pattern(target.trim())?))
+        })
+        .collect()
+}
+
+fn services_key(direction: Direction) -> &'static str {
+    match direction {
+        Direction::ToHost => OPT_SERVICES_HOST,
+        Direction::ToController => OPT_SERVICES_CONTROLLER,
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -250,16 +270,6 @@ async fn resolve(host: &str, port: u16) -> Vec<IpAddr> {
     }
 }
 
-/// Il servizio del catalogo per questa destinazione e direzione, se c'è.
-fn catalog_service(direction: Direction, host: &str, port: u16) -> Option<catalog::Service> {
-    if !catalog_on() {
-        return None;
-    }
-    catalog::current()
-        .into_iter()
-        .find(|s| s.direction == direction && s.matches(host, port))
-}
-
 pub struct Decision {
     pub target: Target,
     /// Id del servizio del catalogo, vuoto per un forward personalizzato.
@@ -267,21 +277,16 @@ pub struct Decision {
 }
 
 /// Lato che espone la propria rete: l'host per `ToHost`, il controller per
-/// `ToController`. Il catalogo autorizza i suoi servizi, l'elenco personalizzato
-/// il resto.
+/// `ToController`. Autorizzano i servizi spuntati, con la destinazione salvata
+/// quando sono stati attivati, e l'elenco personalizzato.
 pub async fn authorize_target(direction: Direction, host: &str, port: i32) -> Result<Decision, String> {
     if !on(OPT_ENABLED) {
         return Err(DENIED_DISABLED.to_owned());
     }
     let port = u16::try_from(port).ok().filter(|p| *p > 0).ok_or(DENIED_TARGET)?;
-    if catalog_on() {
-        catalog::refresh_if_stale().await;
-    }
-    let service = catalog_service(direction, host, port);
-    let service_patterns: Vec<Pattern> = match &service {
-        Some(s) => vec![parse_pattern(&s.target).ok_or(DENIED_TARGET)?],
-        None => Vec::new(),
-    };
+    let services = parse_services(&Config::get_option(services_key(direction)));
+    let service = services.into_iter().find(|(_, p)| literal_match(p, host, port));
+    let service_patterns: Vec<Pattern> = service.iter().map(|(_, p)| p.clone()).collect();
     let (custom_on, list_key) = match direction {
         Direction::ToHost => (on(OPT_CUSTOM_HOST), OPT_CUSTOM_HOST_TARGETS),
         Direction::ToController => (on(OPT_CUSTOM_CONTROLLER), OPT_CUSTOM_CONTROLLER_TARGETS),
@@ -291,8 +296,8 @@ pub async fn authorize_target(direction: Direction, host: &str, port: i32) -> Re
         return Err(DENIED_TARGET.to_owned());
     }
     let resolved = resolve(host, port).await;
-    if let (Some(service), Some(target)) = (service, check(&service_patterns, host, port, &resolved)) {
-        return Ok(Decision { target, service: service.id });
+    if let (Some((id, _)), Some(target)) = (service, check(&service_patterns, host, port, &resolved)) {
+        return Ok(Decision { target, service: id });
     }
     if let Some(target) = check(&custom_patterns, host, port, &resolved) {
         return Ok(Decision { target, service: String::new() });
@@ -386,6 +391,16 @@ mod tests {
         let (p, _) = parse_list("nas.lan:443");
         assert!(check(&p, "NAS.lan", 443, &ips(&["203.0.113.9"])).is_some());
         assert!(check(&p, "other.lan", 443, &ips(&["192.168.1.10"])).is_none());
+    }
+
+    #[test]
+    fn enabled_services_keep_their_target() {
+        let s = parse_services("rdp=localhost:3389; ssh = 10.0.0.5:22;bad;x=nope;a b=localhost:1");
+        let ids: Vec<&str> = s.iter().map(|(id, _)| id.as_str()).collect();
+        assert_eq!(ids, vec!["rdp", "ssh"]);
+        assert!(literal_match(&s[0].1, "127.0.0.1", 3389));
+        assert!(!literal_match(&s[0].1, "127.0.0.1", 3390));
+        assert!(parse_services("").is_empty());
     }
 
     #[test]

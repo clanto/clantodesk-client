@@ -625,7 +625,8 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
 - **Policy** (`policy.rs`, tutte gestibili via GPO, protette dalla `strategy` del server). Ogni lato
   decide solo su ciò che espone:
   - `clanto-forward-enabled` (master, spento) su ogni PC;
-  - `clanto-forward-catalog` (acceso salvo `N`): servizi del catalogo firmato;
+  - `clanto-forward-services-host` / `-controller`: servizi del catalogo spuntati, voci
+    `id=destinazione` separate da `;` (dalla parte dell'host / del controller);
   - `clanto-forward-custom-host` + `-targets`: destinazioni personalizzate dalla parte dell'host;
   - `clanto-forward-reverse`: l'host può aprire listener per `to_controller`;
   - `clanto-forward-custom-controller` + `-targets`: cosa il controller espone.
@@ -633,13 +634,14 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
   anche per 127.0.0.1 e ::1. Un nome viene risolto e ci si collega solo agli indirizzi verificati;
   si risolve solo se una regola ammessa potrebbe corrispondere (nome uguale, rete o `*` sulla porta),
   così un peer non fa interrogare il DNS per nomi qualsiasi.
-- **Catalogo** (`catalog.rs`): `https://clanto.it/api/clantodesk-forward-catalog.json`,
-  `{"payload","signature"}` con firma Ed25519 dei byte esatti del payload, `version` 1 e `expires`.
-  Chiave pubblica al build da `CLANTO_FORWARD_CATALOG_PK` (secret GitHub); senza chiave o con firma
-  non valida il catalogo è vuoto. Si firma con `api/sign-forward-catalog.py` (esempio in
-  `api/forward-catalog.example.json`); la chiave privata resta a Clanto, mai nel repo. La scadenza
-  vale anche per la copia in cache: se l'aggiornamento non riesce più, dopo `expires` il catalogo è
-  vuoto. Un solo aggiornamento alla volta.
+- **Catalogo** (`catalog.rs`): `https://clanto.it/api/clantodesk-forward-catalog.json`, JSON
+  semplice `{"version": 1, "services": [...]}` senza firma (esempio in
+  `api/forward-catalog.example.json`). Aiuta a scegliere e non autorizza: le impostazioni mostrano
+  una casella per servizio e spuntarlo salva `id=destinazione` nell'opzione della sua direzione.
+  L'host autorizza solo su quelle voci, senza scaricare nulla, quindi un elenco pubblicato
+  modificato non allarga ciò che è già attivo; una voce attiva non più nell'elenco (o con altra
+  destinazione) resta visibile per toglierla. Id ammessi: lettere, cifre, `-`, `_`, `.`.
+  Aggiornamento ogni ora, uno alla volta, solo dalla UI.
 - **Forwarding webcam** (`media.rs`, `camera_capture.rs`, `camera_receiver.rs`, `camera_sink.rs`),
   separato dal forwarding rete: opzione propria `clanto-forward-webcam` (spenta, va accesa su
   entrambi i PC) e menu ⚡ «Forwarding webcam» (`forwarding.dart`, `_WebcamDialog`). Due modalità:

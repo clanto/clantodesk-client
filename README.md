@@ -24,7 +24,8 @@ mantenuto come mirror di upstream.
 - usare chat testuale e chiamate vocali durante l'assistenza;
 - usare terminale, inoltro porte e le altre funzioni supportate dal core;
 - inoltrare porte nei due sensi con il menu Forwarding, scegliendo i servizi da
-  un catalogo firmato o destinazioni personalizzate ammesse dalla policy;
+  l'elenco servizi Clanto (attivi solo se spuntati sul PC) o destinazioni
+  personalizzate ammesse dalla policy;
 - mostrare la webcam del tecnico (anche la fotocamera di un telefono Android o
   di un iPhone) come camera virtuale sul computer assistito, per Teams, Zoom e
   simili, oppure usare con il consenso la webcam del computer assistito;
@@ -57,7 +58,7 @@ include, tra le altre, queste personalizzazioni:
   report sessioni, audit verso SIEM e criteri di gruppo (vedi
   [Sicurezza e amministrazione](#sicurezza-e-amministrazione));
 - forwarding modulare separato dal port forward di upstream (che resta
-  spento): porte nei due sensi, catalogo servizi firmato, policy per lato e
+  spento): porte nei due sensi, elenco servizi Clanto da spuntare, policy per lato e
   webcam del tecnico come camera virtuale su Linux (v4l2loopback), Windows 11
   e macOS 13+, senza driver aggiuntivi;
 - trasferimento file mobile tramite picker di sistema, scoped storage e
@@ -349,10 +350,18 @@ di RustDesk (`enable-tunnel`) resta indipendente e spento.
 **Forwarding rete.** Ogni lato decide su ciò che espone:
 
 - **porte verso l'host**: il controller ascolta su `127.0.0.1` e l'host si
-  collega alla destinazione, se è nel catalogo firmato di Clanto o
+  collega alla destinazione, se è un servizio Clanto spuntato sull'host o
   nell'elenco personalizzato dell'host;
 - **porte verso il controller**: l'host ascolta su `127.0.0.1` e il controller
-  raggiunge solo le destinazioni del proprio elenco.
+  raggiunge solo i servizi Clanto spuntati su di sé o le destinazioni del
+  proprio elenco.
+
+L'elenco servizi Clanto è un JSON pubblicato su
+`https://clanto.it/api/clantodesk-forward-catalog.json` (esempio in
+`api/forward-catalog.example.json`): serve a scegliere, non attiva nulla. Nelle
+impostazioni ogni servizio ha la sua casella; spuntandolo si salva anche la sua
+destinazione, così una modifica dell'elenco pubblicato non cambia ciò che è già
+attivo.
 
 **Forwarding webcam.** Va attivato su entrambi i PC. Le webcam arrivano come
 camera virtuale «ClantoDesk Camera»: v4l2loopback su Linux, Windows 11 con
@@ -521,7 +530,8 @@ L'elenco degli ID è l'opzione upstream `id-whitelist` (GPO `IdWhitelist`).
 | Chiave | Valori | Default | Interfaccia | GPO |
 | --- | --- | --- | --- | --- |
 | `clanto-forward-enabled` | `Y`, `N` | `N` | «Abilita forwarding rete» (Forwarding) | `ForwardEnabled` |
-| `clanto-forward-catalog` | `Y`, `N` | acceso | «Usa il catalogo servizi Clanto» | `ForwardCatalog` |
+| `clanto-forward-services-host` | voci `id=destinazione` separate da `;` | vuoto (nessun servizio) | «Servizi Clanto raggiungibili su questo PC» | `ForwardServicesHost` |
+| `clanto-forward-services-controller` | voci `id=destinazione` separate da `;` | vuoto (nessun servizio) | «Servizi Clanto di questo PC per il PC controllato» | `ForwardServicesController` |
 | `clanto-forward-custom-host` | `Y`, `N` | `N` | «Consenti forward personalizzati verso la rete di questo PC» | `ForwardCustomHost` |
 | `clanto-forward-custom-host-targets` | voci `indirizzo:porte` | vuoto | «Destinazioni ammesse dalla parte di questo PC» | `ForwardCustomHostTargets` |
 | `clanto-forward-reverse` | `Y`, `N` | `N` | «Consenti forward verso il controller» | `ForwardReverse` |

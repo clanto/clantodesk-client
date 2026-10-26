@@ -1,6 +1,5 @@
 {
   "version": 1,
-  "expires": "2027-06-30",
   "services": [
     {
       "id": "rdp",

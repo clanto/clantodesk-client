@@ -1,22 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
-//! Catalogo dei servizi di forwarding pubblicato da Clanto e firmato Ed25519.
+//! Catalogo dei servizi di forwarding pubblicato da Clanto: un JSON con la
+//! sola lista dei servizi, `{"version": 1, "services": [...]}`.
 //!
-//! File `{"payload": "<base64 del JSON>", "signature": "<base64>"}`: la firma
-//! copre i byte esatti del payload, quindi nessuna canonicalizzazione. La
-//! chiave pubblica entra al build (`CLANTO_FORWARD_CATALOG_PK`, base64); senza
-//! chiave, firma non valida o catalogo scaduto non vale nessun servizio. Il
-//! catalogo facilita, non obbliga: i forward personalizzati seguono la policy.
+//! Il catalogo aiuta a scegliere, non autorizza: un servizio vale su un PC solo
+//! se lì è stato spuntato nelle impostazioni, e in quel momento si salva anche
+//! la sua destinazione (`policy::OPT_SERVICES_*`). Un catalogo modificato non
+//! può quindi allargare ciò che è già attivo.
 
-use hbb_common::{
-    log,
-    sodiumoxide::{
-        base64::{self, Variant},
-        crypto::sign,
-    },
-    tokio,
-};
+use hbb_common::{log, tokio};
 use serde_derive::{Deserialize, Serialize};
 use std::{
     sync::RwLock,
@@ -63,55 +56,22 @@ impl Service {
 }
 
 #[derive(Deserialize)]
-struct Envelope {
-    payload: String,
-    signature: String,
-}
-
-#[derive(Deserialize)]
-struct Payload {
+struct Catalog {
     version: u32,
-    /// `YYYY-MM-DD`: dopo questa data il catalogo non vale più.
-    expires: String,
     services: Vec<Service>,
 }
 
-fn public_key() -> Option<sign::PublicKey> {
-    let encoded = option_env!("CLANTO_FORWARD_CATALOG_PK").filter(|v| !v.is_empty())?;
-    let bytes = base64::decode(encoded, Variant::Original).ok()?;
-    sign::PublicKey::from_slice(&bytes)
-}
-
-fn today() -> String {
-    chrono::Utc::now().format("%Y-%m-%d").to_string()
-}
-
-/// Verifica firma, versione, scadenza e forma dei servizi. Restituisce anche la
-/// scadenza, che vale pure per la copia in cache.
-pub fn verify(body: &str, pk: &sign::PublicKey, today: &str) -> Result<(Vec<Service>, String), String> {
-    let env: Envelope = serde_json::from_str(body).map_err(|e| format!("catalog: {e}"))?;
-    let payload = base64::decode(env.payload.trim(), Variant::Original)
-        .map_err(|_| "catalog: payload is not base64".to_owned())?;
-    let signature = base64::decode(env.signature.trim(), Variant::Original)
-        .ok()
-        .and_then(|s| sign::Signature::from_bytes(&s).ok())
-        .ok_or("catalog: bad signature encoding")?;
-    if !sign::verify_detached(&signature, &payload, pk) {
-        return Err("catalog: signature does not match".to_owned());
+/// Verifica versione e forma dei servizi; quelli non validi si scartano.
+pub fn parse(body: &str) -> Result<Vec<Service>, String> {
+    let catalog: Catalog = serde_json::from_str(body).map_err(|e| format!("catalog: {e}"))?;
+    if catalog.version != 1 {
+        return Err(format!("catalog: unsupported version {}", catalog.version));
     }
-    let payload: Payload =
-        serde_json::from_slice(&payload).map_err(|e| format!("catalog payload: {e}"))?;
-    if payload.version != 1 {
-        return Err(format!("catalog: unsupported version {}", payload.version));
-    }
-    if payload.expires.len() != 10 || payload.expires.as_str() < today {
-        return Err(format!("catalog: expired on {}", payload.expires));
-    }
-    let services: Vec<Service> = payload
+    Ok(catalog
         .services
         .into_iter()
         .filter(|s| {
-            let ok = !s.id.is_empty()
+            let ok = valid_id(&s.id)
                 && s.kind == "tcp"
                 && super::policy::parse_pattern(&s.target).is_some();
             if !ok {
@@ -120,38 +80,37 @@ pub fn verify(body: &str, pk: &sign::PublicKey, today: &str) -> Result<(Vec<Serv
             ok
         })
         .take(MAX_SERVICES)
-        .collect();
-    Ok((services, payload.expires))
+        .collect())
+}
+
+/// Id usabile nell'opzione dei servizi attivi (`id=destinazione;...`).
+pub fn valid_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
 struct Cache {
     services: Vec<Service>,
-    expires: String,
     fetched: Option<Instant>,
     next_try: Option<Instant>,
 }
 
 static CACHE: RwLock<Cache> = RwLock::new(Cache {
     services: Vec::new(),
-    expires: String::new(),
     fetched: None,
     next_try: None,
 });
 
-/// Servizi validi in questo momento: vuoto se mai scaricato, non valido o
-/// scaduto anche se l'aggiornamento non riesce più.
+/// Ultimo catalogo scaricato (vuoto se mai riuscito).
 pub fn current() -> Vec<Service> {
-    let cache = CACHE.read().unwrap_or_else(|e| e.into_inner());
-    if cache.expires.as_str() < today().as_str() {
-        return Vec::new();
-    }
-    cache.services.clone()
+    CACHE.read().unwrap_or_else(|e| e.into_inner()).services.clone()
 }
 
 /// Un solo aggiornamento alla volta: le richieste concorrenti usano la cache.
 static REFRESHING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-async fn fetch(pk: &sign::PublicKey) -> Result<(Vec<Service>, String), String> {
+async fn fetch() -> Result<Vec<Service>, String> {
     let client = crate::hbbs_http::create_http_client_async_with_url_strict(CATALOG_URL)
         .await
         .map_err(|e| e.to_string())?;
@@ -161,15 +120,12 @@ async fn fetch(pk: &sign::PublicKey) -> Result<(Vec<Service>, String), String> {
     .await
     .map_err(|_| "catalog: timeout".to_owned())?
     .map_err(|e| e.to_string())?;
-    verify(&body, pk, &today())
+    parse(&body)
 }
 
-/// Aggiorna il catalogo se è vecchio; un errore lascia l'ultimo valido finché
-/// non scade, e si ritenta dopo `RETRY_AFTER`.
+/// Aggiorna il catalogo se è vecchio; un errore lascia l'ultimo valido e si
+/// ritenta dopo `RETRY_AFTER`.
 pub async fn refresh_if_stale() {
-    let Some(pk) = public_key() else {
-        return;
-    };
     let now = Instant::now();
     {
         let cache = CACHE.read().unwrap_or_else(|e| e.into_inner());
@@ -182,13 +138,12 @@ pub async fn refresh_if_stale() {
     if REFRESHING.swap(true, std::sync::atomic::Ordering::SeqCst) {
         return;
     }
-    let result = fetch(&pk).await;
+    let result = fetch().await;
     REFRESHING.store(false, std::sync::atomic::Ordering::SeqCst);
     let mut cache = CACHE.write().unwrap_or_else(|e| e.into_inner());
     match result {
-        Ok((services, expires)) => {
+        Ok(services) => {
             cache.services = services;
-            cache.expires = expires;
             cache.fetched = Some(now);
             cache.next_try = None;
         }
@@ -203,32 +158,19 @@ pub async fn refresh_if_stale() {
 mod tests {
     use super::*;
 
-    fn signed(json: &str, sk: &sign::SecretKey) -> String {
-        let sig = sign::sign_detached(json.as_bytes(), sk);
-        serde_json::json!({
-            "payload": base64::encode(json, Variant::Original),
-            "signature": base64::encode(sig.to_bytes(), Variant::Original),
-        })
-        .to_string()
-    }
-
-    const CATALOG: &str = r#"{"version":1,"expires":"2027-01-31","services":[
+    const CATALOG: &str = r#"{"version":1,"services":[
         {"id":"rdp","name":"Desktop remoto","direction":"to_host","target":"localhost:3389"},
-        {"id":"bad","name":"x","direction":"to_host","target":"nope"}]}"#;
+        {"id":"bad","name":"x","direction":"to_host","target":"nope"},
+        {"id":"a;b=c","name":"x","direction":"to_host","target":"localhost:22"}]}"#;
 
     #[test]
-    fn verifies_signature_and_expiry() {
-        let (pk, sk) = sign::gen_keypair();
-        let (services, expires) = verify(&signed(CATALOG, &sk), &pk, "2026-10-25").unwrap();
-        assert_eq!(expires, "2027-01-31");
+    fn parses_and_filters_services() {
+        let services = parse(CATALOG).unwrap();
         assert_eq!(services.len(), 1);
         assert_eq!(services[0].direction, Direction::ToHost);
         assert!(services[0].matches("127.0.0.1", 3389));
         assert!(!services[0].matches("127.0.0.1", 22));
-        assert!(verify(&signed(CATALOG, &sk), &pk, "2027-02-01").is_err());
-        let (other_pk, _) = sign::gen_keypair();
-        assert!(verify(&signed(CATALOG, &sk), &other_pk, "2026-10-25").is_err());
-        let tampered = signed(CATALOG, &sk).replace("\"payload\":\"", "\"payload\":\"A");
-        assert!(verify(&tampered, &pk, "2026-10-25").is_err());
+        assert!(parse(r#"{"version":2,"services":[]}"#).is_err());
+        assert!(parse("not json").is_err());
     }
 }

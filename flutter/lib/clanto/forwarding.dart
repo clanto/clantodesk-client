@@ -18,7 +18,9 @@ import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:settings_ui/settings_ui.dart';
 
 const String kOptClantoForwardEnabled = 'clanto-forward-enabled';
-const String kOptClantoForwardCatalog = 'clanto-forward-catalog';
+const String kOptClantoForwardServicesHost = 'clanto-forward-services-host';
+const String kOptClantoForwardServicesController =
+    'clanto-forward-services-controller';
 const String kOptClantoForwardCustomHost = 'clanto-forward-custom-host';
 const String kOptClantoForwardCustomHostTargets =
     'clanto-forward-custom-host-targets';
@@ -33,6 +35,29 @@ const String kOptClantoForwardWebcamReceive = 'clanto-forward-webcam-receive';
 const String kOptClantoForwardCameraDevice = 'clanto-forward-camera-device';
 
 bool _isY(String key) => bind.mainGetOptionSync(key: key) == 'Y';
+
+/// Servizi spuntati: `id=destinazione` separati da `;` (policy.rs).
+Map<String, String> _enabledServices(String key) {
+  final map = <String, String>{};
+  for (final entry in bind.mainGetOptionSync(key: key).split(';')) {
+    final i = entry.indexOf('=');
+    if (i > 0) map[entry.substring(0, i).trim()] = entry.substring(i + 1).trim();
+  }
+  return map;
+}
+
+/// Elenco servizi Clanto (catalogo pubblicato, senza firma).
+Future<List<_Service>> _loadCatalog() async {
+  try {
+    final list = jsonDecode(await bind.mainClantoForwardCatalog()) as List;
+    return list
+        .map((s) => _Service(s['id'] ?? '', s['name'] ?? '',
+            s['direction'] ?? '', s['target'] ?? '', s['description'] ?? ''))
+        .toList();
+  } catch (_) {
+    return [];
+  }
+}
 
 /// La webcam del PC controllato arriva su una camera virtuale di questo PC:
 /// solo sul desktop.
@@ -62,6 +87,84 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
   final _cameraDevice = TextEditingController(
       text: bind.mainGetOptionSync(key: kOptClantoForwardCameraDevice));
   String? _macCameraStatus;
+  List<_Service>? _catalog;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCatalog().then((list) {
+      if (mounted) setState(() => _catalog = list);
+    });
+  }
+
+  Future<void> _toggleService(
+      String key, String id, String target, bool enable) async {
+    final map = _enabledServices(key);
+    if (enable) {
+      map[id] = target;
+    } else {
+      map.remove(id);
+    }
+    await bind.mainSetOption(
+        key: key,
+        value: map.entries.map((e) => '${e.key}=${e.value}').join(';'));
+    if (mounted) setState(() {});
+  }
+
+  /// Servizi del catalogo per una direzione: nessuno è attivo finché non lo
+  /// si spunta. Le voci attive non più nell'elenco (o con un'altra
+  /// destinazione) restano visibili per poterle togliere.
+  Widget _services(String label, String key, String direction) {
+    final enabled = _enabledServices(key);
+    final editable = _editable(key);
+    final list = (_catalog ?? []).where((s) => s.direction == direction);
+    final orphans = enabled.entries.where(
+        (e) => !list.any((s) => s.id == e.key && s.target == e.value));
+    Widget tile(String title, String subtitle, bool value,
+            ValueChanged<bool>? onChanged) =>
+        CheckboxListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.only(left: 8),
+          controlAffinity: ListTileControlAffinity.leading,
+          title: Text(title),
+          subtitle: subtitle.isEmpty ? null : Text(subtitle),
+          value: value,
+          onChanged: onChanged == null ? null : (v) => onChanged(v == true),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(translate(label)),
+        ),
+        if (_catalog == null)
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text(translate('Loading the Clanto service list…')),
+          )
+        else if (list.isEmpty && orphans.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text(translate('No Clanto services available')),
+          ),
+        ...list.map((s) => tile(
+            '${s.name} (${s.target})',
+            s.description,
+            enabled[s.id] == s.target,
+            editable
+                ? (v) => _toggleService(key, s.id, s.target, v)
+                : null)),
+        ...orphans.map((e) => tile(
+            '${e.key} (${e.value})',
+            translate('No longer in the Clanto service list'),
+            true,
+            editable
+                ? (v) => _toggleService(key, e.key, e.value, v)
+                : null)),
+      ],
+    );
+  }
 
   /// macOS: attiva la Camera Extension (flutter/macos/Runner/AppDelegate.swift).
   Future<void> _activateMacCamera() async {
@@ -91,10 +194,8 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
 
   bool _editable(String key) => widget.enabled && !isOptionFixed(key);
 
-  Widget _check(String label, String key,
-      {bool onByDefault = false, bool bold = false}) {
-    final value =
-        onByDefault ? bind.mainGetOptionSync(key: key) != 'N' : _isY(key);
+  Widget _check(String label, String key, {bool bold = false}) {
+    final value = _isY(key);
     return CheckboxListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
@@ -149,9 +250,9 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
             bold: true),
         if (network)
           _indent([
-            _check('Use the Clanto service catalog', kOptClantoForwardCatalog,
-                onByDefault: true),
             if (!widget.controllerOnly) ...[
+              _services('Clanto services reachable on this PC',
+                  kOptClantoForwardServicesHost, 'to_host'),
               _check('Allow custom forwards to this PC\'s network',
                   kOptClantoForwardCustomHost),
               if (_isY(kOptClantoForwardCustomHost))
@@ -160,6 +261,8 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
               _check('Allow forwards towards the controller',
                   kOptClantoForwardReverse),
             ],
+            _services('Clanto services of this PC for the controlled PC',
+                kOptClantoForwardServicesController, 'to_controller'),
             _check(
                 'Allow custom forwards from this PC\'s network as controller',
                 kOptClantoForwardCustomController),
@@ -245,8 +348,8 @@ List<TTextMenu> clantoForwardingMenus(BuildContext context, FFI ffi) {
 }
 
 class _Service {
-  final String id, name, direction, target;
-  _Service(this.id, this.name, this.direction, this.target);
+  final String id, name, direction, target, description;
+  _Service(this.id, this.name, this.direction, this.target, this.description);
 }
 
 class _ForwardingDialog extends StatefulWidget {
@@ -272,11 +375,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
     super.initState();
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
-    bind.mainClantoForwardCatalog().then((json) {
-      final list = (jsonDecode(json) as List)
-          .map((s) => _Service(s['id'] ?? '', s['name'] ?? '',
-              s['direction'] ?? '', s['target'] ?? ''))
-          .toList();
+    _loadCatalog().then((list) {
       if (mounted) setState(() => _catalog = list);
     });
   }
@@ -337,7 +436,14 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final services = _catalog.where((s) => s.direction == _direction).toList();
+    // Verso il controller valgono solo i servizi spuntati su questo PC; verso
+    // l'host decide il PC controllato.
+    final mine = _enabledServices(kOptClantoForwardServicesController);
+    final services = _catalog
+        .where((s) =>
+            s.direction == _direction &&
+            (_direction == 'to_host' || mine[s.id] == s.target))
+        .toList();
     return AlertDialog(
       title: Text(translate('Network forwarding')),
       content: ConstrainedBox(

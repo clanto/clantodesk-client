@@ -195,6 +195,13 @@ hopt clanto-forward-custom-host-targets "127.0.0.1:7001"
 expect_fwd "15 destinazione ammessa sull'host" ok tech1 "to-host:127.0.0.1:7001"
 expect_fwd "16 destinazione non in elenco" "error:Forwarding target not allowed" tech1 "to-host:127.0.0.1:7002"
 expect_fwd "16b alias localhost della destinazione ammessa" ok tech1 "to-host:localhost:7001"
+# Servizio dell'elenco Clanto spuntato sull'host, senza destinazioni personalizzate.
+hopt clanto-forward-custom-host N
+hopt clanto-forward-services-host "echo=localhost:7001"
+expect_fwd "16d servizio Clanto spuntato sull'host" ok tech1 "to-host:127.0.0.1:7001"
+hopt clanto-forward-services-host ""
+expect_fwd "16e servizio Clanto non spuntato" "error:Forwarding target not allowed" tech1 "to-host:127.0.0.1:7001"
+hopt clanto-forward-custom-host Y
 # Profilo per ID «view» (senza Tunnel): niente forward, anche se la policy lo ammette.
 hopt id-whitelist "$ID1"
 hopt clanto-id-permissions "{\"$ID1\":{\"profile\":\"view\"}}"
