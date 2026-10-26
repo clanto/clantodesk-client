@@ -427,6 +427,9 @@ pub enum Data {
     /// virtuale (serve l'amministratore); resta attiva finché la connessione
     /// IPC è aperta o arriva ClantoVcamStop. Risposta: errore, vuoto se attiva.
     ClantoVcamStart,
+    /// Clanto: esito della scansione antimalware dalla finestra di gestione
+    /// alla connessione, `(tipo, json)`.
+    ClantoFileScan((String, String)),
     ClantoVcamStarted(String),
     ClantoVcamStop,
     #[cfg(windows)]

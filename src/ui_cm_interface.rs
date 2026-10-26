@@ -1945,6 +1945,16 @@ pub fn elevate_portable(_id: i32) {
     }
 }
 
+/// Clanto: messaggio verso la connessione `conn_id` nel servizio.
+#[cfg(not(target_os = "ios"))]
+pub fn clanto_send_to_connection(conn_id: i32, data: Data) -> bool {
+    CLIENTS
+        .read()
+        .unwrap()
+        .get(&conn_id)
+        .map_or(false, |client| client.tx.send(data).is_ok())
+}
+
 /// Clanto: risposta dell'utente alla richiesta della webcam di questo PC.
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
 pub fn handle_clanto_camera_response(id: i32, accept: bool) {

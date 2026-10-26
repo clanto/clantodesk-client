@@ -42,6 +42,7 @@ import '../../common/widgets/login.dart';
 const double _kTabWidth = 200;
 const double _kTabHeight = 42;
 const double _kCardFixedWidth = 540;
+const double _kWideCardWidth = 1100;
 const double _kCardLeftMargin = 15;
 const double _kContentHMargin = 15;
 const double _kContentHSubMargin = _kContentHMargin + 33;
@@ -2229,17 +2230,16 @@ class _SessionReportState extends State<_SessionReport>
         _lock(locked, 'Unlock Security Settings', () {
           setState(() => locked = false);
         }),
-        preventMouseKeyBuilder(
-          block: locked,
-          child: _Card(
-            title: 'Report sessions',
-            children: [
-              ClantoSessionReport(
-                  enabled:
-                      !locked && !isOptionFixed(kOptClantoSessionLogDays))
-                  .marginOnly(left: _kContentHMargin),
-            ],
-          ),
+        // Consultazione libera; conservazione ed esportazione chiedono lo sblocco.
+        _Card(
+          title: 'Report sessions',
+          width: _kWideCardWidth,
+          children: [
+            ClantoSessionReport(
+                    enabled:
+                        !locked && !isOptionFixed(kOptClantoSessionLogDays))
+                .marginOnly(left: _kContentHMargin),
+          ],
         ),
       ]),
     ).marginOnly(bottom: _kListViewBottomMargin);
@@ -3114,12 +3114,13 @@ class _AboutState extends State<_About> {
 Widget _Card(
     {required String title,
     required List<Widget> children,
-    List<Widget>? title_suffix}) {
+    List<Widget>? title_suffix,
+    double width = _kCardFixedWidth}) {
   return Row(
     children: [
       Flexible(
         child: SizedBox(
-          width: _kCardFixedWidth,
+          width: width,
           child: Card(
             child: Column(
               children: [

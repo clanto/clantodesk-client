@@ -488,6 +488,7 @@ riassegnare mai un ID, neppure dopo la rimozione di un evento.
 | 61161 | Incoming file could not be scanned | 4 (warning) | 7 |
 | 61162 | File transfer blocked by direction policy | 4 (warning) | 7 |
 | 61163 | Incoming file blocked by extension | 4 (warning) | 7 |
+| 61164 | Incoming file scanned clean | 6 (informational) | 3 |
 | 61170 | Forwarding channel opened (`clanto_forward_opened`) | 5 (notice) | 5 |
 | 61171 | Forwarding channel denied (`clanto_forward_denied`) | 4 (warning) | 7 |
 | 61172 | Forwarding listener opened (`clanto_forward_listen`) | 5 (notice) | 5 |

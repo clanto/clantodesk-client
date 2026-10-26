@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -34,6 +35,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
   String? _error;
   bool _loading = true;
   String? _retentionError;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -41,10 +43,14 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
     final retention = bind.mainGetOptionSync(key: kOptClantoSessionLogDays);
     _retention.text = retention.isEmpty ? '180' : retention;
     _load();
+    // Aggiornamento continuo, senza indicatore di caricamento.
+    _timer = Timer.periodic(
+        const Duration(seconds: 5), (_) => _load(silent: true));
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _search.dispose();
     _retention.dispose();
     super.dispose();
@@ -132,11 +138,14 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
     }
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _load({bool silent = false}) async {
+    if (silent && _loading) return;
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final raw = await bind.mainGetSessionReport(
           fromMs: _fromMs(), toMs: DateTime.now().millisecondsSinceEpoch);
@@ -144,6 +153,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
       if (mounted) {
         setState(() {
           _records = records;
+          _error = null;
           if (_connectionType.isNotEmpty &&
               !records.any(
                   (record) => record.connectionType == _connectionType)) {
@@ -153,11 +163,11 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
       }
     } catch (error) {
       debugPrint('Unable to load session report: $error');
-      if (mounted) {
+      if (mounted && !silent) {
         setState(() => _error = translate('Unable to load session report'));
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && !silent) setState(() => _loading = false);
     }
   }
 
@@ -343,11 +353,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
               const SizedBox(height: 12),
               Text(translate('File transfers'),
                   style: Theme.of(context).textTheme.titleSmall),
-              ...record.files.map((file) => Text([
-                    file['direction'],
-                    file['name'],
-                    file['size'],
-                  ].where((value) => value != null).join(' · '))),
+              ...record.files.map(_fileLine),
             ],
           ]),
         ),
@@ -357,6 +363,37 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
               child: Text(translate('Close'))),
         ],
       ),
+    );
+  }
+
+  /// Direzione, nome, dimensione ed esito del controllo antimalware.
+  Widget _fileLine(Map<String, dynamic> file) {
+    final direction = switch (file['direction']) {
+      'from_peer' => translate('Received'),
+      'to_peer' => translate('Sent'),
+      _ => '',
+    };
+    final scan = file['scan']?.toString() ?? '';
+    final (label, color) = switch (scan) {
+      'clean' => (translate('Antimalware: clean'), Colors.green),
+      'malware' => (translate('Antimalware: malware detected'), Colors.red),
+      'unscannable' => (translate('Antimalware: not scanned'), Colors.orange),
+      'blocked_direction' ||
+      'blocked_extension' =>
+        (translate('Blocked by policy'), Colors.red),
+      _ => ('', null),
+    };
+    final text = [direction, file['name']?.toString() ?? '', '${file['size'] ?? ''}']
+        .where((value) => value.isNotEmpty)
+        .join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Wrap(spacing: 8, children: [
+        Text(text),
+        if (label.isNotEmpty)
+          Text(label,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+      ]),
     );
   }
 
@@ -579,7 +616,7 @@ SettingsTile clantoSessionReportTile() {
       builder: (context) => AlertDialog(
         title: Text(translate('Report sessions')),
         content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680, maxHeight: 650),
+          constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 650),
           child: SingleChildScrollView(
               child: ClantoSessionReport(
                   enabled: !isOptionFixed(kOptClantoSessionLogDays))),

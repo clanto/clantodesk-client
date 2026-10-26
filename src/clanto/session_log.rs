@@ -60,6 +60,9 @@ struct FileRecord {
     direction: String,
     name: String,
     size: i64,
+    /// Esito del controllo antimalware sui file ricevuti, vuoto se non fatto.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    scan: String,
 }
 
 #[derive(Default)]
@@ -162,7 +165,11 @@ pub fn on_audit(kind: &str, value: &Value) {
         "conn" => on_connection(value),
         "file" => on_file(value),
         "alarm" => on_alarm(value),
-        _ if is_file_security_kind(kind) => on_file_security(kind, value),
+        "clanto_file_clean" => on_file_scan(kind, value),
+        _ if is_file_security_kind(kind) => {
+            on_file_scan(kind, value);
+            on_file_security(kind, value);
+        }
         _ => {}
     }
 }
@@ -303,6 +310,8 @@ fn on_file(value: &Value) {
         .get("info")
         .and_then(Value::as_str)
         .and_then(|info| serde_json::from_str::<Value>(info).ok());
+    // Un file singolo arriva con il nome vuoto e il percorso in `path`.
+    let path_name = basename(&value_str(value, "path")).to_owned();
     let mut registry = registry().lock().unwrap_or_else(|e| e.into_inner());
     let Some(record) = session_for(&mut registry, conn_id) else {
         return;
@@ -317,14 +326,12 @@ fn on_file(value: &Value) {
                 break;
             }
             if let Some(values) = file.as_array() {
+                let name = values.first().and_then(Value::as_str).unwrap_or_default();
                 record.files.push(FileRecord {
                     direction: direction.clone(),
-                    name: values
-                        .first()
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_owned(),
+                    name: if name.is_empty() { path_name.clone() } else { name.to_owned() },
                     size: values.get(1).and_then(Value::as_i64).unwrap_or_default(),
+                    scan: String::new(),
                 });
             }
         }
@@ -372,6 +379,54 @@ fn is_file_security_kind(kind: &str) -> bool {
             | "clanto_file_direction_blocked"
             | "clanto_file_extension_blocked"
     )
+}
+
+fn basename(path: &str) -> &str {
+    path.rsplit(|character| character == '/' || character == '\\')
+        .next()
+        .unwrap_or_default()
+}
+
+fn scan_label(kind: &str) -> &'static str {
+    match kind {
+        "clanto_file_clean" => "clean",
+        "clanto_file_malware" => "malware",
+        "clanto_file_unscannable" => "unscannable",
+        "clanto_file_direction_blocked" => "blocked_direction",
+        "clanto_file_extension_blocked" => "blocked_extension",
+        _ => "",
+    }
+}
+
+/// Esito del controllo sul file della sessione: il primo ricevuto con quel
+/// nome e ancora senza esito, altrimenti una voce nuova.
+fn on_file_scan(kind: &str, value: &Value) {
+    let Some(conn_id) = value.get("conn_id").and_then(Value::as_i64).map(|id| id as i32) else {
+        return;
+    };
+    let name = basename(&value_str(value, "name")).to_owned();
+    let scan = scan_label(kind).to_owned();
+    let mut registry = registry().lock().unwrap_or_else(|e| e.into_inner());
+    let Some(record) = session_for(&mut registry, conn_id) else {
+        return;
+    };
+    apply_file_scan(&mut record.files, name, value.get("size").and_then(Value::as_i64), scan);
+}
+
+fn apply_file_scan(files: &mut Vec<FileRecord>, name: String, size: Option<i64>, scan: String) {
+    if let Some(file) = files
+        .iter_mut()
+        .find(|f| f.direction == "from_peer" && f.scan.is_empty() && basename(&f.name) == name)
+    {
+        file.scan = scan;
+    } else if files.len() < MAX_FILES {
+        files.push(FileRecord {
+            direction: "from_peer".to_owned(),
+            name,
+            size: size.unwrap_or_default(),
+            scan,
+        });
+    }
 }
 
 fn on_file_security(kind: &str, value: &Value) {
@@ -722,6 +777,22 @@ mod tests {
                 "result": "malware",
             })
         );
+    }
+
+    #[test]
+    fn scan_result_is_attached_to_the_received_file() {
+        let mut files = vec![FileRecord {
+            direction: "from_peer".to_owned(),
+            name: "dir/a.txt".to_owned(),
+            size: 3,
+            scan: String::new(),
+        }];
+        apply_file_scan(&mut files, "a.txt".to_owned(), Some(3), "clean".to_owned());
+        assert_eq!(files[0].scan, "clean");
+        apply_file_scan(&mut files, "b.exe".to_owned(), Some(9), "malware".to_owned());
+        assert_eq!((files.len(), files[1].scan.as_str()), (2, "malware"));
+        assert_eq!(scan_label("clanto_file_clean"), "clean");
+        assert_eq!(basename("C:\\in\\x.pdf"), "x.pdf");
     }
 
     #[test]

@@ -812,10 +812,11 @@ fn emit_scan_event(
     let event_kind = match kind {
         ScanOutcomeKind::Malware => "clanto_file_malware",
         ScanOutcomeKind::Unavailable => "clanto_file_unscannable",
-        ScanOutcomeKind::Clean => return,
+        ScanOutcomeKind::Clean => KIND_CLEAN,
     };
     let name = audit_basename(&download.name);
-    crate::clanto::audit_sink::emit(
+    report_to_host(
+        conn_id,
         event_kind,
         &json!({
             "conn_id": conn_id,
@@ -830,6 +831,40 @@ fn emit_scan_event(
             },
         }),
     );
+}
+
+const KIND_CLEAN: &str = "clanto_file_clean";
+/// Esiti che la finestra di gestione può riportare alla connessione.
+const CM_KINDS: &[&str] = &["clanto_file_malware", "clanto_file_unscannable", KIND_CLEAN];
+
+/// La scansione gira nella finestra di gestione (utente), report e audit nel
+/// servizio: l'esito passa dalla connessione IPC della sessione. Senza
+/// connessione si registra qui.
+fn report_to_host(conn_id: i32, kind: &str, value: &serde_json::Value) {
+    #[cfg(not(target_os = "ios"))]
+    if crate::ui_cm_interface::clanto_send_to_connection(
+        conn_id,
+        crate::ipc::Data::ClantoFileScan((kind.to_owned(), value.to_string())),
+    ) {
+        return;
+    }
+    crate::clanto::audit_sink::emit(kind, value);
+}
+
+/// Lato connessione: esito ricevuto dalla finestra di gestione. Solo i tipi
+/// della scansione e sempre con l'id di questa connessione.
+pub fn on_cm_report(conn_id: i32, kind: &str, value: &str) {
+    if !CM_KINDS.contains(&kind) {
+        return;
+    }
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(value) else {
+        return;
+    };
+    if !value.is_object() {
+        return;
+    }
+    value["conn_id"] = json!(conn_id);
+    crate::clanto::audit_sink::emit(kind, &value);
 }
 
 pub async fn finish_completed_download(
@@ -853,9 +888,7 @@ pub async fn finish_completed_download(
     let size = pipeline.size;
     let sha256 = pipeline.sha256;
     let result = pipeline.scan;
-    if result.kind != ScanOutcomeKind::Clean {
-        emit_scan_event(result.kind, job.conn_id, &download, size, &sha256, &result);
-    }
+    emit_scan_event(result.kind, job.conn_id, &download, size, &sha256, &result);
     match scan_decision(mode, result.kind) {
         ScanDecision::Deliver => {
             job.modify_time();

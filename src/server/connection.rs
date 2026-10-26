@@ -1014,6 +1014,9 @@ impl Connection {
                         ipc::Data::VoiceCallResponse(accepted) => {
                             conn.handle_voice_call(accepted).await;
                         }
+                        ipc::Data::ClantoFileScan((kind, value)) => {
+                            crate::clanto::file_scan::on_cm_report(conn.inner.id(), &kind, &value);
+                        }
                         // Clanto: consenso dell'utente alla webcam di questo PC.
                         ipc::Data::ClantoCameraResponse(accepted) => {
                             let peer = crate::clanto::forwarding::host::Peer {
