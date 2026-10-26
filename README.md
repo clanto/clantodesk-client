@@ -525,6 +525,7 @@ L'elenco degli ID è l'opzione upstream `id-whitelist` (GPO `IdWhitelist`).
 | Chiave | Valori | Default | Interfaccia | GPO |
 | --- | --- | --- | --- | --- |
 | `clanto-require-2fa` | `Y`, `N` | `N` | solo GPO o `--option` (avviso nella sezione 2FA) | `RequireTwoFactor` |
+| `clanto-access-hours` | voci `giorni HH:MM-HH:MM` separate da `;`, es. `lun-ven 08:00-18:00`; `none` = mai | vuoto (sempre) | «Consenti le connessioni solo in determinate fasce orarie» (Sicurezza in ingresso) | `AccessHours` |
 | `clanto-share-device-identity` | `Y`, `N` | `N` (hostname e utente non inviati) | solo GPO o `--option` | `ShareDeviceIdentity` |
 
 #### Forwarding

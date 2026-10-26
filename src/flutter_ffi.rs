@@ -1217,6 +1217,11 @@ pub fn main_is_using_public_server() -> bool {
     crate::using_public_server()
 }
 
+/// Clanto: server di rendezvous in uso, JSON `{host, official}`.
+pub fn main_clanto_server_status() -> SyncReturn<String> {
+    SyncReturn(crate::clanto::config::server_status_json())
+}
+
 pub fn main_discover() {
     discover();
 }

@@ -80,6 +80,9 @@
     <policy name="RequireProtectedDevice" class="Machine" displayName="$(string.RequireProtectedDevice)" explainText="$(string.RequireProtectedDevice_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-require-protected-device" presentation="$(presentation.RequireProtectedDevice)">
       <parentCategory ref="InboundSecurity" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
+    <policy name="AccessHours" class="Machine" displayName="$(string.AccessHours)" explainText="$(string.AccessHours_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.AccessHours)">
+      <parentCategory ref="InboundSecurity" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="AccessHoursValue" valueName="clanto-access-hours" maxLength="1000" /></elements></policy>
     <policy name="RequireTwoFactor" class="Machine" displayName="$(string.RequireTwoFactor)" explainText="$(string.RequireTwoFactor_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-require-2fa" presentation="$(presentation.RequireTwoFactor)">
       <parentCategory ref="InboundSecurity" />
       <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>

@@ -138,6 +138,11 @@ docker exec e2e-host $BIN --e2e ui-2fa "$TOTP_HEX" | sed 's/^/    /'
 expect "13c 2FA salvato dal servizio: chiede il codice" 2fa-required tech1 "$HOST_ID" "$PASSWORD" -
 expect "13d 2FA salvato dal servizio: codice corretto" ok tech1 "$HOST_ID" "$PASSWORD" "$TOTP_HEX"
 hopt 2fa ""
+hopt clanto-access-hours none
+expect_prefix "13e fuori dalle fasce orarie: accesso rifiutato" "error:Access to the remote PC is not allowed" tech1 "$HOST_ID" "$PASSWORD" -
+hopt clanto-access-hours "mon-sun 00:00-24:00"
+expect "13f dentro le fasce orarie: solo password" ok tech1 "$HOST_ID" "$PASSWORD" -
+hopt clanto-access-hours ""
 
 echo "==> forwarding (sessione di controllo remoto)"
 ECHO_PY='import socket,sys,threading

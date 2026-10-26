@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_hbb/clanto/server_status.dart';
 import 'package:flutter_hbb/common/widgets/connection_page_title.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/popup_menu.dart';
@@ -35,6 +36,7 @@ class OnlineStatusWidget extends StatefulWidget {
 class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   final _svcStopped = Get.find<RxBool>(tag: 'stop-service');
   final _svcIsUsingPublicServer = true.obs;
+  final _clantoServer = clantoServerStatus().obs;
   Timer? _updateTimer;
 
   double get em => 14.0;
@@ -121,7 +123,9 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
                         stateGlobal.svcStatus.value == SvcStatus.connecting
                     ? kColorWarn
                     : (stateGlobal.svcStatus.value == SvcStatus.ready
-                        ? Color.fromARGB(255, 50, 190, 166)
+                        ? (_clantoServer.value.official
+                            ? Color.fromARGB(255, 50, 190, 166)
+                            : kColorWarn)
                         : Color.fromARGB(255, 224, 79, 95)),
               ),
             ).marginSymmetric(horizontal: em),
@@ -155,15 +159,15 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
 
   _buildConnStatusMsg() {
     widget.onSvcStatusChanged?.call();
-    return Text(
-      _svcStopped.value
-          ? translate("Service is not running")
-          : stateGlobal.svcStatus.value == SvcStatus.connecting
-              ? translate("connecting_status")
-              : stateGlobal.svcStatus.value == SvcStatus.notReady
-                  ? translate("not_ready_status")
-                  : translate('Ready'),
-      style: TextStyle(fontSize: em),
+    return Tooltip(
+      message: _clantoServer.value.host,
+      child: Text(
+        _svcStopped.value
+            ? translate("Service is not running")
+            : clantoConnStatusText(
+                stateGlobal.svcStatus.value, _clantoServer.value),
+        style: TextStyle(fontSize: em),
+      ),
     );
   }
 
@@ -181,6 +185,7 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
       stateGlobal.svcStatus.value = SvcStatus.notReady;
     }
     _svcIsUsingPublicServer.value = await bind.mainIsUsingPublicServer();
+    _clantoServer.value = clantoServerStatus();
     try {
       stateGlobal.videoConnCount.value = status['video_conn_count'] as int;
     } catch (_) {}

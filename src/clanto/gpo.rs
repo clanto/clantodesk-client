@@ -23,6 +23,7 @@ pub const GPO_KEYS: &[&str] = &[
     "clanto-id-permissions",
     "clanto-trusted-controllers",
     "clanto-require-2fa",
+    "clanto-access-hours",
     "clanto-share-device-identity",
     "clanto-forward-enabled",
     "clanto-forward-services-host",

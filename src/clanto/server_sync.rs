@@ -34,6 +34,7 @@ pub const SERVER_PROTECTED_KEYS: &[&str] = &[
     "clanto-id-permissions",
     "clanto-trusted-controllers",
     "clanto-require-2fa",
+    "clanto-access-hours",
     "clanto-require-protected-device",
     "clanto-require-controller-watermark",
     "clanto-posture-bypass",

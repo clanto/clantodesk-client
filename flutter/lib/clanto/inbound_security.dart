@@ -10,6 +10,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/utils/http_service.dart' as http;
 import 'package:settings_ui/settings_ui.dart';
 
+import 'access_hours.dart';
 import 'file_transfer_security.dart';
 import 'id_permissions.dart';
 import 'protected_device.dart';
@@ -258,6 +259,7 @@ class _ClantoInboundSecuritySettingState
             ),
           ),
         ),
+      ClantoAccessHoursSetting(enabled: widget.enabled),
       ClantoProtectedDeviceSetting(
         enabled: widget.enabled,
         onModify: () => showClantoPostureRulesDialog(context,

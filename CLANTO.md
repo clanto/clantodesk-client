@@ -572,6 +572,19 @@ dopo allowlist e permessi per ID e prima della postura; il controller riceve il 
 `clanto_2fa_policy_error` già tradotto dall'host. Con la policy attiva e il 2FA spento, le
 impostazioni host mostrano un avviso rosso nella sezione 2FA.
 
+### Fasce orarie di accesso
+
+`clanto-access-hours` (GPO `AccessHours`, sezione «Sicurezza in ingresso») limita le connessioni
+in ingresso a fasce orarie, nell'ora locale dell'host: voci `giorni HH:MM-HH:MM[,...]` separate da
+`;`, giorni `mon`..`sun` o `lun`..`dom`, intervalli (`mon-fri`) o elenchi (`sat,sun`), `24:00`
+come fine giornata, fasce a cavallo della mezzanotte, `none` per nessuna fascia. Vuota = sempre.
+Valore non valido = ogni connessione rifiutata (fail-closed). Logica in
+`src/clanto/access_hours.rs`, nello stesso hook del login di 2FA e policy
+(`crate::clanto::login_block()`), quindi vale per ogni modalità d'accesso, approvazione compresa.
+Il controller riceve `clanto_access_hours_error` tradotto dall'host. Chiave protetta dalla
+`strategy` del server. Le impostazioni mostrano una fascia per giorno; un valore più ricco
+(per esempio da GPO) si modifica come testo.
+
 ### Segreto 2FA cifrato dal servizio
 
 Segreto TOTP e token del bot Telegram sono cifrati con `machine.key`, che è per utente di
@@ -584,6 +597,13 @@ illeggibile fa rifiutare ogni login con `clanto_2fa_unreadable_error` (stesso ho
 All'avvio la UI reinvia al servizio i valori salvati dalle versioni precedenti, se lei riesce a
 leggerli; altrimenti va disattivato e riattivato il 2FA sull'host. `bot` è tra le
 `SERVER_PROTECTED_KEYS`: un server non può dirottare i codici su un altro bot.
+
+## Server nella barra di stato
+
+La barra in basso della finestra principale (desktop) dice a quale server si collega il PC
+(`main_clanto_server_status`, `src/clanto/config.rs`): se è uno di quelli fissati al build mostra
+«Pronto per la connessione tramite server Clanto» con il bollino verde, altrimenti «Pronto, server
+non gestito da Clanto: host» con il bollino arancione. Il nome del server è nel tooltip.
 
 ## Canale verso `api-server`
 

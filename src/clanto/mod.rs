@@ -7,6 +7,7 @@
 // Una riga aggiunta si auto-mergia quasi sempre; trenta righe intrecciate nel
 // corpo di una funzione upstream conflittano a ogni aggiornamento.
 
+pub mod access_hours;
 pub mod audit_sink;
 pub mod config;
 pub mod config_import;
@@ -26,3 +27,9 @@ pub mod trusted_controllers;
 pub mod two_factor_policy;
 pub mod two_factor_store;
 pub mod watermark;
+
+/// Controlli dell'host prima della password: fasce orarie, 2FA illeggibile,
+/// 2FA richiesto dalla policy. Motivo già tradotto per il controller.
+pub fn login_block() -> Option<String> {
+    access_hours::login_block().or_else(two_factor_policy::login_block)
+}

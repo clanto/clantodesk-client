@@ -194,6 +194,33 @@ pub fn servers_fixed_at_build() -> bool {
     servers_fixed(option_env!("RENDEZVOUS_SERVER"), option_env!("RS_PUB_KEY"))
 }
 
+fn host_of(server: &str) -> String {
+    let server = server.trim();
+    if let Some(rest) = server.strip_prefix('[') {
+        return rest.split(']').next().unwrap_or_default().to_owned();
+    }
+    match server.split_once(':') {
+        Some((host, port)) if !port.contains(':') => host.to_owned(),
+        _ => server.to_owned(),
+    }
+}
+
+/// Server di rendezvous in uso e se è uno di quelli fissati al build
+/// (`official`): la barra di stato lo mostra come server Clanto.
+pub fn server_status_json() -> String {
+    let host = host_of(&Config::get_rendezvous_server());
+    let official = is_build_server(servers_fixed_at_build(), option_env!("RENDEZVOUS_SERVER"), &host);
+    serde_json::json!({ "host": host, "official": official }).to_string()
+}
+
+fn is_build_server(fixed: bool, build: Option<&str>, host: &str) -> bool {
+    fixed
+        && !host.is_empty()
+        && build.map_or(false, |servers| {
+            servers.split(',').any(|s| host_of(s).eq_ignore_ascii_case(host))
+        })
+}
+
 fn servers_fixed(server: Option<&str>, key: Option<&str>) -> bool {
     [server, key]
         .iter()
@@ -253,6 +280,15 @@ fn check_own_server_configured() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn build_server_is_recognized_without_port() {
+        assert_eq!(super::host_of("rs.example.com:21116"), "rs.example.com");
+        assert_eq!(super::host_of("[::1]:21116"), "::1");
+        assert!(super::is_build_server(true, Some("a.example.com,b.example.com"), "B.example.com"));
+        assert!(!super::is_build_server(true, Some("a.example.com"), "evil.example.com"));
+        assert!(!super::is_build_server(false, Some("a.example.com"), "a.example.com"));
+    }
     use super::{
         apply_host_defaults, apply_new_peer_defaults, servers_fixed, OPTION_HOST_WATERMARK,
     };
