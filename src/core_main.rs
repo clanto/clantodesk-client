@@ -485,6 +485,14 @@ pub fn core_main() -> Option<Vec<String>> {
                 }
             }
             return None;
+        } else if args[0] == "--clanto-session-report" {
+            // Report sessioni in JSON per i software di ticketing: giorni (default 7).
+            let days: i64 = args.get(1).and_then(|d| d.parse().ok()).unwrap_or(7).clamp(1, 3650);
+            let to = hbb_common::get_time();
+            let from = to - days * 86_400_000;
+            let report = crate::ipc::get_config(&format!("clanto-session-report:{from}:{to}"));
+            println!("{}", report.ok().flatten().unwrap_or_else(|| "[]".to_owned()));
+            return None;
         } else if args[0] == "--get-id" {
             println!("{}", crate::ipc::get_id());
             return None;
@@ -886,6 +894,7 @@ fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
         Some("--password")
             | Some("--set-unlock-pin")
             | Some("--get-id")
+            | Some("--clanto-session-report")
             | Some("--set-id")
             | Some("--config")
             | Some("--option")

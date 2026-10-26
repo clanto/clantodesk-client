@@ -33,6 +33,8 @@ struct SessionRecord {
     record_type: String,
     session_key: String,
     session_code: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    ticket: String,
     conn_id: i32,
     started_at: String,
     ended_at: String,
@@ -237,6 +239,7 @@ fn apply_connection(registry: &mut Registry, value: &Value) -> Option<SessionRec
         let mut metadata_changed = false;
         for (key, target) in [
             ("session_code", &mut record.session_code),
+            ("ticket", &mut record.ticket),
             ("id_profile", &mut record.id_profile),
             ("account_user", &mut record.account_user),
             ("os_user", &mut record.os_user),
@@ -501,15 +504,24 @@ fn writer() -> &'static mpsc::Sender<WriterMessage> {
         if let Err(err) = std::thread::Builder::new()
             .name("clanto-session-log".to_owned())
             .spawn(move || {
+                // Ultimo anello della catena, letto dai file al primo record.
+                let mut chain: Option<Option<ChainLink>> = None;
                 for message in receiver {
                     match message {
-                        WriterMessage::Append(value) if enabled() => {
-                            if let Err(err) = append_record(&log_dir(), &value) {
-                                log::debug!("session log: {}", err);
+                        WriterMessage::Append(mut value) if enabled() => {
+                            let dir = log_dir();
+                            let last = chain.get_or_insert_with(|| last_link(&dir));
+                            let link = chain_value(&mut value, last.as_ref());
+                            match append_record(&dir, &value) {
+                                Ok(()) => *last = Some(link),
+                                Err(err) => log::debug!("session log: {}", err),
                             }
                         }
                         WriterMessage::Append(_) => {}
-                        WriterMessage::Clear => clear_files(&log_dir()),
+                        WriterMessage::Clear => {
+                            clear_files(&log_dir());
+                            chain = Some(None);
+                        }
                     }
                 }
             })
@@ -533,6 +545,108 @@ fn seal_line(value: &Value) -> std::io::Result<String> {
         ));
     }
     Ok(sealed)
+}
+
+/// Catena d'integrità: ogni record porta numero progressivo (`_seq`), impronta
+/// del precedente (`_prev`) e propria (`_hash`, SHA-256 di `_prev` e del record
+/// senza `_hash`). Una riga modificata, tolta o spostata rompe la catena dal
+/// punto in cui manca. Il primo record rimasto dopo la pulizia per conservazione
+/// fa da ancora. Non ferma chi ha la chiave macchina: per quello serve la copia
+/// esterna (SIEM).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ChainLink {
+    seq: u64,
+    hash: String,
+}
+
+const CHAIN_GENESIS: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+
+fn chain_hash(prev: &str, value: &Value) -> String {
+    use sha2::{Digest, Sha256};
+    let mut body = value.clone();
+    if let Some(map) = body.as_object_mut() {
+        map.remove("_hash");
+    }
+    let mut digest = Sha256::new();
+    digest.update(prev.as_bytes());
+    digest.update(b"\n");
+    digest.update(serde_json::to_string(&body).unwrap_or_default().as_bytes());
+    hex::encode(digest.finalize())
+}
+
+fn chain_value(value: &mut Value, last: Option<&ChainLink>) -> ChainLink {
+    let seq = last.map_or(1, |l| l.seq + 1);
+    let prev = last.map_or(CHAIN_GENESIS.to_owned(), |l| l.hash.clone());
+    value["_seq"] = json!(seq);
+    value["_prev"] = json!(prev);
+    let hash = chain_hash(&prev, value);
+    value["_hash"] = json!(hash);
+    ChainLink { seq, hash }
+}
+
+fn link_of(value: &Value) -> Option<(ChainLink, &str)> {
+    Some((
+        ChainLink {
+            seq: value.get("_seq")?.as_u64()?,
+            hash: value.get("_hash")?.as_str()?.to_owned(),
+        },
+        value.get("_prev")?.as_str()?,
+    ))
+}
+
+fn session_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|e| e.file_name().to_string_lossy().starts_with("sessions-"))
+                .map(|e| e.path())
+                .collect()
+        })
+        .unwrap_or_default();
+    // `sessions-AAAA-MM.jsonl`: l'ordine dei nomi è quello cronologico.
+    files.sort();
+    files
+}
+
+fn last_link(dir: &Path) -> Option<ChainLink> {
+    let mut last = None;
+    for file in session_files(dir) {
+        if let Ok(data) = fs::read_to_string(&file) {
+            for value in data.lines().filter_map(open_line) {
+                if let Some((link, _)) = link_of(&value) {
+                    last = Some(link);
+                }
+            }
+        }
+    }
+    last
+}
+
+/// Verifica in ordine di scrittura. `None` per righe senza catena (precedenti
+/// alla funzione) o illeggibili; una riga illeggibile rompe l'anello seguente.
+#[derive(Default)]
+struct ChainVerifier {
+    last: Option<ChainLink>,
+    gap: bool,
+}
+
+impl ChainVerifier {
+    fn check(&mut self, value: Option<&Value>) -> Option<bool> {
+        let Some(value) = value else {
+            self.gap = true;
+            return None;
+        };
+        let (link, prev) = link_of(value)?;
+        let linked = match &self.last {
+            Some(last) => !self.gap && link.seq == last.seq + 1 && prev == last.hash,
+            None => true,
+        };
+        let ok = linked && chain_hash(prev, value) == link.hash;
+        self.last = Some(link);
+        self.gap = false;
+        Some(ok)
+    }
 }
 
 /// Le righe in chiaro scritte prima della cifratura restano leggibili.
@@ -626,21 +740,33 @@ fn is_expired(modified: SystemTime, cutoff: SystemTime) -> bool {
 /// millisecondi. È chiamata dal processo di servizio attraverso IPC.
 pub fn report_json(from_ms: i64, to_ms: i64) -> String {
     let mut sessions: HashMap<String, Value> = HashMap::new();
+    let mut broken_sessions: HashSet<String> = HashSet::new();
     let mut records = Vec::new();
-    let Ok(entries) = fs::read_dir(log_dir()) else {
-        return "[]".to_owned();
-    };
-    for entry in entries.flatten() {
-        if !entry.file_name().to_string_lossy().starts_with("sessions-") {
-            continue;
-        }
-        let Ok(data) = fs::read_to_string(entry.path()) else {
+    let mut verifier = ChainVerifier::default();
+    for file in session_files(&log_dir()) {
+        let Ok(data) = fs::read_to_string(&file) else {
             continue;
         };
         for line in data.lines() {
-            let Some(record) = open_line(line) else {
+            let opened = open_line(line);
+            let verdict = verifier.check(opened.as_ref());
+            let Some(mut record) = opened else {
                 continue;
             };
+            // Esito per l'interfaccia; i campi della catena non servono oltre.
+            if let Some(map) = record.as_object_mut() {
+                for key in ["_seq", "_prev", "_hash"] {
+                    map.remove(key);
+                }
+            }
+            if let Some(ok) = verdict {
+                record["integrity"] = json!(if ok { "ok" } else { "broken" });
+                if !ok {
+                    if let Some(key) = record.get("session_key").and_then(Value::as_str) {
+                        broken_sessions.insert(key.to_owned());
+                    }
+                }
+            }
             let at = record
                 .get("started_at")
                 .or_else(|| record.get("occurred_at"))
@@ -661,6 +787,11 @@ pub fn report_json(from_ms: i64, to_ms: i64) -> String {
                     records.push(record);
                 }
             }
+        }
+    }
+    for (key, record) in sessions.iter_mut() {
+        if broken_sessions.contains(key) {
+            record["integrity"] = json!("broken");
         }
     }
     records.extend(sessions.into_values());
@@ -777,6 +908,32 @@ mod tests {
                 "result": "malware",
             })
         );
+    }
+
+    #[test]
+    fn chain_detects_changed_removed_and_reordered_records() {
+        let mut values = Vec::new();
+        let mut last = None;
+        for i in 0..4 {
+            let mut v = json!({"record_type": "session", "n": i});
+            last = Some(chain_value(&mut v, last.as_ref()));
+            values.push(v);
+        }
+        let verify = |vals: &[Value]| {
+            let mut verifier = ChainVerifier::default();
+            vals.iter().map(|v| verifier.check(Some(v))).collect::<Vec<_>>()
+        };
+        assert!(verify(&values).iter().all(|r| *r == Some(true)));
+        let mut changed = values.clone();
+        changed[1]["n"] = json!(9);
+        assert_eq!(verify(&changed)[1], Some(false));
+        let removed = [values[0].clone(), values[2].clone(), values[3].clone()];
+        assert_eq!(verify(&removed), vec![Some(true), Some(false), Some(true)]);
+        let mut verifier = ChainVerifier::default();
+        verifier.check(Some(&values[0]));
+        verifier.check(None);
+        assert_eq!(verifier.check(Some(&values[2])), Some(false));
+        assert_eq!(ChainVerifier::default().check(Some(&json!({"legacy": 1}))), None);
     }
 
     #[test]

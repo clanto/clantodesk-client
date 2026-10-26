@@ -13,6 +13,7 @@ class ClantoSessionRecord {
     required this.endedAt,
     required this.durationSecs,
     required this.sessionCode,
+    this.ticket = '',
     required this.peerId,
     required this.peerName,
     required this.ip,
@@ -27,12 +28,14 @@ class ClantoSessionRecord {
     required this.closeReason,
     required this.rejected,
     required this.closed,
+    this.integrity = '',
   });
 
   final DateTime? startedAt;
   final DateTime? endedAt;
   final int durationSecs;
   final String sessionCode;
+  final String ticket;
   final String peerId;
   final String peerName;
   final String ip;
@@ -47,6 +50,10 @@ class ClantoSessionRecord {
   final String closeReason;
   final bool rejected;
   final bool closed;
+
+  /// Catena d'integrità del report (session_log.rs): `ok`, `broken` o vuoto
+  /// per i record scritti prima della catena.
+  final String integrity;
 
   factory ClantoSessionRecord.fromJson(Map<String, dynamic> json) {
     final rawPermissions = json['permissions_used'] ?? json['permissions'];
@@ -65,6 +72,7 @@ class ClantoSessionRecord {
       endedAt: _date(json['ended_at'] ?? json['end']),
       durationSecs: _integer(json['duration_secs']),
       sessionCode: _string(json['session_code']),
+      ticket: _string(json['ticket']),
       peerId: _string(json['peer_id']),
       peerName: _string(json['peer_name']),
       ip: _string(json['ip']),
@@ -89,6 +97,7 @@ class ClantoSessionRecord {
           json['details']),
       rejected: json['record_type'] == 'rejected_attempt',
       closed: json['closed'] == true,
+      integrity: _string(json['integrity']),
     );
   }
 
@@ -195,8 +204,13 @@ List<ClantoSessionRecord> clantoFilterSessionRecords(
       return false;
     }
     if (normalizedQuery.isEmpty) return true;
-    return [record.peerId, record.peerName, record.ip, record.sessionCode]
-        .any((value) => value.toLowerCase().contains(normalizedQuery));
+    return [
+      record.peerId,
+      record.peerName,
+      record.ip,
+      record.sessionCode,
+      record.ticket
+    ].any((value) => value.toLowerCase().contains(normalizedQuery));
   }).toList(growable: false);
 }
 
@@ -213,6 +227,7 @@ String clantoSessionRecordsCsv(
       'Ended',
       'Duration seconds',
       'Session code',
+      'Ticket',
       'Peer ID',
       'Peer name',
       'IP',
@@ -225,6 +240,7 @@ String clantoSessionRecordsCsv(
       'File transfers',
       'Close reason',
       'Rejected',
+      'Integrity',
     ],
     ...records.map((record) => [
           formatDate(record.startedAt),
@@ -232,6 +248,7 @@ String clantoSessionRecordsCsv(
           record.statusLabel(translate),
           record.closed ? '${record.durationSecs}' : '',
           record.sessionCode,
+          record.ticket,
           record.peerId,
           record.peerName,
           record.ip,
@@ -248,6 +265,7 @@ String clantoSessionRecordsCsv(
               .join('; '),
           record.closeReason,
           record.rejected ? 'yes' : 'no',
+          record.integrity,
         ]),
   ];
   return '${rows.map((row) => row.map(quote).join(',')).join('\r\n')}\r\n';

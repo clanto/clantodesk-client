@@ -15,7 +15,7 @@
 //!   --e2e forward <host-id> <password> to-host:<ip>:<porta> | reverse:<ip>:<porta>:<secondi>
 //!   --e2e camera <host-id> <password> <frame>  webcam di prova verso l'host
 //!   --e2e device-key | my-id                 controller
-//!   --e2e login <host-id> <password> <totp-hex|-> [hwid] [no-key] [as-id=<ID>]
+//!   --e2e login <host-id> <password> <totp-hex|-> [hwid] [no-key] [as-id=<ID>] [ticket=<rif>]
 //!
 //! L'esito del login è una riga `RESULT=ok|2fa-required|error:<testo>`.
 
@@ -148,6 +148,7 @@ async fn open_session(a: &LoginArgs, conn: ConnType) -> Result<Stream, String> {
                     hwid: hwid.clone(),
                     ..Default::default()
                 };
+                lr.clanto_ticket = crate::clanto::ticket::for_peer(&a.host);
                 if conn == ConnType::FILE_TRANSFER {
                     lr.set_file_transfer(FileTransfer {
                         dir: "/tmp".to_owned(),
@@ -556,6 +557,9 @@ pub fn run(args: &[String]) {
         "login" => {
             let flags = &args[4.min(args.len())..];
             let totp = arg(3);
+            if let Some(ticket) = flags.iter().find_map(|f| f.strip_prefix("ticket=")) {
+                crate::clanto::ticket::set(&arg(1), ticket);
+            }
             let result = login(LoginArgs {
                 host: arg(1),
                 password: arg(2),

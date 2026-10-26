@@ -309,6 +309,30 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
     }
   }
 
+  /// Pallino della verifica d'integrità, fatta dal servizio a ogni lettura.
+  Widget _integrityDot(ClantoSessionRecord record) {
+    final (color, tip) = switch (record.integrity) {
+      'ok' => (Colors.green, 'Integrity verified'),
+      'broken' => (Colors.red, 'Record altered or records missing'),
+      _ => (Colors.grey, 'Integrity not verifiable (older record)'),
+    };
+    return Tooltip(
+      message: translate(tip),
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+    );
+  }
+
+  String _integrityLabel(ClantoSessionRecord record) => translate(
+      switch (record.integrity) {
+        'ok' => 'Integrity verified',
+        'broken' => 'Record altered or records missing',
+        _ => 'Integrity not verifiable (older record)',
+      });
+
   Widget _outcomeBadge(ClantoSessionRecord record) {
     final color = _outcomeColor(record);
     return Container(
@@ -331,12 +355,14 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
             : translate('Session details')),
         content: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _detail('Integrity', _integrityLabel(record)),
             _detail('Date', _date(record.startedAt)),
             _detail('Ended', record.closed
                 ? _date(record.endedAt)
                 : record.statusLabel(translate)),
             if (record.closed) _detail('Duration', _duration(record.durationSecs)),
             _detail('Session code', record.sessionCode),
+            if (record.ticket.isNotEmpty) _detail('Ticket', record.ticket),
             _detail('Peer', record.peer),
             _detail('IP', record.ip),
             _detail('Connection type', record.connectionType),
@@ -501,6 +527,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
       child: DataTable(
         showCheckboxColumn: false,
         columns: [
+          const DataColumn(label: SizedBox.shrink()),
           DataColumn(label: Text(translate('Date and time'))),
           DataColumn(label: Text(translate('Outcome'))),
           DataColumn(label: Text(translate('Device'))),
@@ -516,6 +543,7 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
                     if (selected == true) _showDetail(record);
                   },
                   cells: [
+                    DataCell(_integrityDot(record)),
                     DataCell(Text(_date(record.startedAt))),
                     DataCell(_outcomeBadge(record)),
                     DataCell(Text(record.peerName.isEmpty
@@ -551,6 +579,8 @@ class _ClantoSessionReportState extends State<ClantoSessionReport> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(children: [
+                          _integrityDot(record),
+                          const SizedBox(width: 8),
                           Expanded(child: Text(record.peer)),
                           _outcomeBadge(record),
                         ]),

@@ -3896,6 +3896,7 @@ impl LoginConfigHandler {
             lr.clanto_device_key = key.into();
             lr.clanto_device_sig = sig.into();
         }
+        lr.clanto_ticket = crate::clanto::ticket::for_peer(&self.id);
         lr.clanto_posture = crate::clanto::posture::collect();
         lr.clanto_posture_mac = crate::clanto::posture::sign(
             &lr.clanto_posture,

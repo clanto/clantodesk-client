@@ -143,6 +143,13 @@ expect_prefix "13e fuori dalle fasce orarie: accesso rifiutato" "error:Access to
 hopt clanto-access-hours "mon-sun 00:00-24:00"
 expect "13f dentro le fasce orarie: solo password" ok tech1 "$HOST_ID" "$PASSWORD" -
 hopt clanto-access-hours ""
+expect "13g login con riferimento ticket" ok tech1 "$HOST_ID" "$PASSWORD" - ticket=INC-E2E-42
+sleep 2
+REPORT="$(docker exec e2e-host $BIN --clanto-session-report 1)"
+if grep -q '"ticket":"INC-E2E-42"' <<<"$REPORT"; then PASS=$((PASS+1)); echo "  OK    13h ticket nel report JSON dell'host"
+else FAIL=$((FAIL+1)); echo "  FAIL  13h ticket nel report JSON dell'host"; fi
+if grep -q '"integrity":"ok"' <<<"$REPORT" && ! grep -q '"integrity":"broken"' <<<"$REPORT"; then PASS=$((PASS+1)); echo "  OK    13i catena d'integrità del report verificata"
+else FAIL=$((FAIL+1)); echo "  FAIL  13i catena d'integrità del report"; fi
 
 echo "==> forwarding (sessione di controllo remoto)"
 ECHO_PY='import socket,sys,threading

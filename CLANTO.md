@@ -430,6 +430,21 @@ di ClantoDesk; nella stessa sezione si imposta la conservazione da 0 a 3650 gior
 esplicita prima di salvare `0`, e il controllo rispetta il relativo blocco amministrativo. I record contengono metadati personali
 dei peer: limitare la conservazione allo stretto necessario e proteggere l'accesso alle impostazioni.
 
+**Integrità.** Ogni riga porta `_seq` (progressivo), `_prev` (impronta della riga precedente) e
+`_hash` (SHA-256 di `_prev` e del record senza `_hash`). `report_json()` rilegge i file in ordine e
+verifica la catena: ogni record arriva alla UI con `integrity` = `ok` o `broken` (assente per le
+righe scritte prima della catena), e il report mostra un pallino verde, rosso o grigio. Una riga
+modificata, tolta, spostata o illeggibile rompe la catena da quel punto; il primo record rimasto
+dopo la pulizia per conservazione fa da ancora. Chi ha la chiave macchina (amministratore) può
+riscrivere la catena intera: contro questo serve la copia esterna dell'audit (SIEM).
+
+**Riferimento ticket.** Facoltativo: `clantodesk://connect/<ID>?ticket=INC-1234` o
+`--connect <ID> --ticket INC-1234` (`src/clanto/ticket.rs`). Il controller lo invia nel login
+(`clanto_ticket = 1004` in `LoginRequest`), l'host lo aggiunge agli eventi di audit (quindi a
+Event Log e SIEM) e al report, accanto al codice sessione; è cercabile ed esportato nel CSV. Testo
+ripulito, massimo 64 caratteri; non influisce sull'accesso. Per i software di ticketing
+`clantodesk --clanto-session-report [giorni]` stampa il report in JSON (default 7 giorni).
+
 ## Integrazione SIEM dell'audit host
 
 L'host può duplicare gli eventi di audit nel registro eventi Application di Windows e verso un

@@ -90,6 +90,8 @@ message LoginRequest {
   // ha registrato la chiave (src/clanto/trusted_controllers.rs).
   bytes clanto_device_key = 1002;
   bytes clanto_device_sig = 1003;
+  // Riferimento ticket facoltativo (src/clanto/ticket.rs).
+  string clanto_ticket = 1004;
 }
 
 message Terminal {

@@ -1619,6 +1619,7 @@ impl Connection {
         if let Some(session_code) = self.session_code.as_deref() {
             v["session_code"] = json!(session_code);
         }
+        crate::clanto::ticket::audit(&mut v, &self.lr.clanto_ticket);
         if let Some(identity) = self.controller_identity.as_ref() {
             if !identity.account_user.trim().is_empty() {
                 v["account_user"] = json!(&identity.account_user);

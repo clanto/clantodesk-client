@@ -2286,8 +2286,13 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
   String? password;
   String? switchUuid;
   bool? forceRelay;
+  String? ticket;
   for (int i = 0; i < args.length; i++) {
     switch (args[i]) {
+      case '--ticket':
+        ticket = args[i + 1];
+        i++;
+        break;
       case '--connect':
       case '--play':
         type = UriLinkType.remoteDesktop;
@@ -2341,6 +2346,8 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
     }
   }
   if (type != null && id != null) {
+    // Clanto: riferimento ticket facoltativo (src/clanto/ticket.rs).
+    if (ticket != null) bind.mainClantoSetTicket(id: id, ticket: ticket);
     switch (type) {
       case UriLinkType.remoteDesktop:
         Future.delayed(Duration.zero, () {
@@ -2484,6 +2491,8 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
   if (isMobile && id != null) {
     final forceRelay = queryParameters["relay"] != null;
     final password = queryParameters["password"];
+    final ticket = queryParameters["ticket"];
+    if (ticket != null) bind.mainClantoSetTicket(id: id, ticket: ticket);
 
     // Determine connection type based on command
     if (command == '--file-transfer') {
@@ -2516,6 +2525,8 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     String? switch_uuid = param["switch_uuid"];
     if (switch_uuid != null) args.addAll(['--switch_uuid', switch_uuid]);
     if (param["relay"] != null) args.add("--relay");
+    String? ticket = param["ticket"];
+    if (ticket != null) args.addAll(['--ticket', ticket]);
     return args;
   }
 
