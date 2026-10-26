@@ -5,125 +5,6 @@
     "aule": []
   },
   "eol": {
-    "Windows": [
-      {
-        "field": "os_build",
-        "regex": "^19044$",
-        "edition_regex": "(?i)IoT.*LTSC",
-        "date": "2032-01-13"
-      },
-      {
-        "field": "os_build",
-        "regex": "^19044$",
-        "edition_regex": "(?i)LTSC|LTSB",
-        "date": "2027-01-12"
-      },
-      {
-        "field": "os_build",
-        "regex": "^19044$",
-        "edition_regex": "(?i)enterprise|(?<!pro )education",
-        "date": "2024-06-11"
-      },
-      {
-        "field": "os_build",
-        "regex": "^19044$",
-        "date": "2023-06-13"
-      },
-      {
-        "field": "os_build",
-        "regex": "^19045$",
-        "date": "2025-10-14"
-      },
-      {
-        "field": "os_build",
-        "regex": "^22000$",
-        "edition_regex": "(?i)enterprise|(?<!pro )education",
-        "date": "2024-10-08"
-      },
-      {
-        "field": "os_build",
-        "regex": "^22000$",
-        "date": "2023-10-10"
-      },
-      {
-        "field": "os_build",
-        "regex": "^22621$",
-        "edition_regex": "(?i)enterprise|(?<!pro )education",
-        "date": "2025-10-14"
-      },
-      {
-        "field": "os_build",
-        "regex": "^22621$",
-        "date": "2024-10-08"
-      },
-      {
-        "field": "os_build",
-        "regex": "^22631$",
-        "edition_regex": "(?i)enterprise|(?<!pro )education",
-        "date": "2026-11-10"
-      },
-      {
-        "field": "os_build",
-        "regex": "^22631$",
-        "date": "2025-11-11"
-      },
-      {
-        "field": "os_build",
-        "regex": "^26100$",
-        "edition_regex": "(?i)IoT.*LTSC",
-        "date": "2034-10-10"
-      },
-      {
-        "field": "os_build",
-        "regex": "^26100$",
-        "edition_regex": "(?i)LTSC",
-        "date": "2029-10-09"
-      },
-      {
-        "field": "os_build",
-        "regex": "^26100$",
-        "edition_regex": "(?i)enterprise|(?<!pro )education",
-        "date": "2027-10-12"
-      },
-      {
-        "field": "os_build",
-        "regex": "^26100$",
-        "date": "2026-10-13"
-      },
-      {
-        "field": "os_build",
-        "regex": "^26200$",
-        "edition_regex": "(?i)enterprise|(?<!pro )education",
-        "date": "2028-10-10"
-      },
-      {
-        "field": "os_build",
-        "regex": "^26200$",
-        "date": "2027-10-12"
-      },
-      {
-        "field": "os_build",
-        "regex": "^26300$",
-        "edition_regex": "(?i)enterprise|(?<!pro )education",
-        "date": "2029-10-09"
-      },
-      {
-        "field": "os_build",
-        "regex": "^26300$",
-        "date": "2028-10-10"
-      },
-      {
-        "field": "os_build",
-        "regex": "^28000$",
-        "edition_regex": "(?i)enterprise|(?<!pro )education",
-        "date": "2029-03-13"
-      },
-      {
-        "field": "os_build",
-        "regex": "^28000$",
-        "date": "2028-03-14"
-      }
-    ],
     "Linux": [
       {
         "field": "os_version",
@@ -167,11 +48,23 @@
       "id": "sistema-supportato",
       "enabled": true,
       "platforms": [
-        "Windows",
         "Linux"
       ],
       "op": "not_eol",
       "message": "Il sistema operativo non riceve più aggiornamenti di sicurezza dal produttore: aggiornarlo alla versione più recente."
+    },
+    {
+      "id": "windows-aggiornamenti-cumulativi",
+      "enabled": true,
+      "platforms": [
+        "Windows"
+      ],
+      "field": "os_patch_days",
+      "op": "num_lte",
+      "value": 60,
+      "unknown_is": "fail",
+      "message": "Windows non riceve aggiornamenti cumulativi da più di 60 giorni: eseguire Windows Update o aggiornare a una versione ancora supportata.",
+      "allow_missing": true
     },
     {
       "id": "windows-build-minima",

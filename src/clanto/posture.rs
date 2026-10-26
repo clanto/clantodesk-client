@@ -91,6 +91,8 @@ pub const POSTURE_KEYS: &[&str] = &[
     "tpm_version",
     "vbs_enabled",
     "last_update_days",
+    "os_ubr",
+    "os_patch_days",
     "auto_update_enabled",
     "pending_reboot",
     "arch",
@@ -442,6 +444,11 @@ $mp = Get-MpComputerStatus -ErrorAction SilentlyContinue
 if ($null -ne $mp -and $null -ne $mp.AntispywareSignatureLastUpdated) { Write-Output ("av_signature_days=" + [math]::Max(0, [math]::Floor(((Get-Date) - $mp.AntispywareSignatureLastUpdated).TotalDays))) }
 $hotfix = Get-HotFix -ErrorAction SilentlyContinue | Where-Object {$null -ne $_.InstalledOn} | Sort-Object InstalledOn -Descending | Select-Object -First 1
 if ($null -ne $hotfix) { Write-Output ("last_update_days=" + [math]::Max(0, [math]::Floor(((Get-Date) - $hotfix.InstalledOn).TotalDays))) }
+$ubr = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name UBR -ErrorAction SilentlyContinue
+if ($null -ne $ubr) { Write-Output ("os_ubr=" + $ubr) }
+$lcu = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\Packages' -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -like 'Package_for_RollupFix*' } | ForEach-Object { $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if ($null -ne $p -and $p.CurrentState -eq 112 -and $null -ne $p.InstallTimeHigh) { $hi = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$p.InstallTimeHigh), 0); $lo = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$p.InstallTimeLow), 0); [DateTime]::FromFileTimeUtc(([int64]$hi -shl 32) -bor [int64]$lo) } } | Sort-Object -Descending | Select-Object -First 1
+if ($null -eq $lcu) { $lcu = (Get-HotFix -ErrorAction SilentlyContinue | Where-Object { $null -ne $_.InstalledOn -and $_.Description -eq 'Security Update' } | Sort-Object InstalledOn -Descending | Select-Object -First 1).InstalledOn }
+if ($null -ne $lcu) { Write-Output ("os_patch_days=" + [math]::Max(0, [math]::Floor(((Get-Date).ToUniversalTime() - ([DateTime]$lcu).ToUniversalTime()).TotalDays))) }
 "#;
     if let Some(output) = command_output(
         deadline,

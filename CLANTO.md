@@ -772,7 +772,10 @@ il pulsante «Aggiorna», usando il download/installer desktop o la pagina Play 
 
 - **Controller.** `src/clanto/posture.rs`: `collect()` raccoglie le chiavi di `POSTURE_KEYS` (sistema,
   patch, antivirus, firewall, firmware, rete...), `unknown` dove non arriva senza privilegi o entro il
-  tempo (8 s su Windows, 3 s altrove). Il risultato resta in cache per 10 minuti; `prewarm()` parte in
+  tempo (8 s su Windows, 3 s altrove). Su Windows `os_ubr` (revisione, es. 19045.7807) e
+  `os_patch_days` (giorni dall'ultimo aggiornamento cumulativo installato, dal registro CBS o da
+  `Get-HotFix`): la policy decide se Windows è supportato da quanto è recente l'ultimo cumulativo,
+  non da una tabella di build e date. Il risultato resta in cache per 10 minuti; `prewarm()` parte in
   `Client::start`, così il login non aspetta le sonde. Mai SSID, hostname, utenti, IP o MAC.
 - **Firma.** HMAC-SHA256 sulla postura, legato a ID dell'host, `challenge` del messaggio `Hash` e
   versione. Il formato canonico sta in `canonical_message()` e **deve coincidere byte per byte** con la
