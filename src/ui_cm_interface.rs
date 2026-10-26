@@ -1949,7 +1949,11 @@ pub fn elevate_portable(_id: i32) {
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
 pub fn handle_clanto_camera_response(id: i32, accept: bool) {
     if let Some(client) = CLIENTS.read().unwrap().get(&id) {
+        // iOS non fa da host: nessuna richiesta da accettare.
+        #[cfg(not(any(target_os = "ios")))]
         allow_err!(client.tx.send(Data::ClantoCameraResponse(accept)));
+        #[cfg(target_os = "ios")]
+        let _ = (client, accept);
     };
 }
 
