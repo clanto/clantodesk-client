@@ -963,6 +963,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Copy", "Copia"),
         ("clanto_2fa_policy_error", "Il PC remoto richiede l'autenticazione a due fattori, ma non l'ha ancora configurata. Contatta l'amministratore del PC remoto."),
         ("clanto_2fa_unreadable_error", "Il PC remoto ha l'autenticazione a due fattori attiva ma non riesce a leggerne la configurazione. Chiedi all'utente del PC remoto di disattivarla e riattivarla in Impostazioni, Sicurezza."),
+        ("clanto_tampered_error", "ClantoDesk è stato manomesso o danneggiato: questi file non sono firmati da Clanto. Per sicurezza ClantoDesk non può essere avviato. Reinstallalo scaricandolo da clanto.it."),
+        ("Tampered executable", "Eseguibile manomesso"),
         ("clanto_access_hours_error", "L'accesso al PC remoto non è consentito in questo orario."),
         ("Allow connections only at set times", "Consenti le connessioni solo in determinate fasce orarie"),
         ("Outside these hours every connection is rejected, in this PC's local time.", "Fuori da queste fasce ogni connessione è rifiutata, nell'ora locale di questo PC."),

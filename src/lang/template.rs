@@ -962,6 +962,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Copy", ""),
         ("clanto_2fa_policy_error", ""),
         ("clanto_2fa_unreadable_error", ""),
+        ("clanto_tampered_error", ""),
+        ("Tampered executable", ""),
         ("clanto_access_hours_error", ""),
         ("Allow connections only at set times", ""),
         ("Outside these hours every connection is rejected, in this PC's local time.", ""),

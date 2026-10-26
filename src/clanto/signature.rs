@@ -3,8 +3,10 @@
 
 //! Firma del codice. Gli aggiornamenti automatici si installano solo se
 //! firmati da Clanto (Authenticode su Windows, Developer ID del team su
-//! macOS); il servizio Windows controlla all'avvio i propri binari e, se la
-//! firma non torna, registra un allarme nell'audit.
+//! macOS). Su Windows, con ClantoDesk installato, servizio e interfaccia
+//! verificano all'avvio ogni `.exe` e `.dll` della cartella d'installazione:
+//! un binario non firmato da Clanto ferma il servizio (niente accesso remoto)
+//! e l'interfaccia mostra «eseguibile manomesso» e si chiude.
 //!
 //! Non ferma chi è già amministratore della macchina (può togliere anche il
 //! controllo): per quello servono le regole di App Control/AppLocker di
@@ -112,41 +114,131 @@ pub fn verify_macos_app(app: &Path) -> ResultType<()> {
     Ok(())
 }
 
-/// Servizio Windows: controllo dei binari installati, in un thread; esito nel
-/// log e, se negativo, nell'audit (`clanto_binary_signature`).
+/// Firmatari ammessi per i binari nella cartella d'installazione: Clanto e i
+/// componenti Microsoft ridistribuiti (runtime, RuntimeBroker).
 #[cfg(windows)]
-pub fn check_installed_binaries() {
+const MICROSOFT_SIGNERS: &[&str] = &["Microsoft Windows", "Microsoft Corporation"];
+
+/// Esito, per ogni file, di `Get-AuthenticodeSignature`: (nome, stato, soggetto).
+#[cfg(windows)]
+fn windows_signatures(files: &[std::path::PathBuf]) -> ResultType<Vec<(String, String, String)>> {
+    let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_owned());
+    let powershell = Path::new(&system_root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+    let list = files.iter().map(|f| f.to_string_lossy()).collect::<Vec<_>>().join("|");
+    let output = Command::new(powershell)
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "foreach ($f in $env:CLANTO_SIGNED_FILES.Split('|')) { $s = Get-AuthenticodeSignature -LiteralPath $f; Write-Output ((Split-Path $f -Leaf) + [char]9 + $s.Status + [char]9 + $s.SignerCertificate.Subject) }",
+        ])
+        .env("CLANTO_SIGNED_FILES", list)
+        .output()?;
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.trim_end().splitn(3, '\t');
+            Some((parts.next()?.to_owned(), parts.next()?.to_owned(), parts.next().unwrap_or_default().to_owned()))
+        })
+        .collect())
+}
+
+/// File non firmati da Clanto (o da Microsoft) fra quelli verificati; ogni
+/// file senza esito conta come manomesso.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn tampered_files(names: &[String], results: &[(String, String, String)], signers: &[&str]) -> Vec<String> {
+    names
+        .iter()
+        .filter(|name| {
+            !results.iter().any(|(file, status, subject)| {
+                file.eq_ignore_ascii_case(name) && signers.iter().any(|s| signer_matches(status, subject, s))
+            })
+        })
+        .cloned()
+        .collect()
+}
+
+/// Windows, ClantoDesk installato: ogni `.exe` e `.dll` della cartella
+/// d'installazione deve essere firmato da Clanto (o Microsoft). `Err` con i
+/// file manomessi: chi chiama non deve proseguire.
+#[cfg(windows)]
+pub fn verify_install_dir() -> Result<(), Vec<String>> {
     if !enforced() || !crate::platform::is_installed() {
-        return;
+        return Ok(());
     }
-    std::thread::spawn(|| {
-        let (_, install_dir, _, _) = crate::platform::windows::get_install_info();
-        let mut files = vec![];
-        if let Ok(exe) = std::env::current_exe() {
-            files.push(exe);
+    let (_, install_dir, _, _) = crate::platform::windows::get_install_info();
+    let files: Vec<std::path::PathBuf> = std::fs::read_dir(&install_dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.is_file()
+                        && p.extension()
+                            .map_or(false, |e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("dll"))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if files.is_empty() {
+        return Ok(());
+    }
+    let names: Vec<String> = files
+        .iter()
+        .filter_map(|f| f.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .collect();
+    let results = match windows_signatures(&files) {
+        Ok(results) => results,
+        Err(err) => {
+            // Senza PowerShell la verifica non si fa: non si blocca l'uso.
+            hbb_common::log::error!("signature check unavailable: {err}");
+            return Ok(());
         }
-        files.push(Path::new(&install_dir).join(clanto_vcam::DLL_NAME));
-        for file in files.into_iter().filter(|f| f.is_file()) {
-            match verify_windows_file(&file) {
-                Ok(()) => hbb_common::log::info!("signature ok: {}", file.display()),
-                Err(err) => {
-                    hbb_common::log::error!("{err}");
-                    crate::clanto::audit_sink::emit(
-                        "clanto_binary_signature",
-                        &serde_json::json!({
-                            "file": file.file_name().map(|n| n.to_string_lossy().into_owned()),
-                            "error": err.to_string(),
-                        }),
-                    );
-                }
-            }
-        }
-    });
+    };
+    let mut signers = vec![WINDOWS_SIGNER];
+    signers.extend_from_slice(MICROSOFT_SIGNERS);
+    let tampered = tampered_files(&names, &results, &signers);
+    if tampered.is_empty() {
+        return Ok(());
+    }
+    hbb_common::log::error!("tampered ClantoDesk binaries: {}", tampered.join(", "));
+    crate::clanto::audit_sink::emit(
+        "clanto_binary_signature",
+        &serde_json::json!({ "files": tampered }),
+    );
+    Err(tampered)
+}
+
+/// Messaggio per l'interfaccia, vuoto se i binari sono integri. Chiamato
+/// dall'interfaccia all'avvio (Flutter, in un thread a parte).
+pub fn tamper_message() -> String {
+    #[cfg(windows)]
+    if let Err(files) = verify_install_dir() {
+        return format!(
+            "{}\n\n{}",
+            crate::lang::translate("clanto_tampered_error".to_owned()),
+            files.join("\n")
+        );
+    }
+    String::new()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unsigned_or_missing_results_are_tampered() {
+        let names = vec!["clantodesk.exe".to_owned(), "librustdesk.dll".to_owned(), "x.dll".to_owned(), "vc.dll".to_owned()];
+        let clanto = "CN=Clanto Services srl, O=Clanto Services srl, C=IT";
+        let results = vec![
+            ("ClantoDesk.exe".to_owned(), "Valid".to_owned(), clanto.to_owned()),
+            ("librustdesk.dll".to_owned(), "HashMismatch".to_owned(), clanto.to_owned()),
+            ("vc.dll".to_owned(), "Valid".to_owned(), "CN=Microsoft Corporation, O=Microsoft Corporation".to_owned()),
+        ];
+        let tampered = tampered_files(&names, &results, &["Clanto Services srl", "Microsoft Corporation"]);
+        assert_eq!(tampered, vec!["librustdesk.dll".to_owned(), "x.dll".to_owned()]);
+    }
 
     #[test]
     fn signer_and_team_checks() {

@@ -279,8 +279,8 @@ const EVENTS: &[EventDefinition] = &[
     EventDefinition {
         key: EventKey::BinarySignatureInvalid,
         id: 61180,
-        name: "ClantoDesk binary not signed by Clanto",
-        syslog_severity: 3,
+        name: "ClantoDesk binary tampered (not signed by Clanto)",
+        syslog_severity: 2,
         cef_severity: 8,
     },
     EventDefinition {

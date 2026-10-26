@@ -1217,6 +1217,12 @@ pub fn main_is_using_public_server() -> bool {
     crate::using_public_server()
 }
 
+/// Clanto: vuoto se i binari installati sono firmati da Clanto, altrimenti il
+/// messaggio di eseguibile manomesso (l'interfaccia si chiude).
+pub fn main_clanto_tamper_check() -> String {
+    crate::clanto::signature::tamper_message()
+}
+
 /// Clanto: riferimento ticket per le prossime connessioni a `id`.
 pub fn main_clanto_set_ticket(id: String, ticket: String) {
     crate::clanto::ticket::set(&id, &ticket);
