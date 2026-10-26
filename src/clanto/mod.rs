@@ -17,6 +17,7 @@ pub mod gpo;
 pub mod host_watermark;
 pub mod id_permissions;
 pub mod keystore;
+pub mod managed_config;
 pub mod outgoing;
 pub mod posture;
 pub mod server_sync;

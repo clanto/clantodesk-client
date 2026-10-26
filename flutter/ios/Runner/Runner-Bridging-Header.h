@@ -2,3 +2,4 @@
 
 #import "bridge_generated.h"
 #import "ClantoCamera.h"
+#import "ClantoManagedConfig.h"

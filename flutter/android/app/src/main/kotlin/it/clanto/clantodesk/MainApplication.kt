@@ -3,6 +3,7 @@ package it.clanto.clantodesk
 import android.app.Application
 import android.util.Log
 import ffi.FFI
+import it.clanto.clantodesk.clanto.ClantoManagedConfig
 
 class MainApplication : Application() {
     companion object {
@@ -13,5 +14,6 @@ class MainApplication : Application() {
         super.onCreate()
         Log.d(TAG, "App start")
         FFI.onAppStart(applicationContext)
+        ClantoManagedConfig.register(applicationContext)
     }
 }

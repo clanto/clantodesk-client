@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
+     SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0 -->
+<!-- Configurazione gestita da MDM: stesse chiavi della GPO (src/clanto/gpo.rs,
+     src/clanto/managed_config.rs), titoli dall'ADMX. Un test verifica che ogni
+     chiave della GPO sia presente. -->
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+    <restriction
+        android:key="enable-remote-printer"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_remote_printer" android:defaultValue="false" />
+    <restriction
+        android:key="enable-clipboard"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_clipboard" android:defaultValue="false" />
+    <restriction
+        android:key="enable-file-transfer"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_file_transfer" android:defaultValue="false" />
+    <restriction
+        android:key="enable-camera"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_camera" android:defaultValue="false" />
+    <restriction
+        android:key="enable-terminal"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_terminal" android:defaultValue="false" />
+    <restriction
+        android:key="enable-tunnel"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_tunnel" android:defaultValue="false" />
+    <restriction
+        android:key="enable-remote-restart"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_remote_restart" android:defaultValue="false" />
+    <restriction
+        android:key="enable-record-session"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_record_session" android:defaultValue="false" />
+    <restriction
+        android:key="enable-keyboard"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_keyboard" android:defaultValue="false" />
+    <restriction
+        android:key="enable-audio"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_audio" android:defaultValue="false" />
+    <restriction
+        android:key="enable-lan-discovery"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_enable_lan_discovery" android:defaultValue="false" />
+    <restriction
+        android:key="allow-auto-disconnect"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_allow_auto_disconnect" android:defaultValue="false" />
+    <restriction
+        android:key="auto-disconnect-timeout"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_auto_disconnect_timeout" />
+    <restriction
+        android:key="verification-method"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_verification_method" />
+    <restriction
+        android:key="approve-mode"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_approve_mode" />
+    <restriction
+        android:key="id-whitelist"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_id_whitelist" />
+    <restriction
+        android:key="clanto-id-permissions"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_id_permissions" />
+    <restriction
+        android:key="clanto-trusted-controllers"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_trusted_controllers" />
+    <restriction
+        android:key="clanto-require-2fa"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_require_2fa" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-access-hours"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_access_hours" />
+    <restriction
+        android:key="clanto-share-device-identity"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_share_device_identity" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-forward-enabled"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_forward_enabled" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-forward-services-host"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_forward_services_host" />
+    <restriction
+        android:key="clanto-forward-services-controller"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_forward_services_controller" />
+    <restriction
+        android:key="clanto-forward-custom-host"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_forward_custom_host" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-forward-custom-host-targets"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_forward_custom_host_targets" />
+    <restriction
+        android:key="clanto-forward-reverse"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_forward_reverse" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-forward-custom-controller"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_forward_custom_controller" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-forward-custom-controller-targets"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_forward_custom_controller_targets" />
+    <restriction
+        android:key="clanto-forward-webcam"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_forward_webcam" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-forward-webcam-send"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_forward_webcam_send" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-forward-webcam-receive"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_forward_webcam_receive" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-forward-camera-device"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_forward_camera_device" />
+    <restriction
+        android:key="clanto-temp-password-rotate-minutes"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_temp_password_rotate_minutes" />
+    <restriction
+        android:key="clanto-require-protected-device"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_require_protected_device" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-posture-bypass"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_posture_bypass" />
+    <restriction
+        android:key="clanto-file-scan"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_file_scan" />
+    <restriction
+        android:key="clanto-file-scan-clamd"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_file_scan_clamd" />
+    <restriction
+        android:key="clanto-file-scan-max-mb"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_file_scan_max_mb" />
+    <restriction
+        android:key="clanto-file-direction"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_file_direction" />
+    <restriction
+        android:key="clanto-file-blocked-ext"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_file_blocked_ext" />
+    <restriction
+        android:key="clanto-eventlog-enabled"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_eventlog_enabled" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-syslog-enabled"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_syslog_enabled" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-syslog-host"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_syslog_host" />
+    <restriction
+        android:key="clanto-syslog-port"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_syslog_port" />
+    <restriction
+        android:key="clanto-syslog-protocol"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_syslog_protocol" />
+    <restriction
+        android:key="clanto-syslog-facility"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_syslog_facility" />
+    <restriction
+        android:key="clanto-syslog-tls-ca"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_syslog_tls_ca" />
+    <restriction
+        android:key="clanto-syslog-format"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_syslog_format" />
+    <restriction
+        android:key="clanto-session-log-days"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_session_log_days" />
+    <restriction
+        android:key="clanto-privacy-prompt"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_privacy_prompt" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-outgoing-file-transfer"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_outgoing_file_transfer" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-outgoing-clipboard"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_outgoing_clipboard" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-outgoing-tunnel"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_outgoing_tunnel" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-outgoing-terminal"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_outgoing_terminal" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-outgoing-remote-printer"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_outgoing_remote_printer" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-outgoing-record"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_outgoing_record" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-require-controller-watermark"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_require_controller_watermark" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-host-watermark"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_host_watermark" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-lock-settings"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_lock_settings" android:defaultValue="false" />
+</restrictions>

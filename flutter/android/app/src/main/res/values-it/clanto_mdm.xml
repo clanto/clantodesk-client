@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
+     SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0 -->
+<resources>
+    <string name="clanto_mdm_enable_remote_printer">Consenti stampante remota</string>
+    <string name="clanto_mdm_enable_clipboard">Consenti appunti</string>
+    <string name="clanto_mdm_enable_file_transfer">Consenti trasferimento file</string>
+    <string name="clanto_mdm_enable_camera">Consenti fotocamera</string>
+    <string name="clanto_mdm_enable_terminal">Consenti terminale</string>
+    <string name="clanto_mdm_enable_tunnel">Consenti tunneling TCP</string>
+    <string name="clanto_mdm_enable_remote_restart">Consenti riavvio remoto</string>
+    <string name="clanto_mdm_enable_record_session">Consenti registrazione sessione</string>
+    <string name="clanto_mdm_enable_keyboard">Consenti tastiera e mouse</string>
+    <string name="clanto_mdm_enable_audio">Consenti audio</string>
+    <string name="clanto_mdm_enable_lan_discovery">Consenti individuazione LAN</string>
+    <string name="clanto_mdm_allow_auto_disconnect">Abilita disconnessione automatica</string>
+    <string name="clanto_mdm_auto_disconnect_timeout">Timeout disconnessione automatica</string>
+    <string name="clanto_mdm_verification_method">Metodo di verifica password</string>
+    <string name="clanto_mdm_approve_mode">Metodo di approvazione della sessione in entrata</string>
+    <string name="clanto_mdm_id_whitelist">Elenco ID di connessione autorizzati</string>
+    <string name="clanto_mdm_clanto_id_permissions">Permessi per gli ID autorizzati</string>
+    <string name="clanto_mdm_clanto_trusted_controllers">Controller fidati (senza 2FA)</string>
+    <string name="clanto_mdm_clanto_require_2fa">Richiedi l\'autenticazione a due fattori</string>
+    <string name="clanto_mdm_clanto_access_hours">Fasce orarie di accesso</string>
+    <string name="clanto_mdm_clanto_share_device_identity">Invia nome del computer e nome utente al server di gestione</string>
+    <string name="clanto_mdm_clanto_forward_enabled">Abilita il forwarding rete</string>
+    <string name="clanto_mdm_clanto_forward_services_host">Servizi Clanto raggiungibili su questo computer</string>
+    <string name="clanto_mdm_clanto_forward_services_controller">Servizi Clanto di questo computer per il computer controllato</string>
+    <string name="clanto_mdm_clanto_forward_custom_host">Consenti forward personalizzati verso la rete di questo computer</string>
+    <string name="clanto_mdm_clanto_forward_custom_host_targets">Destinazioni personalizzate dalla parte di questo computer</string>
+    <string name="clanto_mdm_clanto_forward_reverse">Consenti forward verso il controller</string>
+    <string name="clanto_mdm_clanto_forward_custom_controller">Consenti forward personalizzati dalla rete di questo computer come controller</string>
+    <string name="clanto_mdm_clanto_forward_custom_controller_targets">Destinazioni personalizzate dalla parte del controller</string>
+    <string name="clanto_mdm_clanto_forward_webcam">Abilita il forwarding webcam</string>
+    <string name="clanto_mdm_clanto_forward_webcam_send">Consenti la webcam di questo computer verso il computer controllato</string>
+    <string name="clanto_mdm_clanto_forward_webcam_receive">Consenti la webcam del computer controllato verso questo computer</string>
+    <string name="clanto_mdm_clanto_forward_camera_device">Dispositivo della camera virtuale (Linux)</string>
+    <string name="clanto_mdm_clanto_temp_password_rotate_minutes">Intervallo di rotazione della password temporanea</string>
+    <string name="clanto_mdm_clanto_require_protected_device">Richiedi dispositivi di connessione protetti</string>
+    <string name="clanto_mdm_clanto_posture_bypass">Elenco eccezioni postura di sicurezza</string>
+    <string name="clanto_mdm_clanto_file_scan">Controlla i file ricevuti dall\'host</string>
+    <string name="clanto_mdm_clanto_file_scan_clamd">Endpoint ClamAV clamd</string>
+    <string name="clanto_mdm_clanto_file_scan_max_mb">Dimensione massima del file da controllare</string>
+    <string name="clanto_mdm_clanto_file_direction">Direzione consentita del trasferimento file dell\'host</string>
+    <string name="clanto_mdm_clanto_file_blocked_ext">Estensioni bloccate per i file in entrata</string>
+    <string name="clanto_mdm_clanto_eventlog_enabled">Scrivi eventi audit nel registro eventi di Windows</string>
+    <string name="clanto_mdm_clanto_syslog_enabled">Invia eventi audit a syslog</string>
+    <string name="clanto_mdm_clanto_syslog_host">Host syslog</string>
+    <string name="clanto_mdm_clanto_syslog_port">Porta syslog</string>
+    <string name="clanto_mdm_clanto_syslog_protocol">Protocollo syslog</string>
+    <string name="clanto_mdm_clanto_syslog_facility">Facility syslog</string>
+    <string name="clanto_mdm_clanto_syslog_tls_ca">File CA del collettore syslog TLS</string>
+    <string name="clanto_mdm_clanto_syslog_format">Formato audit syslog</string>
+    <string name="clanto_mdm_clanto_session_log_days">Conservazione report sessioni</string>
+    <string name="clanto_mdm_clanto_privacy_prompt">Chiedi di abilitare la modalità privacy</string>
+    <string name="clanto_mdm_clanto_outgoing_file_transfer">Consenti trasferimento file in uscita</string>
+    <string name="clanto_mdm_clanto_outgoing_clipboard">Consenti appunti in uscita</string>
+    <string name="clanto_mdm_clanto_outgoing_tunnel">Consenti port forwarding e RDP in uscita</string>
+    <string name="clanto_mdm_clanto_outgoing_terminal">Consenti terminale in uscita</string>
+    <string name="clanto_mdm_clanto_outgoing_remote_printer">Consenti stampante remota in uscita</string>
+    <string name="clanto_mdm_clanto_outgoing_record">Consenti registrazione sessione in uscita</string>
+    <string name="clanto_mdm_clanto_require_controller_watermark">Richiedi la filigrana del controller</string>
+    <string name="clanto_mdm_clanto_host_watermark">Mostra la filigrana sull\'host</string>
+    <string name="clanto_mdm_clanto_lock_settings">Impedisci la modifica delle impostazioni di ClantoDesk</string>
+</resources>

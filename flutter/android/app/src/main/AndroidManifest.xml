@@ -41,6 +41,10 @@
         android:label="${appLabel}"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true">
+        <!-- Configurazione gestita da MDM (src/clanto/managed_config.rs). -->
+        <meta-data
+            android:name="android.content.APP_RESTRICTIONS"
+            android:resource="@xml/app_restrictions" />
 
         <receiver
             android:name=".BootReceiver"

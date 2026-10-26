@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
+     SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0 -->
+<resources>
+    <string name="clanto_mdm_enable_remote_printer">Allow remote printer</string>
+    <string name="clanto_mdm_enable_clipboard">Allow clipboard</string>
+    <string name="clanto_mdm_enable_file_transfer">Allow file transfer</string>
+    <string name="clanto_mdm_enable_camera">Allow camera</string>
+    <string name="clanto_mdm_enable_terminal">Allow terminal</string>
+    <string name="clanto_mdm_enable_tunnel">Allow TCP tunneling</string>
+    <string name="clanto_mdm_enable_remote_restart">Allow remote restart</string>
+    <string name="clanto_mdm_enable_record_session">Allow session recording</string>
+    <string name="clanto_mdm_enable_keyboard">Allow keyboard and mouse</string>
+    <string name="clanto_mdm_enable_audio">Allow audio</string>
+    <string name="clanto_mdm_enable_lan_discovery">Allow LAN discovery</string>
+    <string name="clanto_mdm_allow_auto_disconnect">Enable automatic disconnection</string>
+    <string name="clanto_mdm_auto_disconnect_timeout">Automatic disconnection timeout</string>
+    <string name="clanto_mdm_verification_method">Password verification method</string>
+    <string name="clanto_mdm_approve_mode">Incoming session approval method</string>
+    <string name="clanto_mdm_id_whitelist">Allowed connecting ID list</string>
+    <string name="clanto_mdm_clanto_id_permissions">Permissions for allowed IDs</string>
+    <string name="clanto_mdm_clanto_trusted_controllers">Trusted controllers (no 2FA)</string>
+    <string name="clanto_mdm_clanto_require_2fa">Require two-factor authentication</string>
+    <string name="clanto_mdm_clanto_access_hours">Allowed access hours</string>
+    <string name="clanto_mdm_clanto_share_device_identity">Send computer name and user name to the management server</string>
+    <string name="clanto_mdm_clanto_forward_enabled">Enable network forwarding</string>
+    <string name="clanto_mdm_clanto_forward_services_host">Clanto services reachable on this computer</string>
+    <string name="clanto_mdm_clanto_forward_services_controller">Clanto services of this computer for the controlled computer</string>
+    <string name="clanto_mdm_clanto_forward_custom_host">Allow custom forwards to this computer\'s network</string>
+    <string name="clanto_mdm_clanto_forward_custom_host_targets">Custom destinations on this computer\'s side</string>
+    <string name="clanto_mdm_clanto_forward_reverse">Allow forwards towards the controller</string>
+    <string name="clanto_mdm_clanto_forward_custom_controller">Allow custom forwards from this computer\'s network as controller</string>
+    <string name="clanto_mdm_clanto_forward_custom_controller_targets">Custom destinations on the controller\'s side</string>
+    <string name="clanto_mdm_clanto_forward_webcam">Enable webcam forwarding</string>
+    <string name="clanto_mdm_clanto_forward_webcam_send">Allow this computer\'s webcam to the controlled computer</string>
+    <string name="clanto_mdm_clanto_forward_webcam_receive">Allow the controlled computer\'s webcam to this computer</string>
+    <string name="clanto_mdm_clanto_forward_camera_device">Virtual camera device (Linux)</string>
+    <string name="clanto_mdm_clanto_temp_password_rotate_minutes">Temporary password rotation interval</string>
+    <string name="clanto_mdm_clanto_require_protected_device">Require protected connecting devices</string>
+    <string name="clanto_mdm_clanto_posture_bypass">Security posture bypass list</string>
+    <string name="clanto_mdm_clanto_file_scan">Scan files received by the host</string>
+    <string name="clanto_mdm_clanto_file_scan_clamd">ClamAV clamd endpoint</string>
+    <string name="clanto_mdm_clanto_file_scan_max_mb">Maximum file scan size</string>
+    <string name="clanto_mdm_clanto_file_direction">Allowed host file-transfer direction</string>
+    <string name="clanto_mdm_clanto_file_blocked_ext">Blocked incoming file extensions</string>
+    <string name="clanto_mdm_clanto_eventlog_enabled">Write audit events to Windows Event Log</string>
+    <string name="clanto_mdm_clanto_syslog_enabled">Send audit events to syslog</string>
+    <string name="clanto_mdm_clanto_syslog_host">Syslog host</string>
+    <string name="clanto_mdm_clanto_syslog_port">Syslog port</string>
+    <string name="clanto_mdm_clanto_syslog_protocol">Syslog protocol</string>
+    <string name="clanto_mdm_clanto_syslog_facility">Syslog facility</string>
+    <string name="clanto_mdm_clanto_syslog_tls_ca">Syslog TLS collector CA file</string>
+    <string name="clanto_mdm_clanto_syslog_format">Syslog audit format</string>
+    <string name="clanto_mdm_clanto_session_log_days">Session report retention</string>
+    <string name="clanto_mdm_clanto_privacy_prompt">Ask to enable privacy mode</string>
+    <string name="clanto_mdm_clanto_outgoing_file_transfer">Allow outgoing file transfer</string>
+    <string name="clanto_mdm_clanto_outgoing_clipboard">Allow outgoing clipboard</string>
+    <string name="clanto_mdm_clanto_outgoing_tunnel">Allow outgoing port forwarding and RDP</string>
+    <string name="clanto_mdm_clanto_outgoing_terminal">Allow outgoing terminal</string>
+    <string name="clanto_mdm_clanto_outgoing_remote_printer">Allow outgoing remote printer</string>
+    <string name="clanto_mdm_clanto_outgoing_record">Allow outgoing session recording</string>
+    <string name="clanto_mdm_clanto_require_controller_watermark">Require controller watermark</string>
+    <string name="clanto_mdm_clanto_host_watermark">Show host watermark</string>
+    <string name="clanto_mdm_clanto_lock_settings">Prevent changes to ClantoDesk settings</string>
+</resources>

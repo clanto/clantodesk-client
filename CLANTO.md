@@ -542,6 +542,22 @@ impostarla. Il backend rifiuta inoltre le altre scritture richieste dall'utente 
 L'elenco completo delle chiavi gestibili è `GPO_KEYS`; la tabella con valori e predefiniti è nel
 [README](README.md#opzioni-di-configurazione).
 
+## Configurazione gestita da MDM (Android e iOS)
+
+Sui telefoni le stesse chiavi della GPO (`GPO_KEYS` in `src/clanto/gpo.rs`) si impostano dall'MDM
+(Intune, Workspace ONE, Jamf, Android Enterprise...). `src/clanto/managed_config.rs` riceve un JSON
+e le mette in `OVERWRITE_SETTINGS` come la GPO: valgono subito, l'interfaccia le mostra fissate e
+una chiave tolta dall'MDM torna modificabile. Booleani diventano `Y`/`N`.
+
+- **Android:** managed configurations. Lo schema per la console MDM è
+  `flutter/android/app/src/main/res/xml/app_restrictions.xml` (titoli in `values*/clanto_mdm.xml`,
+  presi dall'ADMX), dichiarato in entrambi i manifest. `ClantoManagedConfig.kt` lo legge all'avvio
+  dell'app e a ogni `ACTION_APPLICATION_RESTRICTIONS_CHANGED`. Le policy Y/N sono di tipo `bool`.
+  Un test verifica che ogni chiave della GPO sia nello schema: aggiungendo una policy si rigenera.
+- **iOS:** managed app configuration, chiave `com.apple.configuration.managed` (app distribuita
+  tramite MDM). `AppDelegate.swift` la legge all'avvio e a ogni modifica e la passa a
+  `clanto_apply_managed_config`.
+
 ## 2FA senza "Trust this device"
 
 Upstream, dopo un codice 2FA corretto, il controller può chiedere di essere ricordato e l'host salva
