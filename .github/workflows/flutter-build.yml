@@ -57,6 +57,8 @@ env:
   #signing keys env variable checks
   ANDROID_SIGNING_KEY: "${{ secrets.ANDROID_SIGNING_KEY }}"
   MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
+  # Team Apple Clanto: il bundle verifica di essere firmato da questo team.
+  CLANTO_SIGNING_TEAM: "${{ secrets.MACOS_P12_BASE64 != '' && 'DCP3L7L7BW' || '' }}"
   MACOS_NOTARIZE_KEY_ID: "${{ secrets.MACOS_NOTARIZE_KEY_ID }}"
   MACOS_NOTARIZE_ISSUER_ID: "${{ secrets.MACOS_NOTARIZE_ISSUER_ID }}"
   MACOS_NOTARIZE_KEY: "${{ secrets.MACOS_NOTARIZE_KEY }}"
@@ -69,6 +71,10 @@ env:
   AZURE_ENDPOINT: "${{ secrets.AZURE_CODE_SIGNING_ENDPOINT }}"
   AZURE_ACCOUNT_NAME: "${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}"
   AZURE_PROFILE_NAME: "${{ secrets.AZURE_CODE_SIGNING_PROFILE_NAME }}"
+  # EKU dell'identità Clanto in Azure Trusted Signing: pubblico (è in ogni file
+  # firmato), stabile anche se il certificato ruota. Exe e librustdesk verificano
+  # all'avvio che i binari lo portino; solo se la firma Azure è configurata.
+  CLANTO_SIGNING_EKU: "${{ secrets.AZURE_TENANT_ID != '' && '1.3.6.1.4.1.311.97.198846753.677989547.281320684.501451963' || '' }}"
   # Custom server configuration
   RS_PUB_KEY: "${{ secrets.RS_PUB_KEY }}"
   RENDEZVOUS_SERVER: "${{ secrets.RENDEZVOUS_SERVER }}"
@@ -548,6 +554,22 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+
+      # Stesso controllo che fa l'eseguibile all'avvio: se l'identità Azure cambia
+      # EKU o un binario resta senza firma, il build si ferma qui e non dopo, sui PC.
+      - name: Verify signatures and Clanto EKU
+        if: env.UPLOAD_ARTIFACT == 'true' && env.AZURE_TENANT_ID != ''
+        shell: pwsh
+        run: |
+          $bad = @()
+          Get-ChildItem ./clantodesk -File | Where-Object { $_.Extension -in '.exe', '.dll' } | ForEach-Object {
+            $s = Get-AuthenticodeSignature -LiteralPath $_.FullName
+            $ekus = @($s.SignerCertificate.Extensions | Where-Object { $_ -is [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension] } | ForEach-Object { $_.EnhancedKeyUsages.Value })
+            $microsoft = $s.SignerCertificate.Subject -match '^CN=Microsoft (Windows|Corporation),'
+            if ($s.Status -ne 'Valid' -or (-not ($ekus -contains $env:CLANTO_SIGNING_EKU) -and -not $microsoft)) { $bad += "$($_.Name): $($s.Status) $($s.SignerCertificate.Subject)" }
+          }
+          if ($bad.Count -gt 0) { $bad | ForEach-Object { Write-Host "::error::$_" }; exit 1 }
+          Write-Host "All binaries signed by Clanto (EKU $env:CLANTO_SIGNING_EKU) or Microsoft"
 
       - name: Build self-extracted executable
         shell: bash

@@ -7,6 +7,7 @@ project(runner LANGUAGES CXX)
 #
 # Any new source files that you add to the application should be added here.
 add_executable(${BINARY_NAME} WIN32
+  "clanto_integrity.cpp"
   "flutter_window.cpp"
   "main.cpp"
   "utils.cpp"
@@ -33,7 +34,13 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
-target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
+target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app wintrust crypt32)
+
+# Clanto: EKU dell'identità Azure Trusted Signing (CLANTO_SIGNING_EKU nell'ambiente
+# del build). Senza, l'eseguibile non verifica le firme: build di sviluppo.
+if(DEFINED ENV{CLANTO_SIGNING_EKU} AND NOT "$ENV{CLANTO_SIGNING_EKU}" STREQUAL "")
+  target_compile_definitions(${BINARY_NAME} PRIVATE "CLANTO_SIGNING_EKU=\"$ENV{CLANTO_SIGNING_EKU}\"")
+endif()
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

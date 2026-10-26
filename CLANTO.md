@@ -1035,20 +1035,30 @@ il percorso resta quello vecchio. Gli agganci sono in `clipboard.rs` (lettura, s
 
 ## Firma del codice
 
-`src/clanto/signature.rs`, attivo sui binari di release (server fissati al build):
+Identità di firma fissata al build e verificata con API native (niente PowerShell):
 
-- **Aggiornamenti.** Su Windows l'installer scaricato (exe o MSI) si esegue solo con firma
-  Authenticode `Valid` e CN del firmatario uguale a `Clanto Services srl` (sovrascrivibile al build
-  con `CLANTO_WINDOWS_SIGNER`); su macOS il bundle estratto dal DMG deve passare
-  `codesign --verify --deep --strict` con `TeamIdentifier=DCP3L7L7BW`. Altrimenti l'aggiornamento
-  è scartato e registrato nel log.
-- **Binari installati (Windows).** Servizio (`--service`) e interfaccia verificano all'avvio ogni
-  `.exe` e `.dll` della cartella d'installazione: firma `Valid` e CN `Clanto Services srl`, oppure
-  Microsoft per i componenti ridistribuiti. Un file manomesso, aggiunto o non firmato ferma il
-  servizio (quindi niente accesso remoto) e fa mostrare all'interfaccia «eseguibile manomesso»
-  prima di chiuderla; log ed evento di audit 61180 (`clanto_binary_signature`, gravità critica).
-- **Limite.** Chi è amministratore può modificare anche il controllo. L'applicazione vera della
-  firma la fa Windows con regole App Control (WDAC) o AppLocker sul firmatario.
+- **Windows: EKU di Azure Trusted Signing.** Ogni certificato Azure di Clanto porta l'EKU
+  `1.3.6.1.4.1.311.97.198846753.677989547.281320684.501451963`: pubblico, stabile anche se il
+  certificato ruota (dura 3 giorni) e legato alla verifica d'identità di Clanto, quindi non
+  ottenibile da un'altra società con lo stesso nome. La CI lo passa al build come
+  `CLANTO_SIGNING_EKU` solo se la firma Azure è configurata, e dopo la firma verifica che ogni
+  binario lo porti (passo «Verify signatures and Clanto EKU»): un cambio d'identità ferma il build.
+- **Exe.** `flutter/windows/runner/clanto_integrity.cpp`, prima di caricare `librustdesk.dll`:
+  ogni `.exe`/`.dll` della cartella dell'eseguibile (installazione o copia portable estratta) deve
+  avere firma valida con l'EKU, oppure Microsoft (anche tramite catalogo, es.
+  `RuntimeBroker_rustdesk.exe`). Altrimenti evento 61180 nel registro Applicazione, messaggio
+  «Eseguibile manomesso» (non in sessione 0 né in CI) e uscita: servizio, server e interfaccia
+  non partono. `WinVerifyTrust` senza rete: niente revoca, solo URL in cache.
+- **librustdesk.** `verify_own_exe()` (`src/clanto/signature.rs`, tramite `libs/clanto-win`)
+  all'inizio di `core_main()` verifica a sua volta l'exe: modificare uno solo dei due non basta.
+- **Aggiornamenti.** L'installer scaricato si esegue solo con firma valida e lo stesso EKU.
+- **macOS.** Team Apple `DCP3L7L7BW` (`CLANTO_SIGNING_TEAM` al build, solo con i secret di firma):
+  `SecStaticCodeCheckValidity` sul bundle, codice annidato compreso, con il requisito
+  `anchor apple generic and certificate leaf[subject.OU] = "DCP3L7L7BW"`. Bloccante per
+  `--service`/`--server`; l'interfaccia lo fa in background e mostra l'errore prima di chiudersi
+  (`flutter/lib/clanto/tamper_check.dart`). Vale anche per gli aggiornamenti.
+- **Limite.** Chi è amministratore può modificare entrambi i controlli. Il blocco vero lo fa
+  Windows con App Control (WDAC) su quell'EKU.
 
 ## Debito noto
 

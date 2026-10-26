@@ -1,224 +1,193 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
-//! Firma del codice. Gli aggiornamenti automatici si installano solo se
-//! firmati da Clanto (Authenticode su Windows, Developer ID del team su
-//! macOS). Su Windows, con ClantoDesk installato, servizio e interfaccia
-//! verificano all'avvio ogni `.exe` e `.dll` della cartella d'installazione:
-//! un binario non firmato da Clanto ferma il servizio (niente accesso remoto)
-//! e l'interfaccia mostra «eseguibile manomesso» e si chiude.
+//! Firma del codice (CLANTO.md, «Firma del codice»).
 //!
-//! Non ferma chi è già amministratore della macchina (può togliere anche il
-//! controllo): per quello servono le regole di App Control/AppLocker di
-//! Windows sul firmatario.
+//! - **Windows.** L'identità Clanto è l'EKU di Azure Trusted Signing
+//!   (`CLANTO_SIGNING_EKU` al build): stabile anche se il certificato ruota e
+//!   impossibile da ottenere per un'altra società con lo stesso nome. L'exe
+//!   verifica all'avvio ogni `.exe`/`.dll` della propria cartella
+//!   (`flutter/windows/runner/clanto_integrity.cpp`); qui `librustdesk.dll`
+//!   verifica a sua volta l'exe, così toccare uno solo dei due non basta.
+//!   Gli aggiornamenti si installano solo se firmati con lo stesso EKU.
+//! - **macOS.** Bundle firmato dal team Apple Clanto (`CLANTO_SIGNING_TEAM` al
+//!   build), verificato con Security.framework: all'avvio del servizio e
+//!   dell'interfaccia, e sugli aggiornamenti.
+//!
+//! Senza le variabili al build (sviluppo) non si verifica nulla. Chi è
+//! amministratore può togliere anche questi controlli: il blocco vero sono le
+//! regole App Control di Windows sull'EKU.
 
 #[cfg(any(windows, target_os = "macos"))]
-use hbb_common::{bail, ResultType};
+use hbb_common::{bail, log, ResultType};
 #[cfg(any(windows, target_os = "macos"))]
-use std::{path::Path, process::Command};
+use std::path::Path;
 
-/// CN del certificato Authenticode (Azure Trusted Signing).
+/// EKU dell'identità Clanto in Azure Trusted Signing.
 #[cfg(windows)]
-const WINDOWS_SIGNER: &str = match option_env!("CLANTO_WINDOWS_SIGNER") {
-    Some(signer) => signer,
-    None => "Clanto Services srl",
-};
+fn signing_eku() -> Option<&'static str> {
+    option_env!("CLANTO_SIGNING_EKU").filter(|eku| !eku.is_empty())
+}
+
 /// Team ID Apple del certificato Developer ID.
 #[cfg(target_os = "macos")]
-const MAC_TEAM_ID: &str = "DCP3L7L7BW";
-
-/// Controlli attivi solo sui binari di release (server fissati al build): le
-/// build di sviluppo non sono firmate.
-#[cfg(any(windows, target_os = "macos"))]
-fn enforced() -> bool {
-    crate::clanto::config::servers_fixed_at_build()
+fn signing_team() -> Option<&'static str> {
+    option_env!("CLANTO_SIGNING_TEAM").filter(|team| !team.is_empty())
 }
 
-#[cfg(windows)]
-fn windows_signature(path: &Path) -> ResultType<(String, String)> {
-    let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_owned());
-    let powershell = Path::new(&system_root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
-    // Percorso via variabile d'ambiente: nessun problema di quoting.
-    let output = Command::new(powershell)
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "$s = Get-AuthenticodeSignature -LiteralPath $env:CLANTO_SIGNED_PATH; Write-Output $s.Status; Write-Output $s.SignerCertificate.Subject",
-        ])
-        .env("CLANTO_SIGNED_PATH", path)
-        .output()?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    let mut lines = text.lines().map(str::trim);
-    Ok((
-        lines.next().unwrap_or_default().to_owned(),
-        lines.next().unwrap_or_default().to_owned(),
-    ))
-}
-
-#[cfg_attr(not(windows), allow(dead_code))]
-fn signer_matches(status: &str, subject: &str, expected: &str) -> bool {
-    // Il CN deve coincidere: "contiene" accetterebbe "Clanto Services srl Fake".
-    let common_name = subject
-        .split(", ")
-        .find_map(|part| part.trim().strip_prefix("CN="))
-        .unwrap_or_default();
-    status == "Valid" && common_name.eq_ignore_ascii_case(expected)
-}
-
-/// Windows: `path` ha una firma Authenticode valida di Clanto.
+/// Windows: `path` ha una firma Authenticode valida con l'EKU Clanto.
 #[cfg(windows)]
 pub fn verify_windows_file(path: &Path) -> ResultType<()> {
-    if !enforced() {
+    let Some(eku) = signing_eku() else {
         return Ok(());
-    }
-    let (status, subject) = windows_signature(path)?;
-    if !signer_matches(&status, &subject, WINDOWS_SIGNER) {
-        bail!(
-            "{} is not signed by Clanto (status {status:?}, signer {subject:?})",
-            path.display()
-        );
+    };
+    let signer = clanto_win::trust::embedded_signer(path)
+        .map_err(|err| hbb_common::anyhow::anyhow!("{}: {err}", path.display()))?;
+    if !signer.has_eku(eku) {
+        bail!("{} is not signed by Clanto (signer {:?})", path.display(), signer.name);
     }
     Ok(())
 }
 
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn team_matches(codesign_details: &str, team: &str) -> bool {
-    codesign_details
-        .lines()
-        .any(|line| line.trim() == format!("TeamIdentifier={team}"))
+#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
+fn tampered_text(files: &str) -> String {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let text = crate::lang::translate("clanto_tampered_error".to_owned());
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let text = crate::lang::translate_locale("clanto_tampered_error".to_owned(), "");
+    format!("{text}\n\n{files}")
 }
 
-/// macOS: bundle `.app` firmato integro e dal team Clanto.
+#[cfg(any(windows, target_os = "macos"))]
+fn report_tampered(files: &str) {
+    log::error!("tampered ClantoDesk binaries: {files}");
+    crate::clanto::audit_sink::emit("clanto_binary_signature", &serde_json::json!({ "files": files }));
+}
+
+/// Windows: `librustdesk.dll` verifica l'eseguibile che l'ha caricata.
+/// `false`: il processo deve terminare (errore già mostrato se c'è un utente).
+#[cfg(windows)]
+pub fn verify_own_exe() -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return true;
+    };
+    let Err(err) = verify_windows_file(&exe) else {
+        return true;
+    };
+    log::error!("{err}");
+    let name = exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    report_tampered(&name);
+    let interactive = std::env::var_os("CI").is_none()
+        && crate::platform::get_current_process_session_id().map_or(false, |s| s != 0);
+    if interactive {
+        use std::os::windows::ffi::OsStrExt;
+        let wide = |s: &str| std::ffi::OsStr::new(s).encode_wide().chain(Some(0)).collect::<Vec<u16>>();
+        let text = wide(&tampered_text(&name));
+        let title = wide(&crate::lang::translate("Tampered executable".to_owned()));
+        unsafe {
+            winapi::um::winuser::MessageBoxW(
+                std::ptr::null_mut(),
+                text.as_ptr(),
+                title.as_ptr(),
+                winapi::um::winuser::MB_OK | winapi::um::winuser::MB_ICONERROR | winapi::um::winuser::MB_TOPMOST,
+            );
+        }
+    }
+    false
+}
+
+#[cfg(target_os = "macos")]
+mod mac {
+    use core_foundation::{
+        base::{CFRelease, TCFType},
+        string::CFString,
+        url::CFURL,
+    };
+    use std::{ffi::c_void, path::Path};
+
+    type SecStaticCodeRef = *const c_void;
+    type SecRequirementRef = *const c_void;
+    const CHECK_ALL_ARCHITECTURES: u32 = 1 << 0;
+    const CHECK_NESTED_CODE: u32 = 1 << 3;
+    const STRICT_VALIDATE: u32 = 1 << 4;
+
+    #[link(name = "Security", kind = "framework")]
+    extern "C" {
+        fn SecStaticCodeCreateWithPath(path: *const c_void, flags: u32, code: *mut SecStaticCodeRef) -> i32;
+        fn SecRequirementCreateWithString(text: *const c_void, flags: u32, requirement: *mut SecRequirementRef) -> i32;
+        fn SecStaticCodeCheckValidity(code: SecStaticCodeRef, flags: u32, requirement: SecRequirementRef) -> i32;
+    }
+
+    /// Bundle integro (codice annidato compreso) e firmato Developer ID dal team.
+    pub fn check_bundle(bundle: &Path, team: &str) -> Result<(), String> {
+        let url = CFURL::from_path(bundle, true).ok_or("invalid bundle path")?;
+        let requirement = CFString::new(&format!(
+            "anchor apple generic and certificate leaf[subject.OU] = \"{team}\""
+        ));
+        unsafe {
+            let mut code: SecStaticCodeRef = std::ptr::null();
+            let status = SecStaticCodeCreateWithPath(url.as_concrete_TypeRef() as *const c_void, 0, &mut code);
+            if status != 0 || code.is_null() {
+                return Err(format!("code object error {status}"));
+            }
+            let mut req: SecRequirementRef = std::ptr::null();
+            let status = SecRequirementCreateWithString(requirement.as_concrete_TypeRef() as *const c_void, 0, &mut req);
+            if status != 0 || req.is_null() {
+                CFRelease(code);
+                return Err(format!("requirement error {status}"));
+            }
+            let status = SecStaticCodeCheckValidity(code, CHECK_ALL_ARCHITECTURES | CHECK_NESTED_CODE | STRICT_VALIDATE, req);
+            CFRelease(req);
+            CFRelease(code);
+            if status != 0 {
+                return Err(format!("signature not valid for team {team} (OSStatus {status})"));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// macOS: bundle `.app` integro e firmato dal team Clanto.
 #[cfg(target_os = "macos")]
 pub fn verify_macos_app(app: &Path) -> ResultType<()> {
-    if !enforced() {
+    let Some(team) = signing_team() else {
         return Ok(());
-    }
-    let verify = Command::new("/usr/bin/codesign")
-        .args(["--verify", "--deep", "--strict"])
-        .arg(app)
-        .output()?;
-    if !verify.status.success() {
-        bail!(
-            "{} signature is not valid: {}",
-            app.display(),
-            String::from_utf8_lossy(&verify.stderr).trim()
-        );
-    }
-    // `codesign -dv` scrive i dettagli su stderr.
-    let details = Command::new("/usr/bin/codesign").args(["-dv", "--verbose=2"]).arg(app).output()?;
-    if !team_matches(&String::from_utf8_lossy(&details.stderr), MAC_TEAM_ID) {
-        bail!("{} is not signed by the Clanto team {MAC_TEAM_ID}", app.display());
-    }
-    Ok(())
-}
-
-/// Firmatari ammessi per i binari nella cartella d'installazione: Clanto e i
-/// componenti Microsoft ridistribuiti (runtime, RuntimeBroker).
-#[cfg(windows)]
-const MICROSOFT_SIGNERS: &[&str] = &["Microsoft Windows", "Microsoft Corporation"];
-
-/// Esito, per ogni file, di `Get-AuthenticodeSignature`: (nome, stato, soggetto).
-#[cfg(windows)]
-fn windows_signatures(files: &[std::path::PathBuf]) -> ResultType<Vec<(String, String, String)>> {
-    let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_owned());
-    let powershell = Path::new(&system_root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
-    let list = files.iter().map(|f| f.to_string_lossy()).collect::<Vec<_>>().join("|");
-    let output = Command::new(powershell)
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "foreach ($f in $env:CLANTO_SIGNED_FILES.Split('|')) { $s = Get-AuthenticodeSignature -LiteralPath $f; Write-Output ((Split-Path $f -Leaf) + [char]9 + $s.Status + [char]9 + $s.SignerCertificate.Subject) }",
-        ])
-        .env("CLANTO_SIGNED_FILES", list)
-        .output()?;
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(|line| {
-            let mut parts = line.trim_end().splitn(3, '\t');
-            Some((parts.next()?.to_owned(), parts.next()?.to_owned(), parts.next().unwrap_or_default().to_owned()))
-        })
-        .collect())
-}
-
-/// File non firmati da Clanto (o da Microsoft) fra quelli verificati; ogni
-/// file senza esito conta come manomesso.
-#[cfg_attr(not(windows), allow(dead_code))]
-fn tampered_files(names: &[String], results: &[(String, String, String)], signers: &[&str]) -> Vec<String> {
-    names
-        .iter()
-        .filter(|name| {
-            !results.iter().any(|(file, status, subject)| {
-                file.eq_ignore_ascii_case(name) && signers.iter().any(|s| signer_matches(status, subject, s))
-            })
-        })
-        .cloned()
-        .collect()
-}
-
-/// Windows, ClantoDesk installato: ogni `.exe` e `.dll` della cartella
-/// d'installazione deve essere firmato da Clanto (o Microsoft). `Err` con i
-/// file manomessi: chi chiama non deve proseguire.
-#[cfg(windows)]
-pub fn verify_install_dir() -> Result<(), Vec<String>> {
-    if !enforced() || !crate::platform::is_installed() {
-        return Ok(());
-    }
-    let (_, install_dir, _, _) = crate::platform::windows::get_install_info();
-    let files: Vec<std::path::PathBuf> = std::fs::read_dir(&install_dir)
-        .map(|entries| {
-            entries
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| {
-                    p.is_file()
-                        && p.extension()
-                            .map_or(false, |e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("dll"))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    if files.is_empty() {
-        return Ok(());
-    }
-    let names: Vec<String> = files
-        .iter()
-        .filter_map(|f| f.file_name().map(|n| n.to_string_lossy().into_owned()))
-        .collect();
-    let results = match windows_signatures(&files) {
-        Ok(results) => results,
-        Err(err) => {
-            // Senza PowerShell la verifica non si fa: non si blocca l'uso.
-            hbb_common::log::error!("signature check unavailable: {err}");
-            return Ok(());
-        }
     };
-    let mut signers = vec![WINDOWS_SIGNER];
-    signers.extend_from_slice(MICROSOFT_SIGNERS);
-    let tampered = tampered_files(&names, &results, &signers);
-    if tampered.is_empty() {
-        return Ok(());
-    }
-    hbb_common::log::error!("tampered ClantoDesk binaries: {}", tampered.join(", "));
-    crate::clanto::audit_sink::emit(
-        "clanto_binary_signature",
-        &serde_json::json!({ "files": tampered }),
-    );
-    Err(tampered)
+    mac::check_bundle(app, team).map_err(|err| hbb_common::anyhow::anyhow!("{}: {err}", app.display()))
 }
 
-/// Messaggio per l'interfaccia, vuoto se i binari sono integri. Chiamato
-/// dall'interfaccia all'avvio (Flutter, in un thread a parte).
+/// macOS: il bundle da cui gira questo processo, se è un `.app`.
+#[cfg(target_os = "macos")]
+fn own_bundle() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    exe.ancestors()
+        .find(|p| p.extension().map_or(false, |e| e == "app"))
+        .map(Path::to_path_buf)
+}
+
+/// macOS: verifica del proprio bundle; `Err` con il messaggio da mostrare.
+#[cfg(target_os = "macos")]
+pub fn verify_own_bundle() -> Result<(), String> {
+    let Some(bundle) = own_bundle() else {
+        return Ok(());
+    };
+    match verify_macos_app(&bundle) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            log::error!("{err}");
+            let name = bundle.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            report_tampered(&name);
+            Err(tampered_text(&name))
+        }
+    }
+}
+
+/// Messaggio di eseguibile manomesso per l'interfaccia, vuoto se integro.
+/// Su Windows lo mostrano già l'exe e `verify_own_exe` prima dell'interfaccia.
 pub fn tamper_message() -> String {
-    #[cfg(windows)]
-    if let Err(files) = verify_install_dir() {
-        return format!(
-            "{}\n\n{}",
-            crate::lang::translate("clanto_tampered_error".to_owned()),
-            files.join("\n")
-        );
+    #[cfg(target_os = "macos")]
+    if let Err(message) = verify_own_bundle() {
+        return message;
     }
     String::new()
 }
@@ -228,27 +197,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unsigned_or_missing_results_are_tampered() {
-        let names = vec!["clantodesk.exe".to_owned(), "librustdesk.dll".to_owned(), "x.dll".to_owned(), "vc.dll".to_owned()];
-        let clanto = "CN=Clanto Services srl, O=Clanto Services srl, C=IT";
-        let results = vec![
-            ("ClantoDesk.exe".to_owned(), "Valid".to_owned(), clanto.to_owned()),
-            ("librustdesk.dll".to_owned(), "HashMismatch".to_owned(), clanto.to_owned()),
-            ("vc.dll".to_owned(), "Valid".to_owned(), "CN=Microsoft Corporation, O=Microsoft Corporation".to_owned()),
-        ];
-        let tampered = tampered_files(&names, &results, &["Clanto Services srl", "Microsoft Corporation"]);
-        assert_eq!(tampered, vec!["librustdesk.dll".to_owned(), "x.dll".to_owned()]);
-    }
-
-    #[test]
-    fn signer_and_team_checks() {
-        let subject = "CN=Clanto Services srl, O=Clanto Services srl, L=Melito di Napoli, S=Napoli, C=IT, PostalCode=80017";
-        assert!(signer_matches("Valid", subject, "Clanto Services srl"));
-        assert!(!signer_matches("HashMismatch", subject, "Clanto Services srl"));
-        assert!(!signer_matches("Valid", "CN=Clanto Services srl Fake, O=x", "Clanto Services srl"));
-        assert!(!signer_matches("Valid", "CN=Other, O=Clanto Services srl", "Clanto Services srl"));
-        assert!(team_matches("Identifier=x\nTeamIdentifier=DCP3L7L7BW\n", "DCP3L7L7BW"));
-        assert!(!team_matches("TeamIdentifier=ABCDEF1234\n", "DCP3L7L7BW"));
-        assert!(!team_matches("TeamIdentifier=not set\n", "DCP3L7L7BW"));
+    fn tampered_text_lists_the_files() {
+        assert!(tampered_text("librustdesk.dll").ends_with("\n\nlibrustdesk.dll"));
     }
 }

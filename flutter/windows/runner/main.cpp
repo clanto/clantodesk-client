@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <iostream>
 
+#include "clanto_integrity.h"
 #include "win32_desktop.h"
 #include "flutter_window.h"
 #include "utils.h"
@@ -23,6 +24,10 @@ const wchar_t* getWindowClassName();
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command)
 {
+  // Clanto: binari non firmati da Clanto, nessun avvio (clanto_integrity.cpp).
+  if (!ClantoIntegrityOk()) {
+    return EXIT_FAILURE;
+  }
   HINSTANCE hInstance = LoadLibraryA("librustdesk.dll");
   if (!hInstance)
   {

@@ -33,6 +33,17 @@ pub fn core_main() -> Option<Vec<String>> {
     if !crate::common::global_init() {
         return None;
     }
+    // Clanto: eseguibile e bundle firmati da Clanto (src/clanto/signature.rs).
+    #[cfg(windows)]
+    if !crate::clanto::signature::verify_own_exe() {
+        return None;
+    }
+    #[cfg(target_os = "macos")]
+    if matches!(std::env::args().nth(1).as_deref(), Some("--service") | Some("--server"))
+        && crate::clanto::signature::verify_own_bundle().is_err()
+    {
+        return None;
+    }
     crate::load_custom_client();
     // Dopo load_custom_client: anche quello puo' fornire rendezvous server e chiave.
     if !crate::clanto::config::ensure_own_server_configured() {
@@ -396,12 +407,6 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--service" {
             log::info!("start --service");
-            // Binari non firmati da Clanto: il servizio non parte.
-            #[cfg(windows)]
-            if crate::clanto::signature::verify_install_dir().is_err() {
-                std::thread::sleep(std::time::Duration::from_secs(3));
-                return None;
-            }
             crate::start_os_service();
             return None;
         } else if args[0] == "--server" {
