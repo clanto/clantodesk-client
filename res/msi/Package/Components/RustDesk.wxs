@@ -38,7 +38,13 @@
 		     every custom client. -->
 		<CustomAction Id="InstallPrinter.SetParam" Return="check" Property="InstallPrinter" Value="[ProductName]|[INSTALLFOLDER_INNER]" />
 		<CustomAction Id="UninstallPrinter.SetParam" Return="check" Property="UninstallPrinter" Value="[ProductName]" />
+		<!-- Clanto: msiexec /x ... CLANTO_PURGE=1 [CLANTO_REMOVE_RUSTDESK=1] cancella anche configurazione,
+		     log, report e chiavi di registro di tutti gli utenti (src/clanto/uninstall.rs). -->
+		<CustomAction Id="ClantoPurgeData" FileRef="App.exe" ExeCommand="--clanto-purge-data" Execute="deferred" Impersonate="no" Return="ignore" />
+		<CustomAction Id="ClantoPurgeDataRustDesk" FileRef="App.exe" ExeCommand="--clanto-purge-data --remove-rustdesk" Execute="deferred" Impersonate="no" Return="ignore" />
 		<InstallExecuteSequence>
+			<Custom Action="ClantoPurgeData" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND CLANTO_PURGE=&quot;1&quot; AND NOT CLANTO_REMOVE_RUSTDESK=&quot;1&quot;" />
+			<Custom Action="ClantoPurgeDataRustDesk" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND CLANTO_PURGE=&quot;1&quot; AND CLANTO_REMOVE_RUSTDESK=&quot;1&quot;" />
 
 			<Custom Action="SetPropertyIsServiceRunning" After="InstallInitialize" Condition="Installed" />
 			<Custom Action="SetPropertyIsServiceRunning.SetParam.AppName" Before="SetPropertyIsServiceRunning" Condition="Installed" />
@@ -122,7 +128,8 @@
 			</Component>
 
 			<Component Id="App.StartMenu.ShortcutUninstall" Guid="E100D7F8-D607-4513-28DA-2C95E5EA698E" Condition="STARTMENUSHORTCUTS = 1 OR STARTMENUSHORTCUTS = &quot;Y&quot; OR STARTMENUSHORTCUTS = &quot;y&quot;">
-				<Shortcut Id="App.StartMenu.ShortcutUninstall" Name="!(loc.SC_Uninstall)" Description="!(loc.SC_Uninstall_Desc)" Target="[System6432Folder]msiexec.exe" Arguments="/x [ProductCode]" Icon="AppIcon" />
+				<!-- Clanto: passa da clantodesk.exe con l opzione uninstall, che chiede se mantenere la configurazione e poi esegue msiexec /x. -->
+				<Shortcut Id="App.StartMenu.ShortcutUninstall" Name="!(loc.SC_Uninstall)" Description="!(loc.SC_Uninstall_Desc)" Target="[!App.exe]" Arguments="--uninstall" Icon="AppIcon" WorkingDirectory="INSTALLFOLDER_INNER" />
 				<RegistryValue Root="HKCU" Key="Software\$(var.Product)" Name="App.StartMenu.ShortcutUninstall" Type="string" Value="1" KeyPath="yes" />
 			</Component>
 		</DirectoryRef>

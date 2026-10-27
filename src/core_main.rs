@@ -237,9 +237,16 @@ pub fn core_main() -> Option<Vec<String>> {
         {
             use crate::platform;
             if args[0] == "--uninstall" {
-                if let Err(err) = platform::uninstall_me(true) {
-                    log::error!("Failed to uninstall: {}", err);
+                let Some((choice, extra)) = crate::clanto::uninstall::prepare(&args[1..]) else {
+                    return None;
+                };
+                match platform::uninstall_me_with(true, &extra) {
+                    Ok(()) => crate::clanto::uninstall::finish(choice),
+                    Err(err) => log::error!("Failed to uninstall: {}", err),
                 }
+                return None;
+            } else if args[0] == "--clanto-purge-data" {
+                crate::clanto::uninstall::purge_now(&args[1..]);
                 return None;
             } else if args[0] == "--update" {
                 if config::is_disable_installation() {

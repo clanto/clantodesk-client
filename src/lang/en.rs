@@ -438,6 +438,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_2fa_policy_error", "The remote PC requires two-factor authentication but has not configured it yet. Contact the remote PC's administrator."),
         ("clanto_2fa_unreadable_error", "The remote PC has two-factor authentication enabled but cannot read its configuration. Ask the remote PC's user to turn two-factor authentication off and on again in Settings, Security."),
         ("clanto_tampered_error", "ClantoDesk has been tampered with or damaged: these files are not signed by Clanto. For security ClantoDesk cannot start. Reinstall it from clanto.it."),
+        ("clanto_uninstall_title", "Uninstall ClantoDesk"),
+        ("clanto_uninstall_keep_config", "Do you want to keep the ClantoDesk configuration (ID, passwords, address book, settings) for a future reinstallation?\n\nYes: removes the program and keeps the configuration.\nNo: removes the program and deletes configuration, logs, reports and registry keys of all users, leaving no traces.\nCancel: does not uninstall."),
+        ("clanto_uninstall_official_rustdesk", "RustDesk (the official version, not from Clanto) is also installed on this PC.\n\nDo you want to remove RustDesk as well?"),
         ("clanto_access_hours_error", "Access to the remote PC is not allowed at this time."),
         ("clanto-require-2fa-tip", "Policy requires two-factor authentication: every incoming connection is rejected until you enable it."),
     ].iter().cloned().collect();

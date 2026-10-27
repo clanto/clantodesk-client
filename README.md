@@ -489,6 +489,19 @@ Il criterio `LockSettings` rende tutte le impostazioni di sola lettura, anche pe
 amministratori, tranne tema e lingua. La relativa chiave `clanto-lock-settings` è accettata
 soltanto dalla GPO; i tentativi di scrittura da interfaccia, IPC o riga di comando sono rifiutati.
 
+### Disinstallazione su Windows
+
+Prima di disinstallare, ClantoDesk chiede se **mantenere la configurazione** (ID,
+password, rubrica, impostazioni) per una futura reinstallazione oppure
+**cancellare tutto**: configurazione di tutti gli utenti e del servizio, log,
+report, quarantena e chiavi di registro, senza lasciare tracce. Le policy GPO
+restano. Le vecchie ClantoDesk che si chiamavano «RustDesk» vengono rimosse in
+automatico; un RustDesk ufficiale solo se l'utente lo conferma.
+
+Per le distribuzioni senza interfaccia: `clantodesk.exe --uninstall --purge`
+(oppure `--keep-config`, predefinito) e `--remove-rustdesk`; con l'MSI
+`msiexec /x <prodotto> CLANTO_PURGE=1 [CLANTO_REMOVE_RUSTDESK=1]`.
+
 ### Configurazione MDM (Android e iOS)
 
 Sui telefoni le stesse chiavi della GPO si impostano da MDM (Intune, Workspace

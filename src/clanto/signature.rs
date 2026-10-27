@@ -89,6 +89,15 @@ pub fn stale_binaries_cmd(src_dir: &std::path::Path, install_dir: &std::path::Pa
         .collect()
 }
 
+/// Windows: `path` è firmato da Clanto, con l'EKU attuale o con il nome della
+/// società (versioni firmate prima dell'EKU). Vale anche senza EKU al build.
+#[cfg(windows)]
+pub fn signed_by_clanto(path: &Path) -> bool {
+    clanto_win::trust::embedded_signer(path).map_or(false, |signer| {
+        signing_eku().map_or(false, |eku| signer.has_eku(eku)) || signer.name.starts_with("Clanto Services")
+    })
+}
+
 #[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 fn tampered_text(files: &str) -> String {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

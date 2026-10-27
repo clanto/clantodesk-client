@@ -194,7 +194,7 @@ pub fn servers_fixed_at_build() -> bool {
     servers_fixed(option_env!("RENDEZVOUS_SERVER"), option_env!("RS_PUB_KEY"))
 }
 
-fn host_of(server: &str) -> String {
+pub(crate) fn host_of(server: &str) -> String {
     let server = server.trim();
     if let Some(rest) = server.strip_prefix('[') {
         return rest.split(']').next().unwrap_or_default().to_owned();

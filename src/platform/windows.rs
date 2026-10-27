@@ -1868,7 +1868,12 @@ fn get_uninstall(kill_self: bool, uninstall_printer: bool) -> ResultType<String>
 }
 
 pub fn uninstall_me(kill_self: bool) -> ResultType<()> {
-    run_cmds(get_uninstall(kill_self, true)?, true, "uninstall")
+    uninstall_me_with(kill_self, "")
+}
+
+/// `extra`: comandi Clanto dopo la disinstallazione (src/clanto/uninstall.rs).
+pub fn uninstall_me_with(kill_self: bool, extra: &str) -> ResultType<()> {
+    run_cmds(format!("{}\n{extra}", get_uninstall(kill_self, true)?), true, "uninstall")
 }
 
 fn write_vbs(cmds: String, tip: &str) -> ResultType<PathBuf> {

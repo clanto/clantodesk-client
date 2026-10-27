@@ -1077,6 +1077,36 @@ Identità di firma fissata al build e verificata con API native (niente PowerShe
 - **Limite.** Chi è amministratore può modificare entrambi i controlli. Il blocco vero lo fa
   Windows con App Control (WDAC) su quell'EKU.
 
+## Disinstallazione (Windows)
+
+`clantodesk.exe --uninstall` (Programmi e funzionalità, collegamento «Disinstalla» anche nell'MSI)
+chiede prima di partire (`src/clanto/uninstall.rs`, hook in `core_main.rs`):
+
+- **Sì, mantieni la configurazione:** toglie programma, servizio, collegamenti, firewall,
+  stampante e driver (`get_uninstall()` di upstream); restano ID, password, rubrica e impostazioni.
+- **No, cancella tutto:** in più cancella, per ogni profilo in `ProfileList` e per i profili di
+  servizio (`LocalService`, `systemprofile`), `AppData\Roaming\ClantoDesk` (configurazione,
+  chiavi, log, report, quarantena), `AppData\Local\ClantoDesk`, i dati di Flutter
+  (`AppData\Roaming\<CompanyName>\ClantoDesk`, anche con i CompanyName delle versioni
+  precedenti) e le chiavi `HKLM\SOFTWARE\ClantoDesk` ed `EventLog\Application\ClantoDesk`. La
+  cartella dell'utente corrente si cancella dopo l'uscita del processo, che tiene aperto il log.
+  Restano le policy `HKLM\Software\Policies\Clanto`: le gestisce l'amministratore.
+- **Annulla:** nessuna modifica.
+
+Fino alla 1.3 ClantoDesk si chiamava «RustDesk» in tutto. Se trova un'installazione o dei dati
+«RustDesk» li classifica: eseguibile firmato da Clanto (`signed_by_clanto`) o configurazione con
+un server Clanto fissato al build = vecchia ClantoDesk, rimossa in automatico (i dati solo con
+«cancella tutto»); altrimenti RustDesk ufficiale, rimosso solo se l'utente conferma la seconda
+domanda. Per toglierlo si esegue prima il suo `rustdesk.exe --uninstall` (sa gestire anche MSI,
+stampante e driver), poi i resti: servizio, chiave di disinstallazione, `HKCR\rustdesk`,
+firewall, collegamenti, cartella.
+
+Senza finestra (sessione 0, CI o opzione esplicita): `--keep-config` (predefinito), `--purge`,
+`--remove-rustdesk` (un RustDesk ufficiale si toglie solo con questa). MSI:
+`msiexec /x <prodotto> CLANTO_PURGE=1 [CLANTO_REMOVE_RUSTDESK=1]` esegue
+`clantodesk.exe --clanto-purge-data` come SYSTEM prima di `RemoveFiles`; la disinstallazione MSI da
+Programmi e funzionalità chiama `msiexec` direttamente e mantiene la configurazione.
+
 ## Debito noto
 
 - `res/msi/Package/License.rtf` (italiano e inglese) non è un EULA e non deve

@@ -29,6 +29,7 @@ pub mod signature;
 pub mod ticket;
 pub mod two_factor_policy;
 pub mod two_factor_store;
+pub mod uninstall;
 pub mod watermark;
 
 /// Controlli dell'host prima della password: fasce orarie, 2FA illeggibile,
