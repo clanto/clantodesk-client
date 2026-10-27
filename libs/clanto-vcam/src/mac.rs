@@ -192,6 +192,10 @@ fn direction(stream: ObjectID) -> Option<u32> {
     ok.then_some(value)
 }
 
+/// Richiamata quando l'estensione consuma la coda: non serve, `write` controlla
+/// lo spazio libero a ogni frame.
+extern "C" fn queue_altered(_stream: ObjectID, _token: *mut c_void, _refcon: *mut c_void) {}
+
 /// Stream sink della camera ClantoDesk. Al drop lo stream si ferma.
 pub struct CameraSink {
     device: ObjectID,
@@ -211,16 +215,19 @@ impl CameraSink {
             .find(|&d| name(d).as_deref() == Some(device_name))
             .ok_or_else(|| NOT_INSTALLED.to_owned())?;
         let streams = ids(device, DEVICE_STREAMS);
-        // Lo stream sink ha direzione 1 (ingresso); in mancanza, il secondo.
+        // Lo stream sink si chiama "<camera>.Sink" (CameraExtension/main.swift) e ha
+        // direzione 0: per CoreMediaIO 1 è l'ingresso, cioè lo stream che le app
+        // leggono. In mancanza, il secondo stream.
         let stream = streams
             .iter()
             .copied()
-            .find(|&s| direction(s) == Some(1))
+            .find(|&s| name(s).map_or(false, |n| n.ends_with(".Sink")))
+            .or_else(|| streams.iter().copied().find(|&s| direction(s) == Some(0)))
             .or_else(|| streams.get(1).copied())
             .ok_or_else(|| NOT_INSTALLED.to_owned())?;
         let mut queue: CMSimpleQueueRef = std::ptr::null_mut();
         unsafe {
-            let status = CMIOStreamCopyBufferQueue(stream, None, std::ptr::null_mut(), &mut queue);
+            let status = CMIOStreamCopyBufferQueue(stream, Some(queue_altered), std::ptr::null_mut(), &mut queue);
             if status != 0 || queue.is_null() {
                 return Err(format!("CMIOStreamCopyBufferQueue: {status}"));
             }
