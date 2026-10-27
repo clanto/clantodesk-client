@@ -4,6 +4,22 @@ use std::cell::RefCell;
 
 const GIF_DATA: &[u8] = include_bytes!("./res/spin.gif");
 const LABEL_DATA: &[u8] = include_bytes!("./res/label.png");
+// Clanto: «Caricamento...» con Windows in italiano.
+const LABEL_DATA_IT: &[u8] = include_bytes!("./res/label_it.png");
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetUserDefaultUILanguage() -> u16;
+}
+
+fn label_data() -> &'static [u8] {
+    const LANG_ITALIAN: u16 = 0x10;
+    if unsafe { GetUserDefaultUILanguage() } & 0x3ff == LANG_ITALIAN {
+        LABEL_DATA_IT
+    } else {
+        LABEL_DATA
+    }
+}
 const GIF_SIZE: i32 = 32;
 const BG_COLOR: [u8; 3] = [90, 90, 120];
 const BORDER_COLOR: [u8; 3] = [40, 40, 40];
@@ -118,7 +134,7 @@ mod basic_app_ui {
             nwg::ImageFrame::builder()
                 .parent(&data.bg_image)
                 .background_color(Some(BG_COLOR))
-                .bitmap(Some(&Bitmap::from_bin(LABEL_DATA)?))
+                .bitmap(Some(&Bitmap::from_bin(label_data())?))
                 .build(&mut data.label_image)?;
 
             nwg::AnimationTimer::builder()
