@@ -55,6 +55,7 @@ pub const GPO_KEYS: &[&str] = &[
     "clanto-syslog-format",
     "clanto-session-log-days",
     "clanto-privacy-prompt",
+    "allow-auto-update",
     "clanto-outgoing-file-transfer",
     "clanto-outgoing-clipboard",
     "clanto-outgoing-tunnel",
@@ -171,6 +172,10 @@ mod tests {
     fn forwarding_keys_are_gpo_managed_and_server_protected() {
         for key in crate::clanto::forwarding::policy::GPO_KEYS {
             assert!(GPO_KEYS.contains(key), "{key} not in GPO_KEYS");
+            // Le liste dei servizi le imposta anche l'API server (SERVER_MANAGED_KEYS).
+            if crate::clanto::server_sync::SERVER_MANAGED_KEYS.contains(key) {
+                continue;
+            }
             assert!(
                 crate::clanto::server_sync::SERVER_PROTECTED_KEYS.contains(key),
                 "{key} can be set by the server"

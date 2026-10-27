@@ -1077,6 +1077,29 @@ Identità di firma fissata al build e verificata con API native (niente PowerShe
 - **Limite.** Chi è amministratore può modificare entrambi i controlli. Il blocco vero lo fa
   Windows con App Control (WDAC) su quell'EKU.
 
+## Aggiornamenti
+
+- **Windows, pulsante «Aggiorna».** Con ClantoDesk installato la UI chiede l'aggiornamento al
+  processo `--server` (SYSTEM) via IPC (`clanto-update-now`, `src/clanto/service_update.rs`) e
+  mostra lo stato (`clanto-update-state`: controllo, download, installazione, errore): nessuna
+  richiesta di amministratore, anche per un utente standard. Il servizio usa il percorso
+  dell'aggiornamento automatico (`updater.rs`): solo una versione più recente pubblicata nelle
+  release Clanto, firma con l'EKU Clanto, installazione con `--update` (o `msiexec /qn` per
+  l'MSI). La richiesta manuale non aspetta l'intervallo di 10 minuti né la fine delle sessioni.
+  Il servizio scarica in `<config del servizio>\update`, che gli utenti non possono scrivere: un
+  file preparato o sostituito da un utente tra verifica e avvio non è possibile. Se il servizio
+  non risponde (portable, servizio fermo) o l'aggiornamento fallisce, resta il percorso upstream
+  con download nella UI e UAC («Aggiorna come amministratore»).
+- **Windows, automatico.** `allow-auto-update` («Aggiornamento automatico» nelle impostazioni,
+  GPO `AutoUpdate`, spento di default): il servizio controlla 30 s dopo l'avvio e poi ogni giorno,
+  e installa da solo quando non ci sono sessioni attive (altrimenti riprova dopo 30 minuti).
+- **macOS.** Pulsante «Aggiorna»: download del DMG nella UI, estrazione, verifica del team Clanto e
+  sostituzione del bundle con la password di amministratore (`osascript`). L'aggiornamento
+  automatico come root (`start_auto_update_macos`) c'è ma è spento (`MACOS_AUTO_UPDATE_ENABLED`)
+  finché non è provato su VM.
+- **Linux.** Nessun aggiornamento dall'app: la scheda «Nuova versione» apre la pagina della
+  release; i pacchetti si aggiornano con il gestore della distribuzione o reinstallando.
+
 ## Disinstallazione (Windows)
 
 `clantodesk.exe --uninstall` (Programmi e funzionalità, collegamento «Disinstalla» anche nell'MSI)

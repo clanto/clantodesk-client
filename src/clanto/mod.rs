@@ -21,6 +21,7 @@ pub mod managed_config;
 pub mod outgoing;
 pub mod posture;
 pub mod server_sync;
+pub mod service_update;
 pub mod session_log;
 pub mod settings_lock;
 pub mod temp_password;

@@ -489,6 +489,19 @@ Il criterio `LockSettings` rende tutte le impostazioni di sola lettura, anche pe
 amministratori, tranne tema e lingua. La relativa chiave `clanto-lock-settings` è accettata
 soltanto dalla GPO; i tentativi di scrittura da interfaccia, IPC o riga di comando sono rifiutati.
 
+### Aggiornamenti
+
+Su Windows, con ClantoDesk installato, il pulsante «Aggiorna» fa scaricare e
+installare la nuova versione al servizio di sistema: nessuna richiesta di
+amministratore, anche per un utente standard. Si installano solo versioni più
+recenti firmate da Clanto. «Aggiornamento automatico» (opzione
+`allow-auto-update`, GPO `AutoUpdate`, spento di default) fa installare al
+servizio ogni nuova versione da solo, quando non ci sono sessioni attive.
+
+Su macOS l'aggiornamento chiede la password di amministratore e quello
+automatico è ancora disattivato; su Linux si aggiorna dal pacchetto della
+release. Dettagli in [CLANTO.md](CLANTO.md#aggiornamenti).
+
 ### Disinstallazione su Windows
 
 Prima di disinstallare, ClantoDesk chiede se **mantenere la configurazione** (ID,
@@ -664,6 +677,7 @@ L'interfaccia di questi controlli è nella sezione «Audit» delle impostazioni 
 | Chiave | Valori | Default | Interfaccia | GPO |
 | --- | --- | --- | --- | --- |
 | `clanto-privacy-prompt` | `Y`, `N` (`N` = mai il popup) | assente (popup attivo) | «Chiedi di attivare la modalità privacy all'inizio di ogni sessione» (Altre opzioni predefinite, desktop e mobile) | `PrivacyPrompt` |
+| `allow-auto-update` | `Y`, `N` | assente (spento) | «Aggiornamento automatico» (Generale, solo Windows installato); il servizio installa da solo le nuove versioni | `AutoUpdate` |
 | `clanto-lock-settings` | `Y`, `N` | assente (impostazioni modificabili) | nessun controllo locale; con `Y` tutte le impostazioni sono in sola lettura tranne tema e lingua | `LockSettings` |
 
 #### Default dell'host

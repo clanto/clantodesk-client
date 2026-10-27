@@ -441,6 +441,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_uninstall_title", "Uninstall ClantoDesk"),
         ("clanto_uninstall_keep_config", "Do you want to keep the ClantoDesk configuration (ID, passwords, address book, settings) for a future reinstallation?\n\nYes: removes the program and keeps the configuration.\nNo: removes the program and deletes configuration, logs, reports and registry keys of all users, leaving no traces.\nCancel: does not uninstall."),
         ("clanto_uninstall_official_rustdesk", "RustDesk (the official version, not from Clanto) is also installed on this PC.\n\nDo you want to remove RustDesk as well?"),
+        ("clanto_update_checking", "Checking for the new version through the ClantoDesk service..."),
+        ("clanto_update_downloading", "Downloading the new version..."),
+        ("clanto_update_installing", "Installing: ClantoDesk will close and restart by itself."),
+        ("clanto_update_none", "ClantoDesk is already up to date."),
+        ("clanto_update_failed", "The update failed."),
+        ("clanto_update_as_admin", "Update as administrator"),
         ("clanto_access_hours_error", "Access to the remote PC is not allowed at this time."),
         ("clanto-require-2fa-tip", "Policy requires two-factor authentication: every incoming connection is rejected until you enable it."),
     ].iter().cloned().collect();

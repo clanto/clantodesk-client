@@ -1233,6 +1233,24 @@ pub fn main_clanto_server_status() -> SyncReturn<String> {
     SyncReturn(crate::clanto::config::server_status_json())
 }
 
+/// Clanto: aggiornamento tramite il servizio di sistema, senza UAC.
+/// `false` se il servizio non è disponibile (si usa il percorso con UAC).
+pub fn main_clanto_update_via_service() -> bool {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    return crate::clanto::service_update::request();
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    false
+}
+
+/// Clanto: stato dell'aggiornamento nel servizio (`checking`, `none`,
+/// `downloading`, `installing`, `error:...`, vuoto se non raggiungibile).
+pub fn main_clanto_update_state() -> String {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    return crate::clanto::service_update::state();
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    String::new()
+}
+
 pub fn main_discover() {
     discover();
 }

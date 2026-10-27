@@ -10,6 +10,79 @@ import 'package:url_launcher/url_launcher.dart';
 final _isExtracting = false.obs;
 
 void handleUpdate(String releasePageUrl) {
+  // Clanto: su Windows installato aggiorna il servizio di sistema, senza UAC
+  // (src/clanto/service_update.rs); se non risponde, download e UAC.
+  if (isWindows && bind.mainIsInstalled()) {
+    bind.mainClantoUpdateViaService().then((ok) {
+      if (ok) {
+        _showServiceUpdate(releasePageUrl);
+      } else {
+        _handleUpdateWithDownload(releasePageUrl);
+      }
+    });
+    return;
+  }
+  _handleUpdateWithDownload(releasePageUrl);
+}
+
+void _showServiceUpdate(String releasePageUrl) {
+  final state = ''.obs;
+  Timer? timer;
+  timer = Timer.periodic(const Duration(seconds: 1), (_) async {
+    state.value = await bind.mainClantoUpdateState();
+    if (state.value == 'none' || state.value.startsWith('error:')) {
+      timer?.cancel();
+    }
+  });
+  String text(String s) {
+    if (s.startsWith('error:')) {
+      return '${translate('clanto_update_failed')}\n${s.substring('error:'.length)}';
+    }
+    switch (s) {
+      case 'none':
+        return translate('clanto_update_none');
+      case 'downloading':
+        return translate('clanto_update_downloading');
+      case 'installing':
+        return translate('clanto_update_installing');
+      default:
+        return translate('clanto_update_checking');
+    }
+  }
+
+  gFFI.dialogManager.dismissAll();
+  gFFI.dialogManager.show((setState, close, context) {
+    void dismiss() {
+      timer?.cancel();
+      close();
+    }
+
+    return CustomAlertDialog(
+      title: Text(translate('{$appName} Update')),
+      content: Obx(() => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(text(state.value)),
+              if (state.value != 'none' && !state.value.startsWith('error:'))
+                const LinearProgressIndicator().paddingOnly(top: 12),
+            ],
+          )),
+      actions: [
+        Obx(() => state.value.startsWith('error:')
+            ? dialogButton(translate('clanto_update_as_admin'), onPressed: () {
+                dismiss();
+                _handleUpdateWithDownload(releasePageUrl);
+              }, isOutline: true)
+            : const SizedBox.shrink()),
+        dialogButton(translate('Close'), onPressed: dismiss),
+      ],
+      onCancel: dismiss,
+    );
+  });
+}
+
+void _handleUpdateWithDownload(String releasePageUrl) {
   _isExtracting.value = false;
   String downloadUrl = releasePageUrl.replaceAll('tag', 'download');
   String version = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
@@ -151,7 +224,7 @@ class UpdateProgressState extends State<UpdateProgress> {
 
     retry() {
       dialogManager.dismissAll();
-      handleUpdate(widget.releasePageUrl);
+      _handleUpdateWithDownload(widget.releasePageUrl);
     }
 
     final List<Widget> buttons = [

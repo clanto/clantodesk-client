@@ -53,6 +53,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/outgoing.rs`
 - `src/clanto/posture.rs`
 - `src/clanto/server_sync.rs`
+- `src/clanto/service_update.rs`
 - `src/clanto/session_log.rs`
 - `src/clanto/settings_lock.rs`
 - `src/clanto/signature.rs`

@@ -62,4 +62,5 @@
     <string name="clanto_mdm_clanto_require_controller_watermark">Richiedi la filigrana del controller</string>
     <string name="clanto_mdm_clanto_host_watermark">Mostra la filigrana sull\'host</string>
     <string name="clanto_mdm_clanto_lock_settings">Impedisci la modifica delle impostazioni di ClantoDesk</string>
+    <string name="clanto_mdm_allow_auto_update">Aggiornamento automatico (Windows)</string>
 </resources>

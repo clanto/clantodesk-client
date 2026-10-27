@@ -151,17 +151,23 @@ fn start_auto_update_check_(rx_msg: Receiver<UpdateMsg>) {
         let recv_res = rx_msg.recv_timeout(check_interval);
         match &recv_res {
             Ok(UpdateMsg::CheckUpdate) | Err(_) => {
-                if last_check_time.elapsed() < MIN_INTERVAL {
+                // Clanto: la richiesta dell'utente (pulsante «Aggiorna» via servizio)
+                // non aspetta l'intervallo minimo né la fine delle sessioni.
+                let manually = matches!(recv_res, Ok(UpdateMsg::CheckUpdate));
+                if !manually && last_check_time.elapsed() < MIN_INTERVAL {
                     // log::debug!("Update check skipped due to minimum interval.");
                     continue;
                 }
                 // Don't check update if there are alive connections.
-                if !has_no_active_conns() {
+                if !manually && !has_no_active_conns() {
                     check_interval = RETRY_INTERVAL;
                     continue;
                 }
-                if let Err(e) = check_update(matches!(recv_res, Ok(UpdateMsg::CheckUpdate))) {
+                if let Err(e) = check_update(manually) {
                     log::error!("Error checking for updates: {}", e);
+                    if manually {
+                        crate::clanto::service_update::set_error(&e);
+                    }
                     check_interval = RETRY_INTERVAL;
                 } else {
                     last_check_time = Instant::now();
@@ -193,6 +199,9 @@ fn check_update(manually: bool) -> ResultType<()> {
     let update_url = crate::common::SOFTWARE_UPDATE_URL.lock().unwrap().clone();
     if update_url.is_empty() {
         log::debug!("No update available.");
+        if manually {
+            crate::clanto::service_update::set_state(crate::clanto::service_update::NONE);
+        }
     } else {
         let download_base_url = update_url.replace("tag", "download");
         let version = download_base_url
@@ -224,6 +233,10 @@ fn check_update(manually: bool) -> ResultType<()> {
         let Some(file_path) = get_download_file_from_url(&download_url) else {
             bail!("Failed to get the file path from the URL: {}", download_url);
         };
+        let file_path = crate::clanto::service_update::download_path(file_path);
+        if manually {
+            crate::clanto::service_update::set_state(crate::clanto::service_update::DOWNLOADING);
+        }
         let mut is_file_exists = false;
         if file_path.exists() {
             // Check if the file size is the same as the server file size
@@ -262,9 +275,18 @@ fn check_update(manually: bool) -> ResultType<()> {
         // We have checked if the `conns` is empty before, but we need to check again.
         // No need to care about the downloaded file here, because it's rare case that the `conns` are empty
         // before the download, but not empty after the download.
-        if has_no_active_conns() {
+        if manually || has_no_active_conns() {
             #[cfg(target_os = "windows")]
-            update_new_version(update_msi, &version, &file_path);
+            {
+                if manually {
+                    crate::clanto::service_update::set_state(crate::clanto::service_update::INSTALLING);
+                }
+                update_new_version(update_msi, &version, &file_path);
+                // Ogni errore di update_new_version cancella il file scaricato.
+                if manually && !file_path.exists() {
+                    crate::clanto::service_update::set_error("the update could not be installed");
+                }
+            }
         }
     }
     Ok(())
