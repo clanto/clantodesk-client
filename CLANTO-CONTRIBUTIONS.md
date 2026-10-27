@@ -24,6 +24,7 @@ con Apache-2.0.
 I file interamente Clanto riportano l'identificatore SPDX
 `AGPL-3.0-only OR Apache-2.0`:
 
+- `src/clanto/access_hours.rs`
 - `src/clanto/audit_sink.rs`
 - `src/clanto/config.rs`
 - `src/clanto/config_import.rs`
@@ -47,18 +48,23 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/host_watermark/windows.rs`
 - `src/clanto/id_permissions.rs`
 - `src/clanto/keystore.rs`
+- `src/clanto/managed_config.rs`
 - `src/clanto/mod.rs`
 - `src/clanto/outgoing.rs`
 - `src/clanto/posture.rs`
 - `src/clanto/server_sync.rs`
 - `src/clanto/session_log.rs`
 - `src/clanto/settings_lock.rs`
+- `src/clanto/signature.rs`
 - `src/clanto/temp_password.rs`
+- `src/clanto/ticket.rs`
 - `src/clanto/trusted_controllers.rs`
 - `src/clanto/two_factor_policy.rs`
 - `src/clanto/two_factor_store.rs`
 - `src/clanto/watermark.rs`
+- `src/platform/linux_gtk_clipboard.rs`
 - `flutter/lib/clanto/about_links.dart`
+- `flutter/lib/clanto/access_hours.dart`
 - `flutter/lib/clanto/accessibility_disclosure.dart`
 - `flutter/lib/clanto/android_file_transfer.dart`
 - `flutter/lib/clanto/audit_settings.dart`
@@ -74,11 +80,13 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `flutter/lib/clanto/posture_login_error.dart`
 - `flutter/lib/clanto/privacy_prompt.dart`
 - `flutter/lib/clanto/protected_device.dart`
+- `flutter/lib/clanto/server_status.dart`
 - `flutter/lib/clanto/session_report.dart`
 - `flutter/lib/clanto/session_report_data.dart`
 - `flutter/lib/clanto/settings_auth.dart`
 - `flutter/lib/clanto/settings_lock.dart`
 - `flutter/lib/clanto/settings_password.dart`
+- `flutter/lib/clanto/tamper_check.dart`
 - `flutter/lib/clanto/temp_password_rotation.dart`
 - `flutter/lib/clanto/trusted_controllers.dart`
 - `flutter/lib/clanto/two_factor_policy.dart`
@@ -88,14 +96,23 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoChatNotifier.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoDownloads.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoHostWatermark.kt`
+- `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoManagedConfig.kt`
 - `flutter/android/app/src/main/kotlin/it/clanto/clantodesk/clanto/ClantoUserKeyStore.kt`
+- `flutter/android/app/src/main/res/xml/app_restrictions.xml`
+- `flutter/android/app/src/main/res/values/clanto_mdm.xml`, `values-it/clanto_mdm.xml`
 - `flutter/ios/Runner/ClantoCamera.swift`, `ClantoCamera.h`
 - `flutter/ios/Runner/ClantoFileExporter.swift`
+- `flutter/ios/Runner/ClantoManagedConfig.h`
+- `flutter/windows/runner/clanto_integrity.cpp`, `clanto_integrity.h`
+- `libs/clanto-vcam/Cargo.toml`, `dll/Cargo.toml`
 - `libs/clanto-vcam/src/lib.rs`, `frame.rs`, `shared.rs`, `control.rs`, `mac.rs`
 - `libs/clanto-vcam/dll/src/lib.rs`, `source.rs`
+- `libs/clanto-win/Cargo.toml`, `src/lib.rs`, `src/trust.rs`, `src/posture.rs`
 - `flutter/macos/CameraExtension/main.swift`, `Info.plist`, `CameraExtension.entitlements`
 - `.github/scripts/build-macos-camera-extension.sh`
 - `docker/Dockerfile.android`, `docker/android-build.sh`, `docker/android-inner.sh`
+- `docker/e2e/e2e_harness.rs`
+- `api/clantodesk.php`, `api/clantodesk-posture.php`
 
 L'elenco deve essere aggiornato quando viene aggiunto, rimosso o riclassificato
 un modulo. L'intestazione SPDX del singolo file prevale su questo inventario in
@@ -129,8 +146,9 @@ La logica nuova e separabile viene collocata vicino all'ecosistema che la usa:
 - `src/clanto/` per Rust;
 - `flutter/lib/clanto/` per Dart/Flutter;
 - `it.clanto.clantodesk.clanto` per Kotlin/Android;
-- `libs/clanto-vcam/` per i crate separati (la DLL della camera virtuale deve
-  essere un binario a sé);
+- `libs/clanto-vcam/` e `libs/clanto-win/` per i crate separati (la DLL della
+  camera virtuale deve essere un binario a sé; le API native Windows stanno in
+  un crate proprio);
 - `flutter/ios/Runner/` per sorgenti Swift che devono appartenere al target
   Xcode.
 

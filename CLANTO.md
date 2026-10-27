@@ -58,7 +58,7 @@ docker/test-all.sh                                # tutto, con riepilogo finale
 docker/check.sh                                   # cargo check (linux-pkg-config)
 docker/check.sh --test clanto:: core_main::       # test della lib filtrati
 docker/flutter-check.sh                           # bridge, flutter analyze/test, check con flutter
-docker/e2e/run.sh                                 # 2FA e controller fidati end-to-end
+docker/e2e/run.sh                                 # end-to-end: 2FA, controller fidati, fasce orarie, ticket, forwarding, webcam
 docker/security-scan.sh                           # Semgrep (blocca) e OSV-Scanner (informa)
 docker/android-build.sh [abi] [outgoing|incoming] # APK come la CI (firma di debug) in target/android/
 ```
@@ -127,8 +127,9 @@ voluto: `RELAY_SERVER` esiste solo per fissarne uno.
 Le voci di interfaccia sono chiuse a monte: `hide-server-settings` in
 `BUILTIN_SETTINGS` nasconde "ID/Relay Server" su desktop e mobile, e il **lettore
 di codici QR è stato rimosso** — era l'ultima strada per importare una
-configurazione server, e con esso sono usciti `qr_code_scanner`, `zxing2`,
-`image_picker` e le due autorizzazioni iOS di fotocamera e libreria foto.
+configurazione server, e con esso sono usciti `qr_code_scanner`, `zxing2` e
+`image_picker`. Su iOS la fotocamera è tornata solo per il forwarding webcam
+(`NSCameraUsageDescription`, aperta dal menu Forwarding), non per i codici QR.
 
 ## Cosa controlla la CI prima di compilare
 
@@ -140,6 +141,9 @@ Il job `verify-secrets` in `flutter-build.yml` blocca tutti i build se:
 3. il commit di `libs/hbb_common` pinnato dal tag upstream non è un antenato del
    commit del fork Clanto — il fork può essere avanti, ma non può perdere modifiche upstream
 4. resta qualche nome di artefatto `rustdesk-*`
+
+Dopo la firma, il passo «Verify signatures and Clanto EKU» di `flutter-build.yml` ferma il build
+Windows se un `.exe`/`.dll` non porta l'EKU Clanto (vedi [Firma del codice](#firma-del-codice)).
 
 `build.py` riscrive da sé la versione in `PKGBUILD`, `rpm.spec` e `rpm-suse.spec`
 leggendola da `Cargo.toml`: quei file non vanno aggiornati a mano.
@@ -830,8 +834,9 @@ il pulsante «Aggiorna», usando il download/installer desktop o la pagina Play 
   `clanto-posture-bypass` (id separati da virgola) le ignora su quel PC; `decide()` non lascia mai
   passare un id `core:` (firma, coerenza, versione revocata). Ogni accesso entrato con un bypass va
   nell'audit.
-- **Policy.** Vive sul server, in `posture-policy.json` accanto alla PHP: regole, tabella EOL per
-  edizione, gruppi di host, fasce orarie. Si cambia senza rilasciare il client. Una regola malformata
+- **Policy.** Vive sul server, in `posture-policy.json` accanto alla PHP: regole, versioni revocate,
+  gruppi di host e tabella EOL (oggi solo Linux: Windows si giudica da `os_patch_days`). Le fasce
+  orarie non sono qui ma sull'host (`clanto-access-hours`). Si cambia senza rilasciare il client. Una regola malformata
   blocca tutti gli accessi (`core:policy:<id>`): provarla prima di pubblicarla.
 - **Server.** I file stanno in `api/` di questo repo (`clantodesk-posture.php`, `posture-policy.json`,
   insieme a `clantodesk.php` dei download) e si caricano così come sono su `clanto.it/api/`. Il

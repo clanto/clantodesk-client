@@ -23,9 +23,12 @@ mantenuto come mirror di upstream.
 - sincronizzare appunti e audio quando consentito;
 - usare chat testuale e chiamate vocali durante l'assistenza;
 - usare terminale, inoltro porte e le altre funzioni supportate dal core;
-- inoltrare porte nei due sensi con il menu Forwarding, scegliendo i servizi da
-  l'elenco servizi Clanto (attivi solo se spuntati sul PC) o destinazioni
-  personalizzate ammesse dalla policy;
+- inoltrare porte nei due sensi con il menu Forwarding, verso il PC stesso o
+  verso un altro dispositivo della sua rete (NAS, stampante, firewall),
+  scegliendo i servizi dall'elenco servizi Clanto (attivi solo se spuntati sul
+  PC) o destinazioni personalizzate ammesse dalla policy;
+- indicare un riferimento ticket facoltativo nella connessione, che finisce in
+  audit e report;
 - mostrare la webcam del tecnico (anche la fotocamera di un telefono Android o
   di un iPhone) come camera virtuale sul computer assistito, per Teams, Zoom e
   simili, oppure usare con il consenso la webcam del computer assistito;
@@ -54,9 +57,14 @@ include, tra le altre, queste personalizzazioni:
 - aggiornamenti applicativi tramite il servizio Clanto senza inviare il
   fingerprint hardware stabile del dispositivo;
 - funzioni di sicurezza e amministrazione aggiuntive: accesso solo da
-  dispositivi protetti, filigrane, controllo dei file ricevuti, permessi per ID,
-  report sessioni, audit verso SIEM e criteri di gruppo (vedi
+  dispositivi protetti, fasce orarie, filigrane, controllo dei file ricevuti,
+  permessi per ID, report sessioni con verifica d'integrità, audit verso SIEM,
+  criteri di gruppo su Windows e configurazione MDM su Android e iOS (vedi
   [Sicurezza e amministrazione](#sicurezza-e-amministrazione));
+- blocco dell'avvio se eseguibile o librerie non sono firmati da Clanto
+  (Windows e macOS) e aggiornamenti installati solo se firmati da Clanto;
+- server in uso indicato nella barra di stato («Pronto per la connessione
+  tramite server Clanto» con il pallino verde);
 - forwarding modulare separato dal port forward di upstream (che resta
   spento): porte nei due sensi, elenco servizi Clanto da spuntare, policy per lato e
   webcam del tecnico come camera virtuale su Linux (v4l2loopback), Windows 11
@@ -194,6 +202,9 @@ nell'audit dell'host.
 | `flutter/ios/Runner/ClantoCamera.swift` | Fotocamera iPhone come webcam del tecnico |
 | `flutter/macos/CameraExtension/` | Camera Extension macOS (camera virtuale) |
 | `libs/clanto-vcam/` | Camera virtuale: Windows 11 (Media Foundation) e lato host macOS |
+| `libs/clanto-win/` | API native Windows: verifica delle firme e postura del dispositivo |
+| `flutter/windows/runner/clanto_integrity.cpp` | Verifica delle firme nell'eseguibile Windows, prima di caricare il core |
+| `flutter/android/.../clanto/ClantoManagedConfig.kt`, `flutter/ios/Runner/ClantoManagedConfig.h` | Configurazione gestita da MDM |
 | `libs/hbb_common/` | Configurazione, protocolli e utilità condivise con il server |
 | `libs/base/` | Chiavi di opzione, protocollo `message.proto`, trasferimento file e codice di piattaforma usati solo dal client |
 | `libs/scrap/` | Cattura dello schermo |
@@ -213,7 +224,8 @@ workflow verificano preventivamente:
 - presenza dei secret relativi ai server;
 - coerenza della versione nei file di packaging;
 - allineamento del submodule `libs/hbb_common`;
-- assenza di artefatti distribuibili con nomi RustDesk.
+- assenza di artefatti distribuibili con nomi RustDesk;
+- dopo la firma, che ogni `.exe`/`.dll` Windows porti l'identità di firma Clanto.
 
 Per un controllo locale del codice Rust, senza installare la toolchain sul
 sistema host:
@@ -242,6 +254,12 @@ I principali valori iniettati durante la compilazione sono:
 | `RS_PUB_KEY` | Chiave pubblica del server |
 | `API_SERVER` | API applicativa, quando configurata |
 | `CLANTO_ALLOW_PUBLIC_SERVER` | Eccezione solo per sviluppo locale |
+| `CLANTO_SIGNING_EKU` | EKU Azure Trusted Signing richiesto a exe, DLL e aggiornamenti Windows (impostato dalla CI solo con la firma Azure configurata) |
+| `CLANTO_SIGNING_TEAM` | Team Apple richiesto al bundle macOS e agli aggiornamenti (impostato dalla CI solo con i secret di firma) |
+| `CLANTO_POSTURE_MASTER` | Secret GitHub da cui si deriva la chiave di firma della postura |
+
+Senza `CLANTO_SIGNING_EKU` e `CLANTO_SIGNING_TEAM` (build di sviluppo) le firme
+non vengono verificate.
 
 Non inserire secret, chiavi private o credenziali direttamente nel repository.
 
@@ -264,6 +282,17 @@ secondi o risposta non valida valgono rifiuto.
   ogni accesso entrato con un bypass viene registrato nell'audit.
 - Con l'opzione attiva l'accesso diretto via IP è di fatto escluso.
 - È una misura contro i dispositivi trascurati, non contro chi ricompila il client.
+- Su Windows i dati del dispositivo si leggono con API native (niente
+  PowerShell); il sistema è considerato aggiornato in base ai giorni trascorsi
+  dall'ultimo aggiornamento cumulativo installato, non da una tabella di build.
+
+### Fasce orarie di accesso
+
+«Consenti le connessioni solo in determinate fasce orarie» limita le connessioni
+in ingresso a giorni e orari nell'ora locale dell'host, per esempio
+`lun-ven 08:00-18:00; sab 09:00-12:00`. Fuori fascia ogni accesso è rifiutato,
+anche con approvazione manuale; un valore non valido rifiuta tutto
+(fail-closed). Si imposta anche da GPO, MDM e API server.
 
 ### Autenticazione a due fattori e controller fidati
 
@@ -283,6 +312,9 @@ Ogni utente di ogni controller ha una chiave Ed25519 propria, visibile anche in
 Impostazioni → Sicurezza → «Chiave del dispositivo». L'host salta il 2FA solo se il
 controller firma la connessione con la chiave registrata per il suo ID: un ID
 dichiarato, da solo, non basta. La password resta sempre obbligatoria.
+
+Il segreto 2FA è cifrato dal servizio dell'host. Se è presente ma non
+leggibile, l'host rifiuta ogni accesso invece di accettare la sola password.
 
 ### Filigrane
 
@@ -356,6 +388,14 @@ di RustDesk (`enable-tunnel`) resta indipendente e spento.
   raggiunge solo i servizi Clanto spuntati su di sé o le destinazioni del
   proprio elenco.
 
+La destinazione può essere il PC stesso o un altro dispositivo della sua rete:
+la connessione la apre il PC che espone la rete, che fa da ponte. Nella sessione
+un forward personalizzato si crea scegliendo «PC stesso» o «altro dispositivo»
+(con IP o nome), la porta del servizio e la porta da aprire dall'altra parte.
+Nelle impostazioni le destinazioni ammesse si aggiungono allo stesso modo, una
+riga per voce. Evitare `*` o reti intere: equivalgono a dare al tecnico accesso
+a tutta la rete.
+
 L'elenco servizi Clanto è un JSON pubblicato su
 `https://clanto.it/api/clantodesk-forward-catalog.json` (esempio in
 `api/forward-catalog.example.json`): serve a scegliere, non attiva nulla. Nelle
@@ -392,7 +432,18 @@ L'host conserva localmente uno storico delle sessioni in entrata, compresi i
 tentativi rifiutati: orari, peer, IP, metodo di accesso, esito della postura,
 permessi usati e metadati dei file. Non salva appunti, input da tastiera né altri
 contenuti. Il report si filtra per periodo, esito, tipo di connessione e testo
-(ID, nome, IP, codice sessione) ed è esportabile in CSV.
+(ID, nome, IP, codice sessione, ticket) ed è esportabile in CSV. Si aggiorna da
+solo mentre è aperto e si può consultare senza sbloccare le impostazioni.
+
+- **Antivirus:** per ogni file ricevuto mostra l'esito della scansione.
+- **Integrità:** ogni record è concatenato al precedente con SHA-256; il
+  pallino verde indica una catena integra, il rosso un record modificato, tolto
+  o spostato. Chi ha privilegi di amministratore può riscrivere l'intera
+  catena: per questo conviene inviare l'audit anche al SIEM.
+- **Ticket:** riferimento facoltativo indicato dal tecnico
+  (`clantodesk://connect/<ID>?ticket=INC-1234` o `--ticket`), riportato in
+  audit e report. `clantodesk --clanto-session-report [giorni]` stampa il report
+  in JSON per i software di ticketing.
 
 La conservazione predefinita è di 180 giorni; `0` disabilita il registro ed elimina
 i file esistenti. I record contengono dati personali dei peer: conservarli per il
@@ -437,6 +488,29 @@ importano in Intune. I criteri sono letti da
 Il criterio `LockSettings` rende tutte le impostazioni di sola lettura, anche per gli
 amministratori, tranne tema e lingua. La relativa chiave `clanto-lock-settings` è accettata
 soltanto dalla GPO; i tentativi di scrittura da interfaccia, IPC o riga di comando sono rifiutati.
+
+### Configurazione MDM (Android e iOS)
+
+Sui telefoni le stesse chiavi della GPO si impostano da MDM (Intune, Workspace
+ONE, Jamf, Android Enterprise): managed configurations su Android, con lo schema
+in `flutter/android/app/src/main/res/xml/app_restrictions.xml`, e managed app
+configuration su iOS. I valori si applicano subito, l'interfaccia li mostra
+bloccati e una chiave tolta dall'MDM torna modificabile.
+
+### Firma e integrità dell'eseguibile
+
+- **Windows:** prima di caricare il core, l'eseguibile verifica che ogni
+  `.exe`/`.dll` della sua cartella sia firmato da Clanto (EKU di Azure Trusted
+  Signing, stabile anche quando il certificato ruota) o da Microsoft; il core
+  verifica a sua volta l'eseguibile. Vale anche per le copie non installate.
+- **macOS:** il bundle e il codice annidato devono essere firmati dal team
+  Apple Clanto.
+- In caso di manomissione l'avvio si blocca con il messaggio «Eseguibile
+  manomesso» e un evento di audit (61180). Gli aggiornamenti si installano solo
+  se firmati con la stessa identità.
+
+Chi ha privilegi di amministratore può comunque aggirare i controlli: il blocco
+vero è una regola App Control (WDAC) di Windows sull'EKU Clanto.
 
 ### Predefiniti più sicuri
 
@@ -609,6 +683,11 @@ Postura e filigrana del controller richiedono che l'**host** raggiunga
 (`clantodesk-posture.php`, `posture-policy.json`) siano pubblicati lì, con il
 segreto di firma configurato sul server. Senza questi requisiti i login protetti
 vengono rifiutati.
+
+L'elenco servizi del forwarding va pubblicato come
+`https://clanto.it/api/clantodesk-forward-catalog.json` (formato in
+`api/forward-catalog.example.json`). Se non è raggiungibile restano attivi i
+servizi già spuntati; manca solo l'elenco da cui sceglierne di nuovi.
 
 ## Contributi e aggiornamenti upstream
 

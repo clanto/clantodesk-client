@@ -14,6 +14,8 @@
 * `libs/enigo/` input control
 * `libs/clipboard/` clipboard
 * `libs/clanto-vcam/` Clanto virtual camera: Windows 11 Media Foundation source (`dll/`), macOS host side
+* `libs/clanto-win/` Clanto native Windows APIs: Authenticode/EKU checks (`trust.rs`), device posture (`posture.rs`)
+* `src/clanto/`, `flutter/lib/clanto/` Clanto features (see `CLANTO.md`)
 * `libs/base/src/config/keys.rs` the single import path for all options
 
 ### Key Components
