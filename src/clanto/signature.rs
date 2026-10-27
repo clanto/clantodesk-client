@@ -49,6 +49,46 @@ pub fn verify_windows_file(path: &Path) -> ResultType<()> {
     Ok(())
 }
 
+/// Windows, installazione e aggiornamento: comandi che cancellano dalla cartella
+/// di installazione gli `.exe`/`.dll` che il nuovo pacchetto non contiene più
+/// (es. plugin Flutter tolti). Rimasti lì, non firmati con l'identità attuale,
+/// farebbero bloccare l'avvio dal controllo delle firme.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn stale_binaries_cmd(src_dir: &std::path::Path, install_dir: &std::path::Path, keep: &[&str]) -> String {
+    use std::path::Path;
+    let binaries = |dir: &Path| -> Vec<String> {
+        std::fs::read_dir(dir)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .filter(|e| e.file_type().map_or(false, |t| t.is_file()))
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .filter(|n| {
+                        let n = n.to_lowercase();
+                        n.ends_with(".exe") || n.ends_with(".dll")
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let norm = |p: &Path| p.to_string_lossy().trim_end_matches('\\').to_lowercase();
+    if norm(src_dir) == norm(install_dir) {
+        return String::new();
+    }
+    let shipped: Vec<String> = binaries(src_dir).iter().map(|n| n.to_lowercase()).collect();
+    if shipped.is_empty() {
+        return String::new();
+    }
+    binaries(install_dir)
+        .into_iter()
+        .filter(|n| {
+            let lower = n.to_lowercase();
+            !shipped.contains(&lower) && !keep.iter().any(|k| k.eq_ignore_ascii_case(n))
+        })
+        .map(|n| format!("del /F /Q \"{}\"\n", install_dir.join(n).display()))
+        .collect()
+}
+
 #[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 fn tampered_text(files: &str) -> String {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -195,6 +235,25 @@ pub fn tamper_message() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stale_binaries_are_only_the_ones_no_longer_shipped() {
+        let base = std::env::temp_dir().join(format!("clanto-stale-{}", std::process::id()));
+        let (src, dst) = (base.join("src"), base.join("dst"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&dst).unwrap();
+        for f in ["clantodesk.exe", "librustdesk.dll"] {
+            std::fs::write(src.join(f), b"").unwrap();
+        }
+        for f in ["clantodesk.exe", "LIBRUSTDESK.dll", "file_selector_windows_plugin.dll", "RuntimeBroker_rustdesk.exe", "notes.txt"] {
+            std::fs::write(dst.join(f), b"").unwrap();
+        }
+        let cmd = stale_binaries_cmd(&src, &dst, &["RuntimeBroker_rustdesk.exe"]);
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(cmd.lines().count(), 1, "{cmd}");
+        assert!(cmd.starts_with("del /F /Q \"") && cmd.contains("file_selector_windows_plugin.dll"));
+        assert!(stale_binaries_cmd(&src, &src, &[]).is_empty());
+    }
 
     #[test]
     fn tampered_text_lists_the_files() {

@@ -1065,6 +1065,10 @@ Identità di firma fissata al build e verificata con API native (niente PowerShe
 - **librustdesk.** `verify_own_exe()` (`src/clanto/signature.rs`, tramite `libs/clanto-win`)
   all'inizio di `core_main()` verifica a sua volta l'exe: modificare uno solo dei due non basta.
 - **Aggiornamenti.** L'installer scaricato si esegue solo con firma valida e lo stesso EKU.
+  Installazione e aggiornamento cancellano dalla cartella gli `.exe`/`.dll` che il nuovo
+  pacchetto non contiene più (`stale_binaries_cmd`, hook in `copy_exe_cmd`): un plugin tolto
+  da una versione precedente (es. `file_selector_windows_plugin.dll`) resterebbe senza la firma
+  attuale e bloccherebbe l'avvio.
 - **macOS.** Team Apple `DCP3L7L7BW` (`CLANTO_SIGNING_TEAM` al build, solo con i secret di firma):
   `SecStaticCodeCheckValidity` sul bundle, codice annidato compreso, con il requisito
   `anchor apple generic and certificate leaf[subject.OU] = "DCP3L7L7BW"`. Bloccante per

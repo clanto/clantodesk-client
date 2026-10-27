@@ -1478,8 +1478,12 @@ pub fn copy_raw_cmd(src_raw: &str, _raw: &str, _path: &str) -> ResultType<String
 
 pub fn copy_exe_cmd(src_exe: &str, exe: &str, path: &str) -> ResultType<String> {
     let main_exe = copy_raw_cmd(src_exe, exe, path)?;
+    let stale = PathBuf::from(src_exe).parent().map_or(String::new(), |src| {
+        crate::clanto::signature::stale_binaries_cmd(src, Path::new(path), &[win_topmost_window::INJECTED_PROCESS_EXE])
+    });
     Ok(format!(
         "
+        {stale}
         {main_exe}
         copy /Y \"{ORIGIN_PROCESS_EXE}\" \"{path}\\{broker_exe}\"
         ",

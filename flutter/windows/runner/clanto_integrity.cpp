@@ -235,10 +235,11 @@ bool ClantoIntegrityOk() {
       session != 0) {
     bool italian = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_ITALIAN;
     std::wstring text =
-        italian ? L"ClantoDesk è stato manomesso o danneggiato: questi file "
+        // Accenti come escape: il sorgente non dipende dalla codepage del compilatore.
+        italian ? L"ClantoDesk \u00E8 stato manomesso o danneggiato: questi file "
                   L"non sono firmati da Clanto.\n\n" +
                       tampered +
-                      L"\nPer sicurezza ClantoDesk non può essere avviato. "
+                      L"\nPer sicurezza ClantoDesk non pu\u00F2 essere avviato. "
                       L"Reinstallalo scaricandolo da clanto.it."
                 : L"ClantoDesk has been tampered with or damaged: these files "
                   L"are not signed by Clanto.\n\n" +
