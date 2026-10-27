@@ -674,6 +674,10 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
   le connessioni a una destinazione dalla parte del controller (host `clanto-listen`, porta =
   listen_id). Nessun listener è mai aperto sulla rete, solo in loopback; sull'host solo porta libera
   scelta dal sistema o ≥ 1024. Eliminare un forward chiude anche le connessioni già aperte.
+- **Finestra in sessione** (`forwarding.dart`). Si sceglie un servizio del catalogo oppure una
+  destinazione personalizzata in tre campi: il PC stesso (`localhost`) o un altro dispositivo della
+  sua rete (IP o nome), la porta del servizio, la porta da aprire in loopback dall'altra parte
+  (0 = automatica). La policy dell'altro lato decide comunque se la destinazione è ammessa.
 - **Permesso della connessione.** Se all'ID del controller è assegnato un profilo di permessi, l'host
   accetta canali e listener solo se il profilo concede «Tunnel», e la webcam (nei due sensi) solo se
   concede «Fotocamera»: un profilo «Sola visualizzazione» non apre né l'una né l'altra. Non conta l'opzione globale `enable-tunnel`, che è il port

@@ -367,7 +367,10 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   Timer? _timer;
   String _direction = 'to_host';
   String _serviceId = '';
-  final _target = TextEditingController();
+  // Destinazione personalizzata: il PC stesso o un altro dispositivo della sua rete.
+  bool _otherDevice = false;
+  final _address = TextEditingController();
+  final _servicePort = TextEditingController();
   final _localPort = TextEditingController(text: '0');
   String? _error;
 
@@ -384,7 +387,8 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   @override
   void dispose() {
     _timer?.cancel();
-    _target.dispose();
+    _address.dispose();
+    _servicePort.dispose();
     _localPort.dispose();
     super.dispose();
   }
@@ -404,14 +408,16 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
       host = s.target.substring(0, i);
       port = int.tryParse(s.target.substring(i + 1)) ?? 0;
     } else {
-      final t = _target.text.trim();
-      final i = t.lastIndexOf(':');
-      if (i <= 0) {
-        setState(() => _error = translate('Destination must be host:port'));
+      host = _otherDevice ? _address.text.trim() : 'localhost';
+      port = int.tryParse(_servicePort.text.trim()) ?? 0;
+      if (host.isEmpty) {
+        setState(() => _error = translate('Enter the device address'));
         return;
       }
-      host = t.substring(0, i);
-      port = int.tryParse(t.substring(i + 1)) ?? 0;
+      if (port < 1 || port > 65535) {
+        setState(() => _error = translate('Enter the service port (1-65535)'));
+        return;
+      }
     }
     final res = jsonDecode(await bind.sessionClantoForwardAdd(
       sessionId: widget.sessionId,
@@ -504,21 +510,50 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
                   ],
                   onChanged: (v) => setState(() => _serviceId = v ?? ''),
                 ),
-              if (_serviceId.isEmpty)
-                TextField(
-                  controller: _target,
-                  decoration: InputDecoration(
-                      labelText: translate('Destination (host:port)'),
-                      hintText: 'localhost:3389'),
+              if (_serviceId.isEmpty) ...[
+                DropdownButton<bool>(
+                  value: _otherDevice,
+                  isExpanded: true,
+                  items: [
+                    DropdownMenuItem(
+                        value: false,
+                        child: Text(translate(_direction == 'to_host'
+                            ? 'The remote PC itself'
+                            : 'This PC itself'))),
+                    DropdownMenuItem(
+                        value: true,
+                        child: Text(translate(_direction == 'to_host'
+                            ? 'Another device on the remote PC\'s network'
+                            : 'Another device on this PC\'s network'))),
+                  ],
+                  onChanged: (v) => setState(() => _otherDevice = v ?? false),
                 ),
+                if (_otherDevice)
+                  TextField(
+                    controller: _address,
+                    decoration: InputDecoration(
+                        labelText: translate('Device IP address or name'),
+                        hintText: '192.168.1.20'),
+                  ),
+                TextField(
+                  controller: _servicePort,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                      labelText: translate(_otherDevice
+                          ? 'Service port on that device'
+                          : 'Service port on that PC'),
+                      hintText: '3389'),
+                ),
+              ],
               TextField(
                 controller: _localPort,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   labelText: translate(_direction == 'to_host'
-                      ? 'Local port on this PC (0 = automatic)'
-                      : 'Port on the remote PC (0 = automatic)'),
+                      ? 'Port to open on this PC (0 = automatic)'
+                      : 'Port to open on the remote PC (0 = automatic)'),
                 ),
               ),
               if (_error != null)
