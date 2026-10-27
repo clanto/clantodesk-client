@@ -80,11 +80,6 @@ class ClantoForwardingSettings extends StatefulWidget {
 }
 
 class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
-  final _hostTargets = TextEditingController(
-      text: bind.mainGetOptionSync(key: kOptClantoForwardCustomHostTargets));
-  final _controllerTargets = TextEditingController(
-      text: bind.mainGetOptionSync(
-          key: kOptClantoForwardCustomControllerTargets));
   final _cameraDevice = TextEditingController(
       text: bind.mainGetOptionSync(key: kOptClantoForwardCameraDevice));
   String? _macCameraStatus;
@@ -187,8 +182,6 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
 
   @override
   void dispose() {
-    _hostTargets.dispose();
-    _controllerTargets.dispose();
     _cameraDevice.dispose();
     super.dispose();
   }
@@ -220,7 +213,7 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
       );
 
   Widget _targets(String label, String key, TextEditingController c,
-      {String hint = 'localhost:3389, 192.168.10.0/24:443'}) {
+      {required String hint}) {
     return Padding(
       padding: const EdgeInsets.only(left: 32, bottom: 8),
       child: TextField(
@@ -257,8 +250,10 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
               _check('Allow custom forwards to this PC\'s network',
                   kOptClantoForwardCustomHost),
               if (_isY(kOptClantoForwardCustomHost))
-                _targets('Allowed destinations on this PC\'s side',
-                    kOptClantoForwardCustomHostTargets, _hostTargets),
+                _TargetRules(
+                    label: 'Allowed destinations on this PC\'s side',
+                    optionKey: kOptClantoForwardCustomHostTargets,
+                    editable: _editable(kOptClantoForwardCustomHostTargets)),
               _check('Allow forwards towards the controller',
                   kOptClantoForwardReverse),
             ],
@@ -268,8 +263,11 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
                 'Allow custom forwards from this PC\'s network as controller',
                 kOptClantoForwardCustomController),
             if (_isY(kOptClantoForwardCustomController))
-              _targets('Allowed destinations on the controller\'s side',
-                  kOptClantoForwardCustomControllerTargets, _controllerTargets),
+              _TargetRules(
+                  label: 'Allowed destinations on the controller\'s side',
+                  optionKey: kOptClantoForwardCustomControllerTargets,
+                  editable:
+                      _editable(kOptClantoForwardCustomControllerTargets)),
           ]),
         _check('Enable webcam forwarding', kOptClantoForwardWebcam, bold: true),
         if (webcam)
@@ -293,6 +291,169 @@ class _ClantoForwardingSettingsState extends State<ClantoForwardingSettings> {
               ]),
           ]),
       ],
+    );
+  }
+}
+
+/// Destinazioni ammesse per i forward personalizzati, una riga per voce. Il
+/// formato salvato resta `indirizzo:porte` separati da virgole (policy.rs), così
+/// GPO, MDM e API continuano a usarlo; voci avanzate (CIDR, `*`, intervalli)
+/// impostate da lì si vedono e si possono togliere.
+class _TargetRules extends StatefulWidget {
+  final String label, optionKey;
+  final bool editable;
+  const _TargetRules(
+      {required this.label, required this.optionKey, required this.editable});
+
+  @override
+  State<_TargetRules> createState() => _TargetRulesState();
+}
+
+class _TargetRulesState extends State<_TargetRules> {
+  static final _portsRe = RegExp(r'^(\*|\d{1,5}(-\d{1,5})?)$');
+  bool _otherDevice = false;
+  final _address = TextEditingController();
+  final _ports = TextEditingController();
+  String? _error;
+
+  List<String> get _entries => bind
+      .mainGetOptionSync(key: widget.optionKey)
+      .split(RegExp(r'[,;\s]+'))
+      .where((e) => e.isNotEmpty)
+      .toList();
+
+  @override
+  void dispose() {
+    _address.dispose();
+    _ports.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save(List<String> entries) async {
+    await bind.mainSetOption(key: widget.optionKey, value: entries.join(', '));
+    if (mounted) setState(() {});
+  }
+
+  bool _validPorts(String s) {
+    if (!_portsRe.hasMatch(s)) return false;
+    if (s == '*') return true;
+    final parts = s.split('-').map(int.parse).toList();
+    return parts.first >= 1 && parts.last <= 65535 && parts.first <= parts.last;
+  }
+
+  Future<void> _add() async {
+    var address = _otherDevice ? _address.text.trim() : 'localhost';
+    final ports = _ports.text.trim();
+    if (address.isEmpty || RegExp(r'[\s,;]').hasMatch(address)) {
+      setState(() => _error = translate('Enter the device address'));
+      return;
+    }
+    if (!_validPorts(ports)) {
+      setState(() => _error = translate('Enter the service port (1-65535)'));
+      return;
+    }
+    // IPv6 tra parentesi quadre, come vuole il formato `indirizzo:porte`.
+    if (address.contains(':') && !address.startsWith('[')) {
+      address = '[$address]';
+    }
+    final entry = '$address:$ports';
+    final entries = _entries;
+    if (!entries.contains(entry)) entries.add(entry);
+    _address.clear();
+    _ports.clear();
+    _error = null;
+    await _save(entries);
+  }
+
+  String _describe(String entry) {
+    final i = entry.lastIndexOf(':');
+    if (i <= 0) return entry;
+    final address = entry.substring(0, i);
+    final ports = entry.substring(i + 1);
+    final who = switch (address.toLowerCase()) {
+      'localhost' => translate('This PC itself'),
+      '*' => translate('Any device'),
+      _ => address,
+    };
+    final port = ports == '*' ? translate('any port') : ports;
+    return '$who · ${translate('port')} $port';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = _entries;
+    return Padding(
+      padding: const EdgeInsets.only(left: 32, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(translate(widget.label)),
+          if (entries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 8, top: 4),
+              child: Text(translate('No destination allowed yet')),
+            ),
+          ...entries.map((e) => ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.only(left: 8),
+                title: Text(_describe(e)),
+                trailing: widget.editable
+                    ? IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: translate('Delete'),
+                        onPressed: () =>
+                            _save(entries.where((x) => x != e).toList()),
+                      )
+                    : null,
+              )),
+          if (widget.editable)
+            Wrap(
+              spacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.end,
+              children: [
+                DropdownButton<bool>(
+                  value: _otherDevice,
+                  items: [
+                    DropdownMenuItem(
+                        value: false,
+                        child: Text(translate('This PC itself'))),
+                    DropdownMenuItem(
+                        value: true,
+                        child: Text(
+                            translate('Another device on this PC\'s network'))),
+                  ],
+                  onChanged: (v) => setState(() => _otherDevice = v ?? false),
+                ),
+                if (_otherDevice)
+                  SizedBox(
+                    width: 200,
+                    child: TextField(
+                      controller: _address,
+                      decoration: InputDecoration(
+                          labelText: translate('Device IP address or name'),
+                          hintText: '192.168.1.20'),
+                    ),
+                  ),
+                SizedBox(
+                  width: 140,
+                  child: TextField(
+                    controller: _ports,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9*-]'))
+                    ],
+                    decoration: InputDecoration(
+                        labelText: translate('Service port'),
+                        hintText: '3389'),
+                    onSubmitted: (_) => _add(),
+                  ),
+                ),
+                TextButton(onPressed: _add, child: Text(translate('Add'))),
+              ],
+            ),
+          if (_error != null)
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+        ],
+      ),
     );
   }
 }

@@ -678,6 +678,9 @@ scheda "Forwarding" nelle impostazioni di sicurezza).
   destinazione personalizzata in tre campi: il PC stesso (`localhost`) o un altro dispositivo della
   sua rete (IP o nome), la porta del servizio, la porta da aprire in loopback dall'altra parte
   (0 = automatica). La policy dell'altro lato decide comunque se la destinazione è ammessa.
+  Nelle impostazioni le destinazioni ammesse si aggiungono allo stesso modo, una riga per voce
+  (porta singola, intervallo `N-M` o `*`); l'opzione salvata resta l'elenco `indirizzo:porte`, e le
+  voci avanzate impostate da GPO/MDM/API (CIDR, `*`) compaiono e si possono togliere.
 - **Permesso della connessione.** Se all'ID del controller è assegnato un profilo di permessi, l'host
   accetta canali e listener solo se il profilo concede «Tunnel», e la webcam (nei due sensi) solo se
   concede «Fotocamera»: un profilo «Sola visualizzazione» non apre né l'una né l'altra. Non conta l'opzione globale `enable-tunnel`, che è il port
