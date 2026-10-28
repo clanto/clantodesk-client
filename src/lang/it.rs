@@ -982,6 +982,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_enroll_expired", "Codice scaduto: riprova."),
         ("clanto_enroll_rejected", "Collegamento annullato."),
         ("clanto_enroll_error", "Collegamento non riuscito:"),
+        ("clanto_enroll_unlock", "Sblocca come amministratore"),
+        ("clanto_enroll_unlock_note", "Per collegare il PC al server serve la password di un amministratore del computer. Lo sblocco vale 10 minuti."),
         ("clanto_uninstall_title", "Disinstalla ClantoDesk"),
         ("clanto_uninstall_keep_config", "Vuoi mantenere la configurazione di ClantoDesk (ID, password, rubrica, impostazioni) per una futura reinstallazione?\n\nSì: rimuove il programma e conserva la configurazione.\nNo: rimuove il programma e cancella configurazione, log, report e chiavi di registro di tutti gli utenti, senza lasciare tracce.\nAnnulla: non disinstalla."),
         ("clanto_uninstall_official_rustdesk", "Su questo PC è installato anche RustDesk (versione ufficiale, non di Clanto).\n\nVuoi rimuovere anche RustDesk?"),

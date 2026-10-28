@@ -3060,6 +3060,11 @@ pub fn main_set_common(_key: String, _value: String) {
         crate::clanto::enrollment::ui_qr(&_value);
         return;
     }
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if _key == "clanto-enroll-elevate" {
+        std::thread::spawn(crate::clanto::enrollment::ui_elevate);
+        return;
+    }
     #[cfg(target_os = "windows")]
     if _key == "install-printer" && crate::platform::is_win_10_or_greater() {
         std::thread::spawn(move || {

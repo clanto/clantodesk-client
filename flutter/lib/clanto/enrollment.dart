@@ -29,6 +29,7 @@ class ClantoEnrollmentState {
   final String claimedBy;
   final String qrTenant;
   final String error;
+  final bool adminUnlocked;
 
   const ClantoEnrollmentState({
     this.enrolled = false,
@@ -42,6 +43,7 @@ class ClantoEnrollmentState {
     this.claimedBy = '',
     this.qrTenant = '',
     this.error = '',
+    this.adminUnlocked = false,
   });
 
   factory ClantoEnrollmentState.read() {
@@ -60,6 +62,7 @@ class ClantoEnrollmentState {
         claimedBy: q['claimed_by'] ?? '',
         qrTenant: q['tenant_name'] ?? '',
         error: q['error'] ?? '',
+        adminUnlocked: v['admin_unlocked'] == true,
       );
     } catch (_) {
       return const ClantoEnrollmentState();
@@ -70,11 +73,15 @@ class ClantoEnrollmentState {
 bool clantoIsAdmin() =>
     bind.mainGetCommonSync(key: 'clanto-is-admin') == 'true';
 
-/// La scheda compare se il PC è già gestito o se l'interfaccia è avviata come
-/// amministratore.
+/// macOS e Linux: l'interfaccia non gira come root, lo sblocco chiede la
+/// password di amministratore al sistema.
+bool get _canElevate => isMacOS || isLinux;
+
+/// La scheda compare se il PC è già gestito, se l'interfaccia è avviata come
+/// amministratore o se si può sbloccare con la password di amministratore.
 bool clantoEnrollmentVisible() {
   if (isWeb || bind.isOutgoingOnly()) return false;
-  return clantoIsAdmin() || ClantoEnrollmentState.read().enrolled;
+  return _canElevate || clantoIsAdmin() || ClantoEnrollmentState.read().enrolled;
 }
 
 String _date(int unix) {
@@ -93,15 +100,21 @@ class ClantoEnrollment extends StatefulWidget {
 
 class _ClantoEnrollmentState extends State<ClantoEnrollment> {
   ClantoEnrollmentState _state = ClantoEnrollmentState.read();
-  final bool _admin = clantoIsAdmin();
+  final bool _elevatedUi = clantoIsAdmin();
+  bool _elevating = false;
   Timer? _timer;
+
+  bool get _admin => _elevatedUi || _state.adminUnlocked;
 
   @override
   void initState() {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() => _state = ClantoEnrollmentState.read());
+      setState(() {
+        _state = ClantoEnrollmentState.read();
+        if (_state.adminUnlocked) _elevating = false;
+      });
     });
   }
 
@@ -189,6 +202,26 @@ class _ClantoEnrollmentState extends State<ClantoEnrollment> {
     ]);
   }
 
+  Widget _unlock() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _text('clanto_enroll_unlock_note'),
+      ElevatedButton.icon(
+        icon: const Icon(Icons.admin_panel_settings_outlined),
+        label: Text(translate('clanto_enroll_unlock')),
+        onPressed: _elevating
+            ? null
+            : () {
+                setState(() => _elevating = true);
+                bind.mainSetCommon(key: 'clanto-enroll-elevate', value: '');
+                // Finestra di sistema chiusa senza sblocco: tasto di nuovo attivo.
+                Future.delayed(const Duration(seconds: 60), () {
+                  if (mounted) setState(() => _elevating = false);
+                });
+              },
+      ),
+    ]);
+  }
+
   Widget _start({String? message}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (message != null)
@@ -205,7 +238,9 @@ class _ClantoEnrollmentState extends State<ClantoEnrollment> {
   Widget build(BuildContext context) {
     if (_state.enrolled) return _managed();
     if (!_state.apiConfigured) return _text('clanto_enroll_no_server');
-    if (!_admin) return _text('clanto_enroll_admin_required');
+    if (!_admin) {
+      return _canElevate ? _unlock() : _text('clanto_enroll_admin_required');
+    }
     switch (_state.qrState) {
       case 'starting':
         return const Align(

@@ -856,6 +856,17 @@ impl Drop for CheckIfRestart {
     }
 }
 
+/// Clanto: il processo all'altro capo è root (credenziali del socket).
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn ipc_peer_is_root(stream: &Connection) -> bool {
+    stream.peer_uid() == Some(0)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn ipc_peer_is_root(_stream: &Connection) -> bool {
+    false
+}
+
 async fn handle(data: Data, stream: &mut Connection) {
     match data {
         Data::SystemInfo(_) => {
@@ -1088,7 +1099,9 @@ async fn handle(data: Data, stream: &mut Connection) {
                     Config::set_unlock_pin(&value);
                 } else if let Some(ok) = crate::clanto::two_factor_store::on_ipc_set(&name, &value)
                     .or_else(|| crate::clanto::service_update::on_ipc_set(&name, &value))
-                    .or_else(|| crate::clanto::enrollment::on_ipc_set(&name, &value))
+                    .or_else(|| {
+                        crate::clanto::enrollment::on_ipc_set(&name, &value, ipc_peer_is_root(stream))
+                    })
                 {
                     let ack = if ok { "Y" } else { "N" }.to_owned();
                     allow_err!(stream.send(&Data::Config((name.clone(), Some(ack)))).await);

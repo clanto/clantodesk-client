@@ -928,6 +928,7 @@ fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
             | Some("--untrust-controller")
             | Some("--enroll")
             | Some("--enrollment")
+            | Some("--enroll-unlock")
     )
 }
 

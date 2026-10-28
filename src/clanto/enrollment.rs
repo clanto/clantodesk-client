@@ -45,6 +45,8 @@ const STATE_FILE: &str = "clanto-enrollment.json";
 const API_PREFIX: &str = "/api/clanto/v1";
 const GPO_RETRY: Duration = Duration::from_secs(10 * 60);
 const QR_POLL: Duration = Duration::from_secs(2);
+/// macOS e Linux: finestra aperta da `--enroll-unlock` eseguito come root.
+const ADMIN_UNLOCK: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Enrollment {
@@ -95,6 +97,15 @@ static ACTIVITY: Mutex<Activity> = Mutex::new(Activity {
 static QR: OnceLock<Mutex<QrSession>> = OnceLock::new();
 /// Correzione dell'orologio (secondi) suggerita dal server con `401 clock`.
 static CLOCK_OFFSET: AtomicI64 = AtomicI64::new(0);
+static ADMIN_UNLOCKED_UNTIL: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+
+fn admin_unlocked() -> bool {
+    ADMIN_UNLOCKED_UNTIL
+        .lock()
+        .ok()
+        .and_then(|u| *u)
+        .map_or(false, |until| std::time::Instant::now() < until)
+}
 
 fn state() -> &'static Mutex<Option<Enrollment>> {
     STATE.get_or_init(|| Mutex::new(load()))
@@ -647,6 +658,7 @@ fn state_json() -> String {
         "api_configured": configured_api().is_some(),
         "busy": activity.busy,
         "error": activity.error,
+        "admin_unlocked": admin_unlocked(),
         "qr": view,
     })
     .to_string()
@@ -657,13 +669,30 @@ pub fn on_ipc_get(name: &str) -> Option<String> {
 }
 
 /// `None` se il nome non è nostro. Con le impostazioni bloccate da criterio
-/// l'iscrizione si fa solo con il token della GPO.
-pub fn on_ipc_set(name: &str, value: &str) -> Option<bool> {
+/// l'iscrizione si fa solo con il token della GPO. `peer_is_root`: il processo
+/// all'altro capo dell'IPC è root (credenziali del socket, macOS e Linux).
+pub fn on_ipc_set(name: &str, value: &str, peer_is_root: bool) -> Option<bool> {
     if name != IPC_ENROLL && name != IPC_QR {
         return None;
     }
+    if name == IPC_QR && value == "unlock" {
+        if !peer_is_root {
+            log::warn!("QR enrollment unlock refused: caller is not root");
+            return Some(false);
+        }
+        if let Ok(mut until) = ADMIN_UNLOCKED_UNTIL.lock() {
+            *until = Some(std::time::Instant::now() + ADMIN_UNLOCK);
+        }
+        return Some(true);
+    }
     let starts = name == IPC_ENROLL || value == "start";
     if starts && !super::settings_lock::user_write_allowed_now() {
+        return Some(false);
+    }
+    // Su macOS e Linux l'interfaccia non gira come root: il QR parte solo
+    // dopo lo sblocco fatto da un amministratore.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if name == IPC_QR && value == "start" && !peer_is_root && !admin_unlocked() {
         return Some(false);
     }
     Some(if name == IPC_ENROLL {
@@ -700,13 +729,43 @@ pub fn ui_qr(command: &str) {
     }
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
-        on_ipc_set(IPC_QR, command);
+        on_ipc_set(IPC_QR, command, true);
     }
 }
 
+/// macOS e Linux: chiede la password di amministratore ed esegue
+/// `--enroll-unlock` come root. Bloccante: va chiamata in un thread.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub fn ui_elevate() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::macos::elevate(
+            vec!["--enroll-unlock"],
+            &format!("{} wants to connect this computer to the management server", super::brand::NAME),
+        )
+        .unwrap_or(false)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let Ok(exe) = std::env::current_exe() else {
+            return false;
+        };
+        let exe = exe.to_string_lossy().replace('\'', "'\\''");
+        crate::platform::linux::run_cmds_privileged(&format!("'{exe}' --enroll-unlock"))
+    }
+}
+
+/// Stato dello sblocco visto dal servizio.
+fn ui_unlocked() -> bool {
+    serde_json::from_str::<Value>(&ui_state())
+        .ok()
+        .and_then(|v| v.get("admin_unlocked").and_then(Value::as_bool))
+        .unwrap_or(false)
+}
+
 /// «Collega al server» si apre solo con l'interfaccia avviata come
-/// amministratore (Windows: elevata; macOS e Linux: root). Su Android il
-/// dispositivo è dell'utente stesso.
+/// amministratore (Windows: elevata) o, su macOS e Linux, dopo lo sblocco con
+/// la password di amministratore. Su Android il dispositivo è dell'utente.
 pub fn ui_is_admin() -> bool {
     #[cfg(windows)]
     {
@@ -714,7 +773,7 @@ pub fn ui_is_admin() -> bool {
     }
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
-        crate::platform::is_root()
+        crate::platform::is_root() || ui_unlocked()
     }
     #[cfg(target_os = "android")]
     {
@@ -774,7 +833,7 @@ pub fn start() {
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn is_cli_command(arg: &str) -> bool {
-    arg == "--enroll" || arg == "--enrollment"
+    arg == "--enroll" || arg == "--enrollment" || arg == "--enroll-unlock"
 }
 
 /// `--enroll <token>` e `--enrollment` (stato). Il lavoro lo fa il servizio.
@@ -788,6 +847,14 @@ pub fn run_cli(args: &[String], admin: bool) {
         let text = crate::ipc::get_config(IPC_STATE).ok()??;
         serde_json::from_str(&text).ok()
     };
+    if args[0] == "--enroll-unlock" {
+        // Il servizio verifica che il chiamante sia root.
+        match crate::ipc::set_config(IPC_QR, "unlock".to_owned()) {
+            Ok(()) => println!("Done!"),
+            Err(_) => println!("Service not running"),
+        }
+        return;
+    }
     if args[0] == "--enrollment" {
         match read_state() {
             Some(v) if v["enrolled"] == json!(true) => {
@@ -867,6 +934,15 @@ mod tests {
         let msg = format!("clanto-qr-v1\0poll\0s-1\0{ts}");
         assert!(msg.ends_with("\01700000000"));
         assert_eq!(json!({"ts": ts.to_string()})["ts"], json!("1700000000"));
+    }
+
+    #[test]
+    fn qr_unlock_requires_root_caller() {
+        assert_eq!(on_ipc_set(IPC_QR, "unlock", false), Some(false));
+        assert!(!admin_unlocked());
+        assert_eq!(on_ipc_set(IPC_QR, "unlock", true), Some(true));
+        assert!(admin_unlocked());
+        assert_eq!(on_ipc_set("other-option", "unlock", true), None);
     }
 
     #[test]

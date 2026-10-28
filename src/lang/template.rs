@@ -981,6 +981,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_enroll_expired", ""),
         ("clanto_enroll_rejected", ""),
         ("clanto_enroll_error", ""),
+        ("clanto_enroll_unlock", ""),
+        ("clanto_enroll_unlock_note", ""),
         ("clanto_uninstall_title", ""),
         ("clanto_uninstall_keep_config", ""),
         ("clanto_uninstall_official_rustdesk", ""),

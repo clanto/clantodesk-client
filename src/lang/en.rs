@@ -456,6 +456,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_enroll_expired", "Code expired: try again."),
         ("clanto_enroll_rejected", "Connection cancelled."),
         ("clanto_enroll_error", "Connection failed:"),
+        ("clanto_enroll_unlock", "Unlock as administrator"),
+        ("clanto_enroll_unlock_note", "Connecting this computer to the server requires the password of a computer administrator. The unlock lasts 10 minutes."),
         ("clanto_uninstall_title", "Uninstall ClantoDesk"),
         ("clanto_uninstall_keep_config", "Do you want to keep the ClantoDesk configuration (ID, passwords, address book, settings) for a future reinstallation?\n\nYes: removes the program and keeps the configuration.\nNo: removes the program and deletes configuration, logs, reports and registry keys of all users, leaving no traces.\nCancel: does not uninstall."),
         ("clanto_uninstall_official_rustdesk", "RustDesk (the official version, not from Clanto) is also installed on this PC.\n\nDo you want to remove RustDesk as well?"),
