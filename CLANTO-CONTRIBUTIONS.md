@@ -48,6 +48,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/host_watermark/windows.rs`
 - `src/clanto/id_permissions.rs`
 - `src/clanto/keystore.rs`
+- `src/clanto/linux_update.rs`
 - `src/clanto/managed_config.rs`
 - `src/clanto/mod.rs`
 - `src/clanto/outgoing.rs`

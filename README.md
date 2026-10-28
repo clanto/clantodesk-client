@@ -491,16 +491,17 @@ soltanto dalla GPO; i tentativi di scrittura da interfaccia, IPC o riga di coman
 
 ### Aggiornamenti
 
-Su Windows, con ClantoDesk installato, il pulsante «Aggiorna» fa scaricare e
-installare la nuova versione al servizio di sistema: nessuna richiesta di
-amministratore, anche per un utente standard. Si installano solo versioni più
-recenti firmate da Clanto. «Aggiornamento automatico» (opzione
+Con ClantoDesk installato, su Windows, macOS e Linux (.deb o .rpm) il pulsante
+«Aggiorna» fa scaricare e installare la nuova versione al servizio di sistema:
+nessuna richiesta di amministratore o password, anche per un utente standard.
+Si installano solo versioni più recenti pubblicate nelle release Clanto (firmate
+da Clanto su Windows e macOS). «Aggiornamento automatico» (opzione
 `allow-auto-update`, GPO `AutoUpdate`, spento di default) fa installare al
 servizio ogni nuova versione da solo, quando non ci sono sessioni attive.
 
-Su macOS l'aggiornamento chiede la password di amministratore e quello
-automatico è ancora disattivato; su Linux si aggiorna dal pacchetto della
-release. Dettagli in [CLANTO.md](CLANTO.md#aggiornamenti).
+Su macOS e Linux le chiavi della GPO si impostano con un profilo MDM per il
+dominio `it.clanto.clantodesk` o con `/etc/clantodesk/policy.json`, ad esempio
+`{"allow-auto-update": "Y"}`. Dettagli in [CLANTO.md](CLANTO.md#aggiornamenti).
 
 ### Disinstallazione su Windows
 

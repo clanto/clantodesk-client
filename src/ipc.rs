@@ -525,7 +525,7 @@ pub enum Data {
     #[cfg(target_os = "windows")]
     PortForwardSessionCount(Option<usize>),
     SocksWs(Option<Box<(Option<config::Socks5Server>, String)>>),
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     HasNoActiveConns(Option<bool>),
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     Whiteboard((String, crate::whiteboard::CustomEvent)),
@@ -666,6 +666,10 @@ pub async fn start(postfix: &str) -> ResultType<()> {
                                     if postfix == crate::POSTFIX_SERVICE {
                                         if matches!(&data, Data::SyncConfig(_)) {
                                             handle(data, &mut stream).await;
+                                        } else if let Some(reply) =
+                                            crate::clanto::service_update::on_service_ipc(&data)
+                                        {
+                                            allow_err!(stream.send(&reply).await);
                                         } else {
                                             log::warn!(
                                                 "Rejected non-sync data on protected _service IPC channel: postfix={}, data_kind={:?}, peer_uid={:?}",
@@ -1198,7 +1202,7 @@ async fn handle(data: Data, stream: &mut Connection) {
                     .await
             );
         }
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         Data::HasNoActiveConns(None) => {
             allow_err!(
                 stream

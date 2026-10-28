@@ -439,6 +439,7 @@ pub fn set_option(key: String, value: String) {
     }
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let retention_changed = key == crate::clanto::session_log::OPT_SESSION_LOG_DAYS;
+    let outgoing_changed = key.starts_with("clanto-outgoing-");
     if &key == "stop-service" {
         #[cfg(target_os = "macos")]
         {
@@ -484,6 +485,9 @@ pub fn set_option(key: String, value: String) {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     if retention_changed {
         crate::clanto::session_log::retention_changed();
+    }
+    if outgoing_changed {
+        crate::clanto::config::apply_outgoing_restrictions();
     }
 }
 

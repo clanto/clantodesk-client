@@ -819,8 +819,13 @@ il pulsante «Aggiorna», usando il download/installer desktop o la pagina Play 
   registro, WMI solo per Security Center, BitLocker e VBS, TBS per il TPM (anche senza privilegi),
   IP Helper e WLAN per la rete. `os_ubr` è la revisione (es. 19045.7807) e `os_patch_days` i
   giorni dall'ultimo aggiornamento cumulativo installato (pacchetti CBS `RollupFix`): la policy decide se Windows è supportato da quanto è recente l'ultimo cumulativo,
-  non da una tabella di build e date. Il risultato resta in cache per 10 minuti; `prewarm()` parte in
-  `Client::start`, così il login non aspetta le sonde. Mai SSID, hostname, utenti, IP o MAC.
+  non da una tabella di build e date. Il risultato resta in cache per 10 minuti e su disco
+  (`posture.cache` nella configurazione dell'utente, autenticato con HMAC con la chiave della
+  release, scartato se di un'altra versione): fino a 24 ore una postura scaduta si usa subito e si
+  rinnova in background, quindi il login non aspetta le sonde (prima fino a 3-4 s a ogni avvio).
+  `prewarm()` parte all'apertura della finestra principale e in `Client::start`. La verifica
+  sull'host resta online a ogni login: la firma si controlla solo con il master del server, e una
+  cache delle regole sull'host non potrebbe verificarla. Mai SSID, hostname, utenti, IP o MAC.
 - **Firma.** HMAC-SHA256 sulla postura, legato a ID dell'host, `challenge` del messaggio `Hash` e
   versione. Il formato canonico sta in `canonical_message()` e **deve coincidere byte per byte** con la
   PHP: cambiarlo da una sola parte rifiuta tutti i login. La chiave è per release: `build.rs` la deriva
@@ -1093,12 +1098,54 @@ Identità di firma fissata al build e verificata con API native (niente PowerShe
 - **Windows, automatico.** `allow-auto-update` («Aggiornamento automatico» nelle impostazioni,
   GPO `AutoUpdate`, spento di default): il servizio controlla 30 s dopo l'avvio e poi ogni giorno,
   e installa da solo quando non ci sono sessioni attive (altrimenti riprova dopo 30 minuti).
-- **macOS.** Pulsante «Aggiorna»: download del DMG nella UI, estrazione, verifica del team Clanto e
-  sostituzione del bundle con la password di amministratore (`osascript`). L'aggiornamento
-  automatico come root (`start_auto_update_macos`) c'è ma è spento (`MACOS_AUTO_UPDATE_ENABLED`)
-  finché non è provato su VM.
-- **Linux.** Nessun aggiornamento dall'app: la scheda «Nuova versione» apre la pagina della
-  release; i pacchetti si aggiornano con il gestore della distribuzione o reinstallando.
+- **macOS, pulsante «Aggiorna».** Con l'app installata in `/Applications` e il servizio attivo la
+  UI chiede l'aggiornamento al LaunchDaemon root sul canale `_service`, che oltre a `SyncConfig`
+  ammette solo `clanto-update-now` e `clanto-update-state` (`service_update::on_service_ipc`).
+  Il servizio scarica il DMG, verifica team Clanto e versione del bundle e lo installa senza
+  password (`check_update_as_root_manual`, `update_from_dmg_as_root` con `force`, che salta i
+  controlli delle sessioni). Se il servizio non risponde resta il percorso con la password di
+  amministratore (`osascript`).
+- **macOS, automatico.** Attivo (`start_auto_update_macos`) con la stessa opzione
+  `allow-auto-update`: 30 s dopo l'avvio e poi ogni giorno, solo senza sessioni attive.
+- **Linux, pulsante «Aggiorna».** Per le installazioni da .deb o .rpm (non AppImage o Flatpak)
+  come su macOS, verso il servizio root (`src/clanto/linux_update.rs`): sceglie il pacchetto della
+  stessa famiglia (`.deb`, `.rpm`, `-suse.rpm`) e architettura, lo scarica in
+  `<config di root>/update` (0700), controlla nome e versione dichiarati dal pacchetto e lo
+  installa con `apt-get`/`dpkg` o `dnf`/`zypper`/`yum`/`rpm` in un'unità `systemd-run` separata
+  (lo script del pacchetto ferma il servizio), poi riavvia il servizio. I pacchetti Linux non hanno
+  una firma: la fiducia è HTTPS verso le release Clanto (stessa allowlist di `updater.rs`). Senza
+  servizio la UI apre la pagina della release.
+- **Linux, automatico.** `allow-auto-update`, stessi tempi; le sessioni attive si chiedono ai
+  `--server` dell'utente attivo e della schermata di accesso (`HasNoActiveConns`).
+- **Policy su macOS e Linux.** Le chiavi della GPO (`gpo::GPO_KEYS`, con i nomi delle opzioni,
+  es. `allow-auto-update`) si impostano anche con un profilo di configurazione MDM per il dominio
+  `it.clanto.clantodesk` (`/Library/Managed Preferences/it.clanto.clantodesk.plist`) o con
+  `/etc/clantodesk/policy.json` (oggetto JSON) su Linux. Il file deve essere di root e non
+  scrivibile da altri; si legge all'avvio del processo, come la GPO.
+- **Link.** Le schede «Nuova versione», «Download» e «Changelog» usano l'URL della release
+  restituito da `clantodesk.php`; i file si ricavano da quell'URL. Le guide Linux (Wayland, X11,
+  SELinux) puntano a `https://supporto.clanto.it/clantodesk`.
+
+## Quando valgono le impostazioni
+
+- **Subito, dal prossimo login o dalla prossima connessione:** permessi `enable-*`, disconnessione
+  automatica, metodo di verifica, `approve-mode`, whitelist ID e IP, permessi per ID, controller
+  fidati, 2FA, fasce orarie, PC protetto e filigrana del controller, bypass della postura, porte
+  inoltrate, direzione ed estensioni dei file, syslog ed Event Log, giorni dei report, filigrana
+  dell'host, accesso diretto e porta. Le sessioni già aperte tengono le regole con cui sono entrate
+  (anche le fasce orarie non chiudono una sessione in corso).
+- **Corretti in questa versione:** la scansione dei file (`clanto-file-scan`, ClamAV, dimensione
+  massima) era letta dal processo `--cm` con la configurazione del suo avvio: ora la rilegge dal
+  `--server` a ogni trasferimento. Riabilitare appunti o file in uscita
+  (`clanto-outgoing-clipboard`, `-file-transfer`) lasciava il blocco delle impostazioni di sessione
+  fino al riavvio: ora si toglie subito. Attivare l'aggiornamento automatico aspettava fino a 24
+  ore: con l'opzione spenta il servizio la ricontrolla ogni ora.
+- **Solo dopo il riavvio:** GPO, profilo MDM di macOS e `/etc/clantodesk/policy.json` si leggono
+  all'avvio di ogni processo (servizio, `--server`, `--cm`, interfaccia); una chiave tolta resta
+  fino al riavvio. `clanto-share-device-identity` vale dal prossimo invio dei dati del dispositivo
+  (riavvio del servizio) e non ritira quelli già inviati.
+- **Limite noto:** se il servizio non risponde, la UI desktop mostra comunque l'opzione cambiata
+  (comportamento upstream di `ipc::set_options`).
 
 ## Disinstallazione (Windows)
 

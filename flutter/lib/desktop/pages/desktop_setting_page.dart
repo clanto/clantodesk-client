@@ -516,8 +516,10 @@ class _GeneralState extends State<_General> {
   Widget other() {
     final incomingOnly = bind.isIncomingOnly();
     final outgoingOnly = bind.isOutgoingOnly();
-    // Su macOS l'aggiornamento automatico è spento: nessun interruttore.
-    final showAutoUpdate = isWindows && bind.mainIsInstalled();
+    // Clanto: aggiornamento automatico dal servizio di sistema su Windows,
+    // macOS e Linux installati; fissato dalla GPO / policy AutoUpdate.
+    final showAutoUpdate =
+        (isWindows || isMacOS || isLinux) && bind.mainIsInstalled();
     final children = <Widget>[
       if (!isWeb && !incomingOnly)
         _OptionCheckBox(context, 'Confirm before closing multiple tabs',

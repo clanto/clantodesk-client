@@ -1211,6 +1211,8 @@ pub fn main_check_connect_status() {
     start_option_status_sync(); // avoid multi calls
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     crate::clanto::two_factor_store::repair_once();
+    // Postura pronta prima della prima connessione in uscita.
+    crate::clanto::posture::prewarm();
 }
 
 pub fn main_is_using_public_server() -> bool {

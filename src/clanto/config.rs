@@ -175,16 +175,19 @@ pub fn apply_build_config() {
     }
 }
 
-fn apply_outgoing_restrictions() {
+/// Ricalcolata anche quando cambia un'opzione `clanto-outgoing-*`
+/// (`ui_interface::set_option`): riabilitarla toglie il blocco senza riavvio.
+pub fn apply_outgoing_restrictions() {
     let mut overwrite = config::OVERWRITE_DISPLAY_SETTINGS.write().unwrap();
-    if !outgoing::allowed(OPT_CLIPBOARD) {
-        overwrite.insert(keys::OPTION_DISABLE_CLIPBOARD.to_owned(), "Y".to_owned());
-    }
-    if !outgoing::allowed(OPT_FILE_TRANSFER) {
-        overwrite.insert(
-            keys::OPTION_ENABLE_FILE_COPY_PASTE.to_owned(),
-            "N".to_owned(),
-        );
+    for (option, key, value) in [
+        (OPT_CLIPBOARD, keys::OPTION_DISABLE_CLIPBOARD, "Y"),
+        (OPT_FILE_TRANSFER, keys::OPTION_ENABLE_FILE_COPY_PASTE, "N"),
+    ] {
+        if outgoing::allowed(option) {
+            overwrite.remove(key);
+        } else {
+            overwrite.insert(key.to_owned(), value.to_owned());
+        }
     }
 }
 

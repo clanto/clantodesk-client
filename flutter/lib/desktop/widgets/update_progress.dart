@@ -10,27 +10,43 @@ import 'package:url_launcher/url_launcher.dart';
 final _isExtracting = false.obs;
 
 void handleUpdate(String releasePageUrl) {
-  // Clanto: su Windows installato aggiorna il servizio di sistema, senza UAC
-  // (src/clanto/service_update.rs); se non risponde, download e UAC.
-  if (isWindows && bind.mainIsInstalled()) {
+  // Clanto: installato, aggiorna il servizio di sistema senza UAC né password
+  // (src/clanto/service_update.rs); se non risponde, il percorso di prima.
+  if (bind.mainIsInstalled()) {
     bind.mainClantoUpdateViaService().then((ok) {
       if (ok) {
         _showServiceUpdate(releasePageUrl);
       } else {
-        _handleUpdateWithDownload(releasePageUrl);
+        _fallbackUpdate(releasePageUrl);
       }
     });
     return;
   }
-  _handleUpdateWithDownload(releasePageUrl);
+  _fallbackUpdate(releasePageUrl);
+}
+
+/// Windows e macOS: download e UAC/password; Linux: pagina della release.
+void _fallbackUpdate(String releasePageUrl) {
+  if (isLinux) {
+    launchUrl(Uri.parse(releasePageUrl));
+  } else {
+    _handleUpdateWithDownload(releasePageUrl);
+  }
 }
 
 void _showServiceUpdate(String releasePageUrl) {
   final state = ''.obs;
   Timer? timer;
   timer = Timer.periodic(const Duration(seconds: 1), (_) async {
-    state.value = await bind.mainClantoUpdateState();
-    if (state.value == 'none' || state.value.startsWith('error:')) {
+    final next = await bind.mainClantoUpdateState();
+    // Servizio riavviato dopo l'installazione: stato vuoto o di nuovo assente.
+    state.value =
+        state.value == 'installing' && (next.isEmpty || next == 'done')
+            ? 'done'
+            : next;
+    if (state.value == 'none' ||
+        state.value == 'done' ||
+        state.value.startsWith('error:')) {
       timer?.cancel();
     }
   });
@@ -41,6 +57,8 @@ void _showServiceUpdate(String releasePageUrl) {
     switch (s) {
       case 'none':
         return translate('clanto_update_none');
+      case 'done':
+        return translate('clanto_update_done');
       case 'downloading':
         return translate('clanto_update_downloading');
       case 'installing':
@@ -64,15 +82,19 @@ void _showServiceUpdate(String releasePageUrl) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(text(state.value)),
-              if (state.value != 'none' && !state.value.startsWith('error:'))
+              if (state.value != 'none' &&
+                  state.value != 'done' &&
+                  !state.value.startsWith('error:'))
                 const LinearProgressIndicator().paddingOnly(top: 12),
             ],
           )),
       actions: [
         Obx(() => state.value.startsWith('error:')
-            ? dialogButton(translate('clanto_update_as_admin'), onPressed: () {
+            ? dialogButton(
+                translate(isLinux ? 'Download' : 'clanto_update_as_admin'),
+                onPressed: () {
                 dismiss();
-                _handleUpdateWithDownload(releasePageUrl);
+                _fallbackUpdate(releasePageUrl);
               }, isOutline: true)
             : const SizedBox.shrink()),
         dialogButton(translate('Close'), onPressed: dismiss),

@@ -972,6 +972,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_update_none", ""),
         ("clanto_update_failed", ""),
         ("clanto_update_as_admin", ""),
+        ("clanto_update_done", ""),
         ("Tampered executable", ""),
         ("clanto_access_hours_error", ""),
         ("Allow connections only at set times", ""),

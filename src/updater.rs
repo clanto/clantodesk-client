@@ -80,6 +80,18 @@ pub const MIN_INTERVAL: Duration = Duration::from_secs(60 * 10);
 /// Retry interval when an update check fails or a session is active (30 minutes).
 pub const RETRY_INTERVAL: Duration = Duration::from_secs(60 * 30);
 
+/// Clanto: con l'aggiornamento automatico spento si riguarda l'opzione ogni ora,
+/// così attivarlo (impostazioni o policy) non aspetta un giorno.
+pub const DISABLED_RECHECK: Duration = Duration::from_secs(60 * 60);
+
+fn next_interval() -> Duration {
+    if config::Config::get_bool_option(keys::OPTION_ALLOW_AUTO_UPDATE) {
+        DUR_ONE_DAY
+    } else {
+        DISABLED_RECHECK
+    }
+}
+
 pub fn update_controlling_session_count(count: usize) {
     CONTROLLING_SESSION_COUNT.store(count, Ordering::SeqCst);
 }
@@ -171,7 +183,7 @@ fn start_auto_update_check_(rx_msg: Receiver<UpdateMsg>) {
                     check_interval = RETRY_INTERVAL;
                 } else {
                     last_check_time = Instant::now();
-                    check_interval = DUR_ONE_DAY;
+                    check_interval = next_interval();
                 }
             }
             Ok(UpdateMsg::Exit) => break,
@@ -525,17 +537,10 @@ fn wait_for_failed_update_retry() {
     }
 }
 
-#[cfg(target_os = "macos")]
-const MACOS_AUTO_UPDATE_ENABLED: bool = false;
-
 /// Starts the background silent auto-update scheduler for macOS.
 /// Called from `start_os_service()` which runs as root via LaunchDaemon.
 #[cfg(target_os = "macos")]
 pub fn start_auto_update_macos() {
-    // Spento in ClantoDesk fino a verifica su VM.
-    if !MACOS_AUTO_UPDATE_ENABLED {
-        return;
-    }
     let spawn_result = std::thread::Builder::new()
         .name("clantodesk-auto-update".to_owned())
         .spawn(|| {
@@ -558,7 +563,7 @@ pub fn start_auto_update_macos() {
                                 // failure interval until the new daemon replaces us.
                                 interval = RETRY_INTERVAL;
                             } else {
-                                interval = DUR_ONE_DAY;
+                                interval = next_interval();
                             }
                         }
                         Err(e) => {
@@ -577,9 +582,22 @@ pub fn start_auto_update_macos() {
 
 #[cfg(target_os = "macos")]
 pub fn check_update_as_root() -> ResultType<bool> {
+    check_update_as_root_(false)
+}
+
+/// Clanto: «Aggiorna» dalla UI tramite il servizio (src/clanto/service_update.rs):
+/// niente controllo dell'opzione né delle sessioni attive, niente password.
+#[cfg(target_os = "macos")]
+pub fn check_update_as_root_manual() -> ResultType<bool> {
+    check_update_as_root_(true)
+}
+
+#[cfg(target_os = "macos")]
+fn check_update_as_root_(manual: bool) -> ResultType<bool> {
+    use crate::clanto::service_update::{set_state, DOWNLOADING, INSTALLING};
     let _update_lock = acquire_mac_update_lock()?;
     // Allow-auto-update setting
-    if !config::Config::get_bool_option(keys::OPTION_ALLOW_AUTO_UPDATE) {
+    if !manual && !config::Config::get_bool_option(keys::OPTION_ALLOW_AUTO_UPDATE) {
         log::info!("[root-update] Auto update is disabled, skipping.");
         return Ok(false);
     }
@@ -639,6 +657,9 @@ pub fn check_update_as_root() -> ResultType<bool> {
         bail!("[root-update] URL failed allowlist check: {}", dmg_url);
     };
     drop(file_path_validated);
+    if manual {
+        set_state(DOWNLOADING);
+    }
     let client = create_http_client_with_url_strict(&dmg_url)?;
     // Use mktemp so a local user cannot pre-create a predictable path and
     // permanently deny updates for a reused service PID.
@@ -683,14 +704,17 @@ pub fn check_update_as_root() -> ResultType<bool> {
     }
     log::info!("[root-update] Downloaded to {}", tmp_path);
     // Recheck active sessions before installing — download can take minutes
-    if !has_no_active_conns_ipc() {
+    if !manual && !has_no_active_conns_ipc() {
         if let Err(e) = std::fs::remove_dir_all(&private_tmp) {
             log::warn!("[root-update] Failed to remove temp dir {}: {}", private_tmp, e);
         }
         bail!("[root-update] Active session started during download, deferring update.");
     }
     // Install silently as root
-    let result = crate::platform::update_from_dmg_as_root(&tmp_path, &version);
+    if manual {
+        set_state(INSTALLING);
+    }
+    let result = crate::platform::update_from_dmg_as_root(&tmp_path, &version, manual);
     // Clean up download directory
     if let Err(e) = std::fs::remove_dir_all(&private_tmp) {
         log::warn!("[root-update] Failed to remove temp dir {}: {}", private_tmp, e);

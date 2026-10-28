@@ -973,6 +973,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_update_none", "ClantoDesk è già aggiornato."),
         ("clanto_update_failed", "Aggiornamento non riuscito."),
         ("clanto_update_as_admin", "Aggiorna come amministratore"),
+        ("clanto_update_done", "Aggiornamento installato. Riapri ClantoDesk per usare la nuova versione."),
         ("Tampered executable", "Eseguibile manomesso"),
         ("clanto_access_hours_error", "L'accesso al PC remoto non è consentito in questo orario."),
         ("Allow connections only at set times", "Consenti le connessioni solo in determinate fasce orarie"),

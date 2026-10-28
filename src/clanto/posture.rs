@@ -21,7 +21,11 @@ use std::{
 };
 
 const CACHE_TTL: Duration = Duration::from_secs(600);
+/// Oltre `CACHE_TTL` la postura si usa ancora, rinnovandola in background, fino a
+/// questa età: la connessione non aspetta la raccolta (fino a 3-4 secondi).
+const STALE_TTL: Duration = Duration::from_secs(24 * 3600);
 const COLLECT_TIMEOUT: Duration = Duration::from_secs(3);
+const DISK_CACHE: &str = "posture.cache";
 
 static CACHE: Mutex<Option<(Instant, HashMap<String, String>)>> = Mutex::new(None);
 static COLLECTING: AtomicBool = AtomicBool::new(false);
@@ -213,18 +217,78 @@ impl VerificationRejection {
     }
 }
 
-fn cached() -> Option<HashMap<String, String>> {
-    let cache = CACHE.lock().unwrap_or_else(|err| err.into_inner());
+fn cached_within(ttl: Duration) -> Option<HashMap<String, String>> {
+    let mut cache = CACHE.lock().unwrap_or_else(|err| err.into_inner());
+    if cache.is_none() {
+        *cache = load_disk_cache();
+    }
     cache
         .as_ref()
-        .filter(|(at, _)| at.elapsed() < CACHE_TTL)
+        .filter(|(at, _)| at.elapsed() < ttl)
         .map(|(_, posture)| posture.clone())
+}
+
+fn cached() -> Option<HashMap<String, String>> {
+    cached_within(CACHE_TTL)
 }
 
 fn collect_and_store() -> HashMap<String, String> {
     let posture = gather();
     *CACHE.lock().unwrap_or_else(|err| err.into_inner()) = Some((Instant::now(), posture.clone()));
+    store_disk_cache(&posture);
     posture
+}
+
+/// Messaggio autenticato della cache su disco: stessa chiave della firma di
+/// login, così modificare il file non vale più che falsificare la postura.
+fn disk_cache_mac(at: u64, posture: &HashMap<String, String>) -> Option<String> {
+    let key = release_key()?;
+    let message = format!(
+        "clanto-posture-cache-v1
+{}",
+        canonical_message(posture, "", &at.to_string(), crate::VERSION)
+    );
+    Some(hex::encode(hmac_sha256(&key, message.as_bytes())))
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default()
+}
+
+/// Postura salvata da un'esecuzione precedente: valida se firmata, della stessa
+/// versione del client e più recente di `STALE_TTL`.
+fn load_disk_cache() -> Option<(Instant, HashMap<String, String>)> {
+    let text = std::fs::read_to_string(Config::path(DISK_CACHE)).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let at = value.get("at")?.as_u64()?;
+    let posture: HashMap<String, String> =
+        serde_json::from_value(value.get("posture")?.clone()).ok()?;
+    let mac = value.get("mac")?.as_str()?;
+    if Some(mac) != disk_cache_mac(at, &posture).as_deref()
+        || posture.get("client_version").map(String::as_str) != Some(crate::VERSION)
+        || POSTURE_KEYS.iter().any(|key| !posture.contains_key(*key))
+    {
+        return None;
+    }
+    let age = Duration::from_secs(unix_now().checked_sub(at)?);
+    if age >= STALE_TTL {
+        return None;
+    }
+    Some((Instant::now().checked_sub(age)?, posture))
+}
+
+fn store_disk_cache(posture: &HashMap<String, String>) {
+    let at = unix_now();
+    let Some(mac) = disk_cache_mac(at, posture) else {
+        return;
+    };
+    let value = serde_json::json!({ "at": at, "posture": posture, "mac": mac });
+    if let Err(err) = std::fs::write(Config::path(DISK_CACHE), value.to_string()) {
+        hbb_common::log::debug!("posture cache not saved: {err}");
+    }
 }
 
 /// Avvia la raccolta in un thread dedicato se la cache manca o è scaduta.
@@ -250,8 +314,14 @@ pub async fn warm() {
 }
 
 /// Bloccante: da chiamare fuori dall'executor (vedi `warm`).
+/// Con una postura scaduta ma più recente di `STALE_TTL` non aspetta: la
+/// restituisce e la rinnova in background.
 pub fn collect() -> HashMap<String, String> {
     if let Some(posture) = cached() {
+        return posture;
+    }
+    if let Some(posture) = cached_within(STALE_TTL) {
+        prewarm();
         return posture;
     }
     // Se un prewarm è in corso lo si attende, per non lanciare due raccolte.
@@ -718,6 +788,15 @@ mod tests {
             classify_rejection("1.5.0", VerificationFailure::Rules(&policy)),
             RejectionKind::Policy
         );
+    }
+
+    #[test]
+    fn disk_cache_mac_depends_on_time_and_values() {
+        let posture = HashMap::from([("os_version".to_owned(), "10".to_owned())]);
+        let mac = super::disk_cache_mac(100, &posture).unwrap();
+        assert_ne!(Some(mac.clone()), super::disk_cache_mac(101, &posture));
+        let changed = HashMap::from([("os_version".to_owned(), "11".to_owned())]);
+        assert_ne!(Some(mac), super::disk_cache_mac(100, &changed));
     }
 
     #[test]

@@ -447,6 +447,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("clanto_update_none", "ClantoDesk is already up to date."),
         ("clanto_update_failed", "The update failed."),
         ("clanto_update_as_admin", "Update as administrator"),
+        ("clanto_update_done", "Update installed. Reopen ClantoDesk to use the new version."),
         ("clanto_access_hours_error", "Access to the remote PC is not allowed at this time."),
         ("clanto-require-2fa-tip", "Policy requires two-factor authentication: every incoming connection is rejected until you enable it."),
     ].iter().cloned().collect();

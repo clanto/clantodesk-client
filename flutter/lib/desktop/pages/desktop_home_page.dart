@@ -440,7 +440,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         updateUrl.isNotEmpty &&
         !isCardClosed &&
         bind.mainUriPrefixSync().contains('clantodesk')) {
-      final isToUpdate = (isWindows || isMacOS) && bind.mainIsInstalled();
+      final isToUpdate =
+          (isWindows || isMacOS || isLinux) && bind.mainIsInstalled();
       String btnText = isToUpdate ? 'Update' : 'Download';
       // Clanto: pagina della release ClantoDesk (updateUrl), non rustdesk.com.
       GestureTapCallback onPressed = () async {
@@ -534,7 +535,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             marginTop: LinuxCards.isEmpty ? 20.0 : 5.0,
             help: 'Help',
             link:
-                'https://rustdesk.com/docs/en/client/linux/#permissions-issue',
+                'https://supporto.clanto.it/clantodesk',
             closeButton: true,
             closeOption: keyShowSelinuxHelpTip,
           ));
@@ -545,13 +546,13 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             "Warning", "wayland_experiment_tip", "", () async {},
             marginTop: LinuxCards.isEmpty ? 20.0 : 5.0,
             help: 'Help',
-            link: 'https://rustdesk.com/docs/en/client/linux/#x11-required'));
+            link: 'https://supporto.clanto.it/clantodesk'));
       } else if (bind.mainIsLoginWayland()) {
         LinuxCards.add(buildInstallCard("Warning",
             "Login screen using Wayland is not supported", "", () async {},
             marginTop: LinuxCards.isEmpty ? 20.0 : 5.0,
             help: 'Help',
-            link: 'https://rustdesk.com/docs/en/client/linux/#login-screen'));
+            link: 'https://supporto.clanto.it/clantodesk'));
       }
       if (LinuxCards.isNotEmpty) {
         return Column(

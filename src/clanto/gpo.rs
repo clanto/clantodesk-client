@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Clanto Services srls <info@clanto.it>
 // SPDX-License-Identifier: AGPL-3.0-only OR Apache-2.0
 
-//! Criteri di gruppo applicati una volta all'avvio del processo.
+//! Criteri di gruppo (Windows) e policy di macOS e Linux, applicati una volta
+//! all'avvio del processo.
 
 pub const GPO_KEYS: &[&str] = &[
     "enable-remote-printer",
@@ -130,7 +131,43 @@ pub fn apply() {
     }
 }
 
-#[cfg(not(windows))]
+/// macOS: profilo di configurazione MDM, dominio `it.clanto.clantodesk`
+/// (`/Library/Managed Preferences`). Linux: `/etc/clantodesk/policy.json`.
+/// Stesse chiavi e stesso effetto della GPO (`GPO_KEYS`, i nomi delle opzioni);
+/// il file deve essere di root e non scrivibile da altri.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub fn apply() {
+    use hbb_common::log;
+    use std::os::unix::fs::MetadataExt;
+
+    #[cfg(target_os = "macos")]
+    const POLICY_FILE: &str = "/Library/Managed Preferences/it.clanto.clantodesk.plist";
+    #[cfg(target_os = "linux")]
+    const POLICY_FILE: &str = "/etc/clantodesk/policy.json";
+
+    let Ok(meta) = std::fs::metadata(POLICY_FILE) else {
+        return;
+    };
+    if meta.uid() != 0 || meta.mode() & 0o022 != 0 {
+        log::warn!("{POLICY_FILE} ignored: it must be owned by root and not writable by others");
+        return;
+    }
+    #[cfg(target_os = "macos")]
+    let json = std::process::Command::new("/usr/bin/plutil")
+        .args(["-convert", "json", "-o", "-", POLICY_FILE])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| String::from_utf8(out.stdout).ok());
+    #[cfg(target_os = "linux")]
+    let json = std::fs::read_to_string(POLICY_FILE).ok();
+    match json {
+        Some(json) => super::managed_config::apply_json(&json),
+        None => log::warn!("{POLICY_FILE} is not readable"),
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 pub fn apply() {}
 
 #[cfg(test)]

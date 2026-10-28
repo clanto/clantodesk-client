@@ -17,6 +17,8 @@ pub mod gpo;
 pub mod host_watermark;
 pub mod id_permissions;
 pub mod keystore;
+#[cfg(target_os = "linux")]
+pub mod linux_update;
 pub mod managed_config;
 pub mod outgoing;
 pub mod posture;

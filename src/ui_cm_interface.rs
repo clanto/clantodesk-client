@@ -1223,6 +1223,9 @@ async fn handle_fs(
             }
             job.total_size = total_size;
             job.conn_id = conn_id;
+            // Clanto: opzioni di scansione aggiornate dal `--server` (il CM le
+            // caricherebbe solo all'avvio).
+            crate::ipc::get_options_async().await;
             if let Err(error) = crate::clanto::file_scan::register_scan_job(&job) {
                 send_raw(fs::new_error(id, error, file_num), tx);
                 return;
