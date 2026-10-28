@@ -449,7 +449,8 @@ fn qr_signature(action: &str, session: &str, ts: i64) -> Option<String> {
 
 fn qr_body(action: &str, session: &str) -> Option<Value> {
     let ts = now_secs();
-    Some(json!({"session": session, "ts": ts, "sig": qr_signature(action, session, ts)?}))
+    // `ts` viaggia come stringa: è la stessa sequenza di byte che si firma.
+    Some(json!({"session": session, "ts": ts.to_string(), "sig": qr_signature(action, session, ts)?}))
 }
 
 fn qr_update(generation: u64, f: impl FnOnce(&mut QrSession)) -> bool {
@@ -576,6 +577,11 @@ fn qr_run(generation: u64) {
             }
         };
         if let Some((code, _)) = error_code(&text) {
+            // Orologio fuori finestra: si corregge e si riprova al giro dopo.
+            if code == "clock" {
+                observe_response(401, &text);
+                continue;
+            }
             return qr_fail(generation, code);
         }
         let Ok(v) = serde_json::from_str::<Value>(&text) else {
@@ -853,6 +859,14 @@ mod tests {
             "/api/record?type=part&file=a"
         );
         assert_eq!(path_and_query("https://h.example/api/heartbeat"), "/api/heartbeat");
+    }
+
+    #[test]
+    fn qr_body_sends_the_signed_timestamp_as_text() {
+        let ts: i64 = 1700000000;
+        let msg = format!("clanto-qr-v1\0poll\0s-1\0{ts}");
+        assert!(msg.ends_with("\01700000000"));
+        assert_eq!(json!({"ts": ts.to_string()})["ts"], json!("1700000000"));
     }
 
     #[test]
