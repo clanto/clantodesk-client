@@ -3,14 +3,15 @@
 
 //! Audit verso l'api-server: numerazione e coda su disco.
 //!
-//! - Ogni evento porta `seq` (contatore del dispositivo, mai riusato) e `ts`
-//!   (millisecondi): il server vede i buchi.
+//! - Ogni evento porta `seq` (contatore del dispositivo, mai riusato),
+//!   `seq_epoch` (UUID del contatore, nuovo quando riparte da zero) e `ts`
+//!   (millisecondi): il server scarta i doppioni e segnala i buchi.
 //! - Un evento non consegnato dopo i tentativi in memoria finisce in coda,
 //!   cifrata con la chiave macchina, e riparte quando il server risponde. Il
 //!   server scarta i doppioni sul `nonce`, quindi ritentare è sicuro.
 //! - Al massimo `MAX_QUEUED` eventi: oltre si scarta il più vecchio e il numero
 //!   degli scartati va al server con l'heartbeat (`clanto_audit_dropped`).
-//! - Lo scollegamento svuota la coda.
+//! - Lo scollegamento svuota la coda e fa ripartire il contatore.
 
 use super::enrollment;
 use hbb_common::{
@@ -37,6 +38,7 @@ const KINDS: &[&str] = &["conn", "file", "alarm"];
 #[derive(Default)]
 struct Queue {
     loaded: bool,
+    epoch: String,
     next_seq: u64,
     dropped: u64,
     items: VecDeque<(String, Value)>,
@@ -61,7 +63,15 @@ fn load(q: &mut Queue) {
         if let Ok(v) = serde_json::from_str::<Value>(&text) {
             q.next_seq = v["next_seq"].as_u64().unwrap_or(0);
             q.dropped = v["dropped"].as_u64().unwrap_or(0);
+            q.epoch = v["seq_epoch"].as_str().unwrap_or_default().to_owned();
         }
+    }
+    // Contatore nuovo o stato perso: nuova epoca, così il server non scambia
+    // i nuovi eventi per doppioni.
+    if q.epoch.is_empty() {
+        q.epoch = uuid::Uuid::new_v4().to_string();
+        q.next_seq = 0;
+        save_state(q);
     }
     if let Ok(text) = std::fs::read_to_string(queue_path()) {
         for line in text.lines().filter(|l| !l.is_empty()) {
@@ -83,7 +93,7 @@ fn load(q: &mut Queue) {
 }
 
 fn save_state(q: &Queue) {
-    let state = json!({"next_seq": q.next_seq, "dropped": q.dropped}).to_string();
+    let state = json!({"seq_epoch": q.epoch, "next_seq": q.next_seq, "dropped": q.dropped}).to_string();
     if let Err(err) = std::fs::write(Config::path(STATE_FILE), state) {
         log::error!("audit sequence not saved: {err}");
     }
@@ -122,6 +132,7 @@ pub fn stamp(mut v: Value) -> Value {
     if let Ok(mut q) = queue().lock() {
         load(&mut q);
         v["seq"] = json!(q.next_seq);
+        v["seq_epoch"] = json!(q.epoch);
         q.next_seq += 1;
         save_state(&q);
     }
@@ -188,6 +199,8 @@ pub fn clear() {
         load(&mut q);
         q.items.clear();
         q.dropped = 0;
+        q.epoch = uuid::Uuid::new_v4().to_string();
+        q.next_seq = 0;
         save_queue(&q);
         save_state(&q);
     }

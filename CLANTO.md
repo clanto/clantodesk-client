@@ -680,7 +680,9 @@ effettivi dal servizio via IPC (`clanto-policy-effective`).
 
 ### Audit verso il server
 
-Gli eventi (`conn`, `file`, `alarm`) portano `seq` (contatore del dispositivo) e `ts`. Quelli
+Gli eventi (`conn`, `file`, `alarm`) portano `seq` (contatore del dispositivo), `seq_epoch`
+(UUID del contatore, nuovo quando riparte da zero, per esempio dopo uno scollegamento) e `ts`:
+il server scarta i doppioni per sempre e segnala i buchi. Quelli
 non consegnati dopo i tentativi in memoria vanno in coda su disco, cifrata con la chiave
 macchina (`src/clanto/audit_queue.rs`), e ripartono ogni minuto; il server scarta i doppioni sul
 `nonce`. Oltre 10 000 eventi si scarta il più vecchio e il conteggio arriva al server con
