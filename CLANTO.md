@@ -1205,6 +1205,29 @@ Senza finestra (sessione 0, CI o opzione esplicita): `--keep-config` (predefinit
 `clantodesk.exe --clanto-purge-data` come SYSTEM prima di `RemoveFiles`; la disinstallazione MSI da
 Programmi e funzionalità chiama `msiexec` direttamente e mantiene la configurazione.
 
+### Ritorno da 1.5.0 a 1.4.9
+
+Non supportato. La 1.5.0 cifra i segreti della macchina con `machine.key` (prefisso `02`, vedi
+«Credenziali protette»), la 1.4.9 conosce solo il formato `00`. Se la 1.4.9 viene installata sopra
+una configurazione mantenuta dalla 1.5.0, in `ClantoDesk.toml` del servizio
+(`C:\Windows\ServiceProfiles\LocalService\AppData\Roaming\ClantoDesk\config\`):
+
+- `enc_id` non è decifrabile: la 1.4.9 genera un **ID nuovo** e lo salva in formato `00`;
+- `key_pair` non è vuota, quindi non viene rigenerata, ma la chiave privata è il blob cifrato (non
+  64 byte): il dispositivo non firma la propria identità e chi si collega vede «Impossibile
+  verificare la crittografia end-to-end» (connessione non E2EE);
+- la password permanente non è decifrabile e va reimpostata.
+
+Ripristino:
+
+- **consigliato:** reinstallare la 1.5.0, che decifra ancora `key_pair` con `machine.key`; resta
+  l'ID generato dalla 1.4.9;
+- **restando sulla 1.4.9:** fermare il servizio `ClantoDesk`, salvare una copia di
+  `ClantoDesk.toml`, togliere `key_pair` e impostare `key_confirmed = false`, riavviare il
+  servizio (la 1.4.9 genera una coppia di chiavi nuova e la registra sul server con lo stesso ID),
+  poi `clantodesk.exe --password <nuova>` da amministratore. `machine.key` può restare: la 1.4.9
+  lo ignora e una futura 1.5.0 lo riusa.
+
 ## Debito noto
 
 - `res/msi/Package/License.rtf` (italiano e inglese) non è un EULA e non deve
