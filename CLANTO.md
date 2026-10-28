@@ -1150,11 +1150,11 @@ Identità di firma fissata al build e verificata con API native (niente PowerShe
 ## Build per i partner
 
 Livello 1: solo Windows e macOS, firmati da Clanto, cambia solo ciò che si vede. Il repo del
-partner `github.com/clanto/<partner>` contiene `brand.json` e `icons/` (modello e regole in
+partner `github.com/clantodesk/<partner>` contiene `brand.json` e `icons/` (modello e regole in
 `res/partner-template/`); il workflow «Partner build» (`partner-build.yml`, input `partner` e
 `upload-tag`) chiama `flutter-build.yml` con `targets: desktop` e pubblica la release nel repo
-del partner. Serve il secret `CLANTO_PARTNER_TOKEN`: token con lettura e scrittura dei contenuti
-dei repo partner.
+del partner. Serve il secret `CLANTO_PARTNER_TOKEN`: token fine-grained con owner `clantodesk` e permesso
+Contents in lettura e scrittura sui repo partner.
 
 - **Cosa cambia:** `.github/scripts/apply-brand.py` copia le icone, cambia `FileDescription`
   (Task Manager, anche del packer portable) e `CFBundleName`/`CFBundleDisplayName` (barra dei

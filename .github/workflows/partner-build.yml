@@ -1,13 +1,13 @@
 name: Partner build (Windows + macOS)
 
 # Build con il brand di un partner (CLANTO.md, «Build per i partner»): legge
-# brand.json e icons/ da github.com/clanto/<partner>, firma con i certificati
+# brand.json e icons/ da github.com/clantodesk/<partner>, firma con i certificati
 # Clanto e pubblica la release nel repo del partner con il tag indicato.
 on:
   workflow_dispatch:
     inputs:
       partner:
-        description: "Repo del partner in github.com/clanto (es. acmedesk)"
+        description: "Repo del partner in github.com/clantodesk (es. acmedesk)"
         type: string
         required: true
       upload-tag:

@@ -22,7 +22,9 @@ pub const NAME: &str = or(option_env!("CLANTO_BRAND_NAME"), "ClantoDesk");
 pub const COMPANY: &str = or(option_env!("CLANTO_BRAND_COMPANY"), "Clanto");
 /// Inizio dei nomi dei file della release.
 pub const FILE_PREFIX: &str = or(option_env!("CLANTO_BRAND_FILE_PREFIX"), "clantodesk");
-/// Repo `github.com/clanto/<repo>` delle release e degli aggiornamenti.
+/// Owner GitHub delle release: i repo dei partner stanno nell'organizzazione `clantodesk`.
+pub const UPDATE_OWNER: &str = if BRANDED { "clantodesk" } else { "clanto" };
+/// Repo `github.com/<UPDATE_OWNER>/<repo>` delle release e degli aggiornamenti.
 pub const UPDATE_REPO: &str = or(option_env!("CLANTO_BRAND_REPO"), "clantodesk-client");
 pub const SUPPORT_URL: &str = or(
     option_env!("CLANTO_BRAND_SUPPORT_URL"),

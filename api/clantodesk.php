@@ -290,7 +290,7 @@ $is_api = (strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false) 
 if ($is_api) {
     header('Content-Type: application/json');
     // Build dei partner (`?repo=<repo>`): stessa versione, release nel repo
-    // github.com/clanto/<repo>. Nessun elenco da mantenere.
+    // github.com/clantodesk/<repo>. Nessun elenco da mantenere.
     $api_repo_url = $REPO_URL;
     $partner_repo = $_GET['repo'] ?? '';
     if ($partner_repo !== '') {
@@ -299,7 +299,7 @@ if ($is_api) {
             echo json_encode(['error' => 'invalid repo']);
             exit;
         }
-        $api_repo_url = "https://github.com/clanto/{$partner_repo}";
+        $api_repo_url = "https://github.com/clantodesk/{$partner_repo}";
     }
     if (!$UPDATE_ENABLED) {
         echo json_encode(['url' => "{$api_repo_url}/releases/tag/0.0.0"]);

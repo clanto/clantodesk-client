@@ -14,7 +14,7 @@ on:
       targets:
         type: string
         default: "all"
-      # Repo del partner (github.com/clanto/<partner>) con brand.json e icons/
+      # Repo del partner (github.com/clantodesk/<partner>) con brand.json e icons/
       # (CLANTO.md, «Build per i partner»): build con il brand, pubblicata nel
       # repo del partner. Solo con targets: desktop.
       partner:
@@ -52,7 +52,7 @@ env:
   # Inizio dei nomi degli asset; apply-brand.py lo cambia per i partner.
   ASSET_PREFIX: "clantodesk"
   # Repo in cui pubblicare la release: il nostro o quello del partner.
-  RELEASE_REPO: "${{ inputs.partner != '' && format('clanto/{0}', inputs.partner) || github.repository }}"
+  RELEASE_REPO: "${{ inputs.partner != '' && format('clantodesk/{0}', inputs.partner) || github.repository }}"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # vcpkg version: 2026.07.29
   # If we change the `VCPKG COMMIT_ID`, please remember:
@@ -350,7 +350,7 @@ jobs:
         if: ${{ inputs.partner != '' }}
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          repository: clanto/${{ inputs.partner }}
+          repository: clantodesk/${{ inputs.partner }}
           token: ${{ secrets.CLANTO_PARTNER_TOKEN }}
           path: partner-brand
           persist-credentials: false
@@ -1150,7 +1150,7 @@ jobs:
         if: ${{ inputs.partner != '' }}
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          repository: clanto/${{ inputs.partner }}
+          repository: clantodesk/${{ inputs.partner }}
           token: ${{ secrets.CLANTO_PARTNER_TOKEN }}
           path: partner-brand
           persist-credentials: false

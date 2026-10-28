@@ -1,6 +1,6 @@
 # Repo partner ClantoDesk (livello 1)
 
-Modello del repo `github.com/clanto/<partner>`: contiene solo i dati del brand.
+Modello del repo `github.com/clantodesk/<partner>`: contiene solo i dati del brand.
 La build la fa il workflow «Partner build» del repo `clanto/clantodesk-client`
 (CLANTO.md, «Build per i partner»), che firma con i certificati Clanto e
 pubblica qui la release.

@@ -404,7 +404,7 @@ fn update_new_version(update_msi: bool, version: &str, file_path: &PathBuf) {
 }
 
 // Release di ClantoDesk o del partner: la stessa sorgente restituita da clantodesk.php.
-const UPDATE_REPO_OWNER: &str = "clanto";
+const UPDATE_REPO_OWNER: &str = crate::clanto::brand::UPDATE_OWNER;
 const UPDATE_REPO_NAME: &str = crate::clanto::brand::UPDATE_REPO;
 
 pub fn get_update_download_file_from_url(url: &str) -> Option<PathBuf> {
@@ -741,13 +741,14 @@ mod tests {
     #[test]
     fn update_download_file_accepts_clanto_release_asset_urls() {
         // Repo e nomi del brand della build: ClantoDesk senza variabili di brand.
-        let (repo, prefix) = (
+        let (owner, repo, prefix) = (
+            crate::clanto::brand::UPDATE_OWNER,
             crate::clanto::brand::UPDATE_REPO,
             crate::clanto::brand::FILE_PREFIX,
         );
         let name = format!("{prefix}-1.4.0-x86_64.dmg");
         let file = get_download_file_from_url(&format!(
-            "https://github.com/clanto/{repo}/releases/download/1.4.0/{name}"
+            "https://github.com/{owner}/{repo}/releases/download/1.4.0/{name}"
         ))
         .expect("valid Clanto release asset URL");
 
