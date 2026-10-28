@@ -1038,7 +1038,8 @@ pub fn check_software_update() {
 }
 
 // No need to check `danger_accept_invalid_cert` for now.
-// Because the url is always `https://clanto.it/api/clantodesk.php` (with `?repo=` for a partner brand).
+// Because the url is the HTTPS Clanto api-server or `https://clanto.it/api/clantodesk.php`
+// (with `?repo=` for a partner brand).
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
     let (mut request, _) =
@@ -1047,6 +1048,9 @@ pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
     // quindi dato personale pseudonimizzato. Per sapere se esiste un aggiornamento bastano
     // sistema operativo, architettura e versione corrente: non lo trasmettiamo.
     request.device_id = Vec::new();
+    // Clanto: la versione serve al conteggio anonimo per versione; nessun ID.
+    let mut request = serde_json::to_value(&request)?;
+    request["version"] = serde_json::json!(crate::VERSION);
     let url = crate::clanto::brand::update_api_url();
     let proxy_conf = Config::get_socks();
     let tls_url = get_url_for_tls(&url, &proxy_conf);

@@ -1715,6 +1715,7 @@ pub fn main_handle_relay_id(id: String) -> String {
 }
 
 pub fn main_is_option_fixed(key: String) -> SyncReturn<bool> {
+    crate::clanto::policy::sync_ui();
     let fixed_by_settings_lock = !crate::clanto::settings_lock::user_write_allowed_now()
         && key != keys::OPTION_THEME
         && key != keys::OPTION_LANGUAGE;
@@ -2779,10 +2780,12 @@ pub fn is_disable_settings() -> SyncReturn<bool> {
 }
 
 pub fn is_disable_ab() -> SyncReturn<bool> {
+    crate::clanto::policy::sync_ui();
     SyncReturn(config::is_disable_ab())
 }
 
 pub fn is_disable_account() -> SyncReturn<bool> {
+    crate::clanto::policy::sync_ui();
     SyncReturn(config::is_disable_account())
 }
 
@@ -2947,6 +2950,12 @@ pub fn main_get_common(key: String) -> String {
     if key == "clanto-brand" {
         return crate::clanto::brand::to_json();
     }
+    if key == crate::clanto::enrollment::IPC_STATE {
+        return crate::clanto::enrollment::ui_state();
+    }
+    if key == "clanto-is-admin" {
+        return crate::clanto::enrollment::ui_is_admin().to_string();
+    }
     if key == "clanto-device-key" {
         return crate::clanto::trusted_controllers::device_public_key().unwrap_or_default();
     }
@@ -3047,6 +3056,10 @@ pub fn main_get_common_sync(key: String) -> SyncReturn<String> {
 }
 
 pub fn main_set_common(_key: String, _value: String) {
+    if _key == crate::clanto::enrollment::IPC_QR {
+        crate::clanto::enrollment::ui_qr(&_value);
+        return;
+    }
     #[cfg(target_os = "windows")]
     if _key == "install-printer" && crate::platform::is_win_10_or_greater() {
         std::thread::spawn(move || {

@@ -55,6 +55,8 @@ pub const SERVER_PROTECTED_KEYS: &[&str] = &[
     "clanto-forward-webcam-send",
     "clanto-forward-webcam-receive",
     "clanto-forward-camera-device",
+    "clanto-enroll-token",
+    "clanto-unenroll",
 ];
 
 /// Chiavi che la `strategy` può impostare sempre, anche con il blocco delle

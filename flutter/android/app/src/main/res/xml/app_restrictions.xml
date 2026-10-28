@@ -249,4 +249,12 @@
         android:key="allow-auto-update"
         android:restrictionType="bool"
         android:title="@string/clanto_mdm_allow_auto_update" android:defaultValue="false" />
+    <restriction
+        android:key="clanto-enroll-token"
+        android:restrictionType="string"
+        android:title="@string/clanto_mdm_clanto_enroll_token" />
+    <restriction
+        android:key="clanto-unenroll"
+        android:restrictionType="bool"
+        android:title="@string/clanto_mdm_clanto_unenroll" android:defaultValue="false" />
 </restrictions>

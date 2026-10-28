@@ -18,6 +18,7 @@
     <category name="Interface" displayName="$(string.Interface)" />
     <category name="Privacy" displayName="$(string.Privacy)" />
     <category name="Forwarding" displayName="$(string.Forwarding)" />
+    <category name="Management" displayName="$(string.Management)" />
   </categories>
   <policies>
     <policy name="EnableRemotePrinter" class="Machine" displayName="$(string.EnableRemotePrinter)" explainText="$(string.EnableRemotePrinter_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="enable-remote-printer" presentation="$(presentation.EnableRemotePrinter)">
@@ -203,5 +204,11 @@
     <policy name="ForwardCameraDevice" class="Machine" displayName="$(string.ForwardCameraDevice)" explainText="$(string.ForwardCameraDevice_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.ForwardCameraDevice)">
       <parentCategory ref="Forwarding" />
       <supportedOn ref="ClantoDesk150" /><elements><text id="ForwardCameraDeviceValue" valueName="clanto-forward-camera-device" maxLength="260" /></elements></policy>
+    <policy name="EnrollToken" class="Machine" displayName="$(string.EnrollToken)" explainText="$(string.EnrollToken_Help)" key="Software\Policies\Clanto\ClantoDesk" presentation="$(presentation.EnrollToken)">
+      <parentCategory ref="Management" />
+      <supportedOn ref="ClantoDesk150" /><elements><text id="EnrollTokenValue" valueName="clanto-enroll-token" maxLength="512" /></elements></policy>
+    <policy name="Unenroll" class="Machine" displayName="$(string.Unenroll)" explainText="$(string.Unenroll_Help)" key="Software\Policies\Clanto\ClantoDesk" valueName="clanto-unenroll" presentation="$(presentation.Unenroll)">
+      <parentCategory ref="Management" />
+      <supportedOn ref="ClantoDesk150" /><enabledValue><string>Y</string></enabledValue><disabledValue><string>N</string></disabledValue></policy>
   </policies>
 </policyDefinitions>

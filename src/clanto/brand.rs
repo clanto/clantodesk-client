@@ -41,11 +41,16 @@ const SIGNER_KEYS: &[&str] = &["clanto_tampered_error"];
 
 /// Indirizzo del controllo aggiornamenti: con il brand chiede la release del
 /// repo del partner, con lo stesso tag di ClantoDesk.
+/// Controllo aggiornamenti: api-server Clanto (HTTPS) se configurato,
+/// altrimenti l'endpoint storico.
 pub fn update_api_url() -> String {
+    let base = super::enrollment::configured_api()
+        .map(|api| format!("{api}/api/clanto/v1/update"))
+        .unwrap_or_else(|| UPDATE_API.to_owned());
     if BRANDED {
-        format!("{UPDATE_API}?repo={UPDATE_REPO}")
+        format!("{base}?repo={UPDATE_REPO}")
     } else {
-        UPDATE_API.to_owned()
+        base
     }
 }
 

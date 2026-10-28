@@ -1586,16 +1586,8 @@ impl Connection {
     }
 
     fn get_api_server(&mut self) {
-        self.server_audit_conn = crate::get_audit_server(
-            Config::get_option("api-server"),
-            Config::get_option("custom-rendezvous-server"),
-            "conn".to_owned(),
-        );
-        self.server_audit_file = crate::get_audit_server(
-            Config::get_option("api-server"),
-            Config::get_option("custom-rendezvous-server"),
-            "file".to_owned(),
-        );
+        self.server_audit_conn = crate::clanto::audit_queue::audit_url("conn");
+        self.server_audit_file = crate::clanto::audit_queue::audit_url("file");
     }
 
     fn conn_audit_ref(&self) -> Option<&str> {
@@ -1717,11 +1709,7 @@ impl Connection {
             }
         }
         crate::clanto::audit_sink::emit("alarm", &v);
-        let url = crate::get_audit_server(
-            Config::get_option("api-server"),
-            Config::get_option("custom-rendezvous-server"),
-            "alarm".to_owned(),
-        );
+        let url = crate::clanto::audit_queue::audit_url("alarm");
         if url.is_empty() {
             return;
         }
@@ -1770,14 +1758,22 @@ impl Connection {
         // two cannot drift apart.
         const RETRY_BACKOFF_SECS: [u64; 2] = [10, 30];
         const ATTEMPTS: usize = RETRY_BACKOFF_SECS.len() + 1;
+        let v = crate::clanto::audit_queue::stamp(v);
         let body = v.to_string();
         let started = Instant::now();
         let mut attempt = 0usize;
         loop {
             attempt += 1;
             let (retryable, err) =
-                match crate::post_request_with_status(url.clone(), body.clone(), "").await {
+                match crate::post_request_with_status(
+                    url.clone(),
+                    body.clone(),
+                    &crate::clanto::enrollment::auth_header("POST", &url, body.as_bytes()),
+                )
+                .await
+                {
                     Ok((status, text)) => {
+                        crate::clanto::enrollment::observe_response(status, &text);
                         if (200..300).contains(&status) {
                             // Success is an empty body. hbbs reports handler
                             // failures (e.g. a db write error) as 200 with an
@@ -1815,6 +1811,9 @@ impl Connection {
                 };
             let elapsed = started.elapsed();
             if !retryable || attempt >= ATTEMPTS || elapsed >= RETRY_DEADLINE {
+                if retryable {
+                    crate::clanto::audit_queue::push(&url, &v);
+                }
                 log::error!(
                     "Audit post dropped (attempt {}/{}, {:?} elapsed): {}",
                     attempt,
@@ -1835,6 +1834,7 @@ impl Connection {
             // Re-checked after the delay so no attempt starts past the deadline;
             // the check above alone would let one begin up to a backoff later.
             if started.elapsed() >= RETRY_DEADLINE {
+                crate::clanto::audit_queue::push(&url, &v);
                 log::error!(
                     "Audit post dropped (attempt {}/{}, deadline passed during backoff): {}",
                     attempt,

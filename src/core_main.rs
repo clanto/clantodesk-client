@@ -593,6 +593,12 @@ pub fn core_main() -> Option<Vec<String>> {
                 crate::platform::is_installed() && is_root(),
             );
             return None;
+        } else if crate::clanto::enrollment::is_cli_command(&args[0]) {
+            crate::clanto::enrollment::run_cli(
+                &args,
+                crate::platform::is_installed() && is_root(),
+            );
+            return None;
         } else if args[0] == "--assign" {
             if config::Config::no_register_device() {
                 println!("Cannot assign an unregistrable device!");
@@ -920,6 +926,8 @@ fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
             | Some("--deploy")
             | Some("--trust-controller")
             | Some("--untrust-controller")
+            | Some("--enroll")
+            | Some("--enrollment")
     )
 }
 

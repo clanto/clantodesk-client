@@ -209,7 +209,7 @@ async fn start_hbbs_sync_async() {
                             }
                         }
                     }
-                    match crate::post_request(url.replace("heartbeat", "sysinfo"), v, "").await {
+                    match crate::clanto::enrollment::post_signed(url.replace("heartbeat", "sysinfo"), v).await {
                         Ok(x)  => {
                             if x == "SYSINFO_UPDATED" {
                                 info_uploaded = InfoUploaded::uploaded(url.clone(), id.clone(), sys_username);
@@ -243,12 +243,14 @@ async fn start_hbbs_sync_async() {
                 }
                 let modified_at = LocalConfig::get_option("strategy_timestamp").parse::<i64>().unwrap_or(0);
                 v["modified_at"] = json!(modified_at);
-                let response = crate::post_request(url.clone(), v.to_string(), "").await;
+                crate::clanto::enrollment::heartbeat_extend(&mut v);
+                let response = crate::clanto::enrollment::post_signed(url.clone(), v.to_string()).await;
                 if let Err(err) = &response {
                     hbb_common::throttled_log!(API_LOG_INTERVAL, warn, "Heartbeat failed: {err:?}");
                 }
                 if let Ok(s) = response {
                     if let Ok(mut rsp) = serde_json::from_str::<HashMap::<&str, Value>>(&s) {
+                        crate::clanto::enrollment::heartbeat_response(rsp.remove("clanto"), &v);
                         if rsp.remove("sysinfo").is_some() {
                             info_uploaded.uploaded = false;
                             config::Status::set("sysinfo_hash", "".to_owned());
@@ -279,15 +281,11 @@ async fn start_hbbs_sync_async() {
     }
 }
 
+// Clanto: solo da iscritto a un tenant, solo HTTPS.
 fn heartbeat_url() -> String {
-    let url = crate::common::get_api_server(
-        Config::get_option("api-server"),
-        Config::get_option("custom-rendezvous-server"),
-    );
-    if url.is_empty() || crate::is_public(&url) {
-        return "".to_owned();
-    }
-    format!("{}/api/heartbeat", url)
+    crate::clanto::enrollment::device_api()
+        .map(|url| format!("{}/api/heartbeat", url))
+        .unwrap_or_default()
 }
 
 fn handle_config_options(mut config_options: HashMap<String, String>) {
@@ -323,10 +321,10 @@ pub fn is_pro() -> bool {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn register_switch_grant(switch_uuid: String) {
     tokio::spawn(async move {
-        let api_server = crate::ui_interface::get_api_server();
-        if api_server.is_empty() || crate::is_public(&api_server) {
+        // Clanto: solo da iscritto a un tenant.
+        let Some(api_server) = crate::clanto::enrollment::device_api() else {
             return;
-        }
+        };
         use hbb_common::sodiumoxide::crypto::{hash::sha256, sign};
         let switch_code = crate::encode64(sha256::hash(switch_uuid.as_bytes()).0);
         let switch_code_verifier = switch_code_verifier(&switch_code);

@@ -1,6 +1,6 @@
 use crate::hbbs_http::create_http_client_with_url;
 use bytes::Bytes;
-use hbb_common::{bail, config::Config, lazy_static, log, ResultType};
+use hbb_common::{bail, log, ResultType};
 use reqwest::blocking::{Body, Client};
 use scrap::record::RecordState;
 use serde::Serialize;
@@ -8,7 +8,7 @@ use serde_json::Map;
 use std::{
     fs::File,
     io::{prelude::*, SeekFrom},
-    sync::{mpsc::Receiver, Arc, Mutex},
+    sync::mpsc::Receiver,
     time::{Duration, Instant},
 };
 
@@ -16,20 +16,15 @@ const MAX_HEADER_LEN: usize = 1024;
 const SHOULD_SEND_TIME: Duration = Duration::from_secs(1);
 const SHOULD_SEND_SIZE: u64 = 1024 * 1024;
 
-lazy_static::lazy_static! {
-    static ref ENABLE: Arc<Mutex<bool>> = Default::default();
-}
-
+// Clanto: solo da iscritto e con il criterio del tenant che lo chiede.
 pub fn is_enable() -> bool {
-    ENABLE.lock().unwrap().clone()
+    crate::clanto::policy::settings().record_upload
+        && crate::clanto::enrollment::device_api().is_some()
 }
 
 pub fn run(rx: Receiver<RecordState>) {
     std::thread::spawn(move || {
-        let api_server = crate::get_api_server(
-            Config::get_option("api-server"),
-            Config::get_option("custom-rendezvous-server"),
-        );
+        let api_server = crate::clanto::enrollment::device_api().unwrap_or_default();
         // This URL is used for TLS connectivity testing and fallback detection.
         let login_option_url = format!("{}/api/login-options", &api_server);
         let client = create_http_client_with_url(&login_option_url);
@@ -93,15 +88,23 @@ impl RecordUploader {
     fn send<Q, B>(&self, query: &Q, body: B) -> ResultType<()>
     where
         Q: Serialize + ?Sized,
-        B: Into<Body>,
+        B: Into<Body> + AsRef<[u8]>,
     {
-        match self
+        let mut request = self
             .client
             .post(format!("{}/api/record", self.api_server))
             .query(query)
-            .body(body)
-            .send()
-        {
+            .build()?;
+        let Some(auth) =
+            crate::clanto::enrollment::auth_value("POST", request.url().as_str(), body.as_ref())
+        else {
+            bail!("device not enrolled");
+        };
+        request
+            .headers_mut()
+            .insert(reqwest::header::AUTHORIZATION, auth.parse()?);
+        *request.body_mut() = Some(body.into());
+        match self.client.execute(request) {
             Ok(resp) => {
                 if let Ok(m) = resp.json::<Map<String, serde_json::Value>>() {
                     if let Some(e) = m.get("error") {

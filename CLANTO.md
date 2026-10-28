@@ -643,8 +643,58 @@ non gestito da Clanto: host» con il bollino arancione. Il nome del server è ne
 
 ## Canale verso `api-server`
 
-Con `API_SERVER` al build il client manda a quel server heartbeat e `sysinfo`
-(`src/hbbs_http/sync.rs`), e il server può rispondere con una `strategy` che **scrive opzioni
+Contratto completo: `clantodesk-server/docs/protocollo.md`.
+
+### Iscrizione a un tenant
+
+Senza iscrizione il PC **non manda nulla** all'api-server: niente heartbeat, `sysinfo`, audit,
+registrazioni né `switch-grant` (`src/clanto/enrollment.rs`, `device_api()`). Resta solo il
+controllo aggiornamenti, anonimo. L'api-server deve essere `https://` (HTTP solo verso loopback,
+per i test), e l'iscrizione vale solo per l'api-server su cui è stata fatta.
+
+- **Token** (GPO, RMM, CLI): `clantodesk --enroll <TOKEN>` da amministratore, oppure il criterio
+  `clanto-enroll-token` (ADMX «Iscrivi il dispositivo al tenant», profilo macOS, policy.json
+  Linux, restrizioni Android). Il servizio lo usa all'avvio e riprova ogni 10 minuti finché il
+  server non risponde. `clantodesk --enrollment` stampa lo stato.
+- **QR**: impostazioni → «Collega al server», scheda visibile solo con l'interfaccia avviata come
+  amministratore (Windows elevata, root su macOS e Linux) o con il PC già iscritto. Il codice
+  cambia ogni 30 secondi; l'amministratore del tenant lo rivendica dal pannello e chi è davanti al
+  PC conferma. Con `clanto-lock-settings` attivo si iscrive solo con il token della GPO.
+- **Scollegamento** solo dal pannello (revoca → `403 revoked` → il PC cancella l'iscrizione) o
+  con il criterio `clanto-unenroll=Y`. Togliere il criterio del token non scollega.
+- Le richieste del dispositivo sono firmate con la chiave Ed25519 del rendezvous
+  (`Authorization: ClantoDevice <device_id>:<ts>:<firma>`). Stato in
+  `clanto-enrollment.json` nella cartella di configurazione del servizio.
+
+### Criteri firmati
+
+Il server consegna i criteri del tenant (all'iscrizione e nella risposta all'heartbeat) firmati
+con la chiave del tenant fissata all'iscrizione (`src/clanto/policy.rs`). Il client verifica
+firma, dispositivo e versione, li salva (`clanto-policy.json`) e li riapplica all'avvio anche
+senza rete. Le opzioni diventano impostazioni gestite, solo per chiavi di `GPO_KEYS` (mai quelle
+di iscrizione). Sulla stessa chiave vince il valore più restrittivo: `enable-*` → `N`;
+`clanto-require-*`, `clanto-host-watermark`, `clanto-lock-settings` → `Y`; il resto → la GPO.
+I `settings` del criterio accendono login e rubrica (`enable_account`, altrimenti nascosti come
+oggi) e il caricamento delle registrazioni (`record_upload`). La UI desktop riceve i valori
+effettivi dal servizio via IPC (`clanto-policy-effective`).
+
+### Audit verso il server
+
+Gli eventi (`conn`, `file`, `alarm`) portano `seq` (contatore del dispositivo) e `ts`. Quelli
+non consegnati dopo i tentativi in memoria vanno in coda su disco, cifrata con la chiave
+macchina (`src/clanto/audit_queue.rs`), e ripartono ogni minuto; il server scarta i doppioni sul
+`nonce`. Oltre 10 000 eventi si scarta il più vecchio e il conteggio arriva al server con
+l'heartbeat (`clanto_audit_dropped`).
+
+### Controllo aggiornamenti
+
+Va a `<api-server>/api/clanto/v1/update` se l'api-server HTTPS è configurato, altrimenti a
+`clanto.it/api/clantodesk.php`. Manda sistema, versione del sistema, architettura e versione
+del programma; nessun identificativo.
+
+### Strategy RustDesk
+
+Il server può anche rispondere all'heartbeat con una `strategy` che **scrive opzioni
 sull'host**. Hook in `src/clanto/server_sync.rs`:
 
 - **In uscita** hostname e nome utente raccolti dal sistema non partono, salvo
@@ -657,8 +707,9 @@ sull'host**. Hook in `src/clanto/server_sync.rs`:
   si impostano sempre da GPO e da API. Se la GPO imposta la stessa chiave vale la GPO
   (`OVERWRITE_SETTINGS`); da soli non aprono nulla senza `clanto-forward-enabled`, che resta
   protetta.
-  Un server compromesso non può quindi abbassare la sicurezza degli host. Il pannello di gestione
-  dovrà usare un canale firmato, non questo.
+  La `strategy` non può quindi abbassare la sicurezza degli host. Il pannello usa i criteri
+  firmati, che invece possono farlo: le chiavi dei tenant sul server vanno protette (cifrate con
+  `MASTER_KEY`, vedi `clantodesk-server`).
 
 ## Forwarding
 

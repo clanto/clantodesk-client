@@ -17,6 +17,7 @@ import 'package:flutter_hbb/clanto/forwarding.dart';
 import 'package:flutter_hbb/clanto/trusted_controllers.dart';
 import 'package:flutter_hbb/clanto/two_factor_policy.dart';
 import 'package:flutter_hbb/clanto/protected_device.dart';
+import 'package:flutter_hbb/clanto/enrollment.dart';
 import 'package:flutter_hbb/clanto/session_report.dart';
 import 'package:flutter_hbb/clanto/settings_lock.dart';
 import 'package:flutter_hbb/clanto/temp_password_rotation.dart';
@@ -67,6 +68,7 @@ enum SettingsTabKey {
   general,
   safety,
   sessionReport,
+  server,
   network,
   display,
   account,
@@ -89,6 +91,7 @@ class DesktopSettingPage extends StatefulWidget {
         !bind.isDisableSettings() &&
         bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) != 'Y')
       SettingsTabKey.sessionReport,
+    if (clantoEnrollmentVisible()) SettingsTabKey.server,
     if (!bind.isDisableSettings() &&
         bind.mainGetBuildinOption(key: kOptionHideNetworkSetting) != 'Y')
       SettingsTabKey.network,
@@ -217,6 +220,10 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           settingTabs.add(_TabInfo(tab, 'Report sessions',
               Icons.assessment_outlined, Icons.assessment));
           break;
+        case SettingsTabKey.server:
+          settingTabs.add(_TabInfo(tab, 'clanto_enroll_tab', Icons.dns_outlined,
+              Icons.dns));
+          break;
         case SettingsTabKey.network:
           settingTabs
               .add(_TabInfo(tab, 'Network', Icons.link_outlined, Icons.link));
@@ -254,6 +261,9 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           break;
         case SettingsTabKey.sessionReport:
           children.add(const _SessionReport());
+          break;
+        case SettingsTabKey.server:
+          children.add(const _Server());
           break;
         case SettingsTabKey.network:
           children.add(const _Network());
@@ -2241,6 +2251,25 @@ class _SessionReportState extends State<_SessionReport>
                     enabled:
                         !locked && !isOptionFixed(kOptClantoSessionLogDays))
                 .marginOnly(left: _kContentHMargin),
+          ],
+        ),
+      ]),
+    ).marginOnly(bottom: _kListViewBottomMargin);
+  }
+}
+
+class _Server extends StatelessWidget {
+  const _Server();
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(children: [
+        _Card(
+          title: 'clanto_enroll_tab',
+          width: _kWideCardWidth,
+          children: [
+            const ClantoEnrollment().marginOnly(left: _kContentHMargin),
           ],
         ),
       ]),

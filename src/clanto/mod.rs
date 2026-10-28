@@ -8,10 +8,12 @@
 // corpo di una funzione upstream conflittano a ogni aggiornamento.
 
 pub mod access_hours;
+pub mod audit_queue;
 pub mod audit_sink;
 pub mod brand;
 pub mod config;
 pub mod config_import;
+pub mod enrollment;
 pub mod file_scan;
 pub mod forwarding;
 pub mod gpo;
@@ -22,6 +24,7 @@ pub mod keystore;
 pub mod linux_update;
 pub mod managed_config;
 pub mod outgoing;
+pub mod policy;
 pub mod posture;
 pub mod server_sync;
 pub mod service_update;

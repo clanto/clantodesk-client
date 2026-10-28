@@ -1033,6 +1033,10 @@ async fn handle(data: Data, stream: &mut Connection) {
                     value = Some(v);
                 } else if let Some(v) = crate::clanto::service_update::on_ipc_get(&name) {
                     value = Some(v);
+                } else if let Some(v) = crate::clanto::enrollment::on_ipc_get(&name)
+                    .or_else(|| crate::clanto::policy::on_ipc_get(&name))
+                {
+                    value = Some(v);
                 } else {
                     value = None;
                 }
@@ -1084,6 +1088,7 @@ async fn handle(data: Data, stream: &mut Connection) {
                     Config::set_unlock_pin(&value);
                 } else if let Some(ok) = crate::clanto::two_factor_store::on_ipc_set(&name, &value)
                     .or_else(|| crate::clanto::service_update::on_ipc_set(&name, &value))
+                    .or_else(|| crate::clanto::enrollment::on_ipc_set(&name, &value))
                 {
                     let ack = if ok { "Y" } else { "N" }.to_owned();
                     allow_err!(stream.send(&Data::Config((name.clone(), Some(ack)))).await);
