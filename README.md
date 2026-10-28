@@ -257,6 +257,7 @@ I principali valori iniettati durante la compilazione sono:
 | `CLANTO_SIGNING_EKU` | EKU Azure Trusted Signing richiesto a exe, DLL e aggiornamenti Windows (impostato dalla CI solo con la firma Azure configurata) |
 | `CLANTO_SIGNING_TEAM` | Team Apple richiesto al bundle macOS e agli aggiornamenti (impostato dalla CI solo con i secret di firma) |
 | `CLANTO_POSTURE_MASTER` | Secret GitHub da cui si deriva la chiave di firma della postura |
+| `CLANTO_ROOT_KEY` | Chiave pubblica radice Clanto (base64, facoltativa): firma la sostituzione d'emergenza della chiave di un tenant |
 
 Senza `CLANTO_SIGNING_EKU` e `CLANTO_SIGNING_TEAM` (build di sviluppo) le firme
 non vengono verificate.

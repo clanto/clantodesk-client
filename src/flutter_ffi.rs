@@ -3060,6 +3060,13 @@ pub fn main_set_common(_key: String, _value: String) {
         crate::clanto::enrollment::ui_qr(&_value);
         return;
     }
+    if _key == crate::clanto::device_report::IPC_DIAGNOSTICS {
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        hbb_common::allow_err!(crate::ipc::set_config(&_key, _value));
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        crate::clanto::device_report::on_ipc_set(&_key);
+        return;
+    }
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     if _key == "clanto-enroll-elevate" {
         std::thread::spawn(crate::clanto::enrollment::ui_elevate);

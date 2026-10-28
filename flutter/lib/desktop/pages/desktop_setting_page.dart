@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/clanto/about_links.dart';
+import 'package:flutter_hbb/clanto/account_entries.dart';
 import 'package:flutter_hbb/clanto/audit_settings.dart';
 import 'package:flutter_hbb/clanto/file_transfer_security.dart';
 import 'package:flutter_hbb/clanto/id_permissions.dart';
@@ -2768,7 +2769,11 @@ class _AccountState extends State<_Account> {
     return ListView(
       controller: scrollController,
       children: [
-        _Card(title: 'Account', children: [accountAction(), useInfo()]),
+        _Card(title: 'Account', children: [
+          accountAction(),
+          useInfo(),
+          clantoDesktopAccountButtons(),
+        ]),
       ],
     ).marginOnly(bottom: _kListViewBottomMargin);
   }

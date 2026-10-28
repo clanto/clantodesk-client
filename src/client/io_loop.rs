@@ -407,6 +407,7 @@ impl<T: InvokeUiSession> Remote<T> {
                 }
                 log::debug!("Exit io_loop of id={}", self.handler.get_id());
                 crate::clanto::forwarding::controller::close(self.handler.lc.read().unwrap().session_id);
+                crate::clanto::session_grant::controller_closed(&self.handler.get_id());
                 // Stop client audio server.
                 if let Some(s) = self.stop_voice_call_sender.take() {
                     s.send(()).ok();

@@ -92,6 +92,9 @@ message LoginRequest {
   bytes clanto_device_sig = 1003;
   // Riferimento ticket facoltativo (src/clanto/ticket.rs).
   string clanto_ticket = 1004;
+  // Grant di sessione firmato dal tenant, JSON {payload, signature}
+  // (src/clanto/session_grant.rs).
+  string clanto_grant = 1005;
 }
 
 message Terminal {

@@ -377,6 +377,7 @@ impl Client {
     )> {
         debug_assert!(peer == interface.get_id());
         crate::clanto::posture::prewarm();
+        crate::clanto::session_grant::prefetch(peer).await;
         interface.update_direct(None);
         interface.update_received(false);
         match Self::_start(peer, key, token, conn_type, interface.clone()).await {
@@ -3897,6 +3898,7 @@ impl LoginConfigHandler {
             lr.clanto_device_sig = sig.into();
         }
         lr.clanto_ticket = crate::clanto::ticket::for_peer(&self.id);
+        lr.clanto_grant = crate::clanto::session_grant::grant_for(&self.id);
         lr.clanto_posture = crate::clanto::posture::collect();
         lr.clanto_posture_mac = crate::clanto::posture::sign(
             &lr.clanto_posture,

@@ -313,6 +313,8 @@ enum ConnAuditPrimaryAuth {
     TemporaryPassword = 2,
     PermanentPassword = 3,
     SwitchSides = 4,
+    // Clanto: grant di sessione firmato dal tenant (src/clanto/session_grant.rs).
+    ClantoGrant = 100,
 }
 
 impl ConnAuditPrimaryAuth {
@@ -391,6 +393,7 @@ pub struct Connection {
     clanto_forward_profile: bool,
     /// Clanto: il profilo per ID concede la webcam (Fotocamera); senza profilo, sì.
     clanto_camera_profile: bool,
+    clanto_grant: Option<crate::clanto::session_grant::GrantInfo>,
     control_permissions: Option<ControlPermissions>,
     last_test_delay: Option<Instant>,
     network_delay: u32,
@@ -623,6 +626,7 @@ impl Connection {
             id_profile: String::new(),
             clanto_forward_profile: true,
             clanto_camera_profile: true,
+            clanto_grant: None,
             control_permissions,
             last_test_delay: None,
             network_delay: 0,
@@ -780,6 +784,9 @@ impl Connection {
                 Some(data) = rx_from_cm.recv() => {
                     match data {
                         ipc::Data::Authorize => {
+                            if let Some(grant) = conn.clanto_grant.as_ref() {
+                                crate::clanto::session_grant::consent(grant, "granted");
+                            }
                             conn.set_conn_audit_primary_auth(ConnAuditPrimaryAuth::Click);
                             conn.require_2fa.take();
                             if !conn.send_logon_response_and_keep_alive().await {
@@ -793,6 +800,7 @@ impl Connection {
                         ipc::Data::Close => {
                             conn.chat_unanswered = false; // seen
                             conn.file_transferred = false; //seen
+                            conn.clanto_grant_user_denied();
                             conn.remember_close_reason("Closed manually by connection manager");
                             conn.send_close_reason_no_retry("").await;
                             conn.on_close("connection manager", true).await;
@@ -1612,6 +1620,9 @@ impl Connection {
             v["session_code"] = json!(session_code);
         }
         crate::clanto::ticket::audit(&mut v, &self.lr.clanto_ticket);
+        if let Some(grant) = self.clanto_grant.as_ref() {
+            v["clanto_session_id"] = json!(grant.session_id);
+        }
         if let Some(identity) = self.controller_identity.as_ref() {
             if !identity.account_user.trim().is_empty() {
                 v["account_user"] = json!(&identity.account_user);
@@ -1991,6 +2002,10 @@ impl Connection {
         };
         self.session_code = Some(session_code);
         self.authorized = true;
+        if let Some(grant) = self.clanto_grant.as_ref() {
+            crate::clanto::session_grant::ack(&grant.session_id, true, "", &grant.nonce);
+            crate::clanto::session_grant::register(self.inner.id(), grant);
+        }
         self.unauthorized_id = None;
         // One-time means gone once it has let a peer in, not once that peer
         // leaves. This session's later logins come in on the password the
@@ -2836,6 +2851,50 @@ impl Connection {
         Self::is_permission_enabled_locally(enable_prefix_option)
     }
 
+    /// Clanto: grant di sessione e modalità di accesso del tenant. `false` se
+    /// il login è rifiutato (messaggio già inviato).
+    async fn clanto_check_grant(&mut self, lr: &LoginRequest) -> bool {
+        use crate::clanto::session_grant::{self, Decision};
+        self.clanto_grant = None;
+        match session_grant::evaluate(&lr.clanto_grant) {
+            Decision::Unmanaged => true,
+            Decision::Grant(info) => {
+                log::info!(
+                    "#{} session grant {} accepted for {}",
+                    self.inner.id(),
+                    info.session_id,
+                    info.username
+                );
+                self.clanto_grant = Some(info);
+                true
+            }
+            Decision::Refuse {
+                code,
+                message,
+                session_id,
+                nonce,
+            } => {
+                log::warn!("#{} session grant refused: {code}", self.inner.id());
+                session_grant::ack(&session_id, false, code, &nonce);
+                let text = session_grant::translated(message);
+                self.send_login_error(&text).await;
+                self.remember_close_reason(&text);
+                false
+            }
+        }
+    }
+
+    /// Clanto: chi è al PC ha rifiutato prima di autorizzare.
+    fn clanto_grant_user_denied(&self) {
+        if self.authorized {
+            return;
+        }
+        if let Some(grant) = self.clanto_grant.as_ref() {
+            crate::clanto::session_grant::consent(grant, "denied");
+            crate::clanto::session_grant::ack(&grant.session_id, false, "user_denied", &grant.nonce);
+        }
+    }
+
     async fn apply_id_permissions(&mut self) {
         use crate::clanto::id_permissions::{self, Permission as IdPermission};
 
@@ -2870,6 +2929,16 @@ impl Connection {
             self.block_input &= profile.allows(IdPermission::BlockInput);
             self.privacy_mode &= profile.allows(IdPermission::PrivacyMode);
             self.remote_printer &= profile.allows(IdPermission::RemotePrinter);
+        }
+        if let Some(grant) = self.clanto_grant.as_ref() {
+            self.keyboard &= grant.allows("control");
+            self.block_input &= grant.allows("control");
+            self.restart &= grant.allows("control");
+            self.terminal_permission &= grant.allows("control");
+            self.tunnel &= grant.allows("control");
+            self.file &= grant.allows("file");
+            self.clipboard &= grant.allows("clipboard");
+            self.recording &= grant.allows("record");
         }
         self.recording = crate::clanto::watermark::configured_recording_allowed(self.recording);
 
@@ -3281,6 +3350,9 @@ impl Connection {
             if !self.check_id_whitelist().await {
                 return false;
             }
+            if !self.clanto_check_grant(&lr).await {
+                return false;
+            }
             self.apply_id_permissions().await;
             if let Some(reason) = crate::clanto::login_block() {
                 log::warn!("Login rejected: {}", reason);
@@ -3443,8 +3515,28 @@ impl Connection {
                 crate::get_builtin_option(keys::OPTION_ALLOW_LOGON_SCREEN_PASSWORD) == "Y"
                     && is_logon();
 
-            if (password::approve_mode() == ApproveMode::Click && !allow_logon_screen_password)
-                || password::approve_mode() == ApproveMode::Both && !password::has_valid_password()
+            // Clanto: con un grant valido decide la modalità di accesso del tenant.
+            if let Some(needs) = self.clanto_grant.as_ref().map(|g| g.needs) {
+                if needs.confirm && !needs.password {
+                    self.try_start_cm(lr.my_id, lr.my_name, false);
+                    return true;
+                }
+                if !needs.password {
+                    self.set_conn_audit_primary_auth(ConnAuditPrimaryAuth::ClantoGrant);
+                    if !self.send_logon_response_and_keep_alive().await {
+                        return false;
+                    }
+                    self.try_start_cm(lr.my_id, lr.my_name, self.authorized);
+                    return true;
+                }
+            }
+            let clanto_password_required =
+                self.clanto_grant.as_ref().map_or(false, |g| g.needs.password);
+            if !clanto_password_required
+                && ((password::approve_mode() == ApproveMode::Click
+                    && !allow_logon_screen_password)
+                    || password::approve_mode() == ApproveMode::Both
+                        && !password::has_valid_password())
             {
                 #[cfg(not(any(target_os = "android", target_os = "ios")))]
                 if should_use_terminal_os_login_scope(self.terminal, &lr.os_login.username) {
@@ -5775,6 +5867,13 @@ impl Connection {
         }
         self.closed = true;
         crate::clanto::forwarding::host::close(self.inner.id());
+        crate::clanto::session_grant::unregister(self.inner.id());
+        if !self.authorized && reason == "Timeout" {
+            if let Some(grant) = self.clanto_grant.as_ref().filter(|g| g.needs.confirm) {
+                crate::clanto::session_grant::consent(grant, "timeout");
+                crate::clanto::session_grant::ack(&grant.session_id, false, "consent_denied", &grant.nonce);
+            }
+        }
         // If voice A,B -> C, and A,B has voice call
         // B disconnects, C will reset the voice call input.
         //

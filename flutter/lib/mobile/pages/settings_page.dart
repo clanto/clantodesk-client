@@ -11,6 +11,7 @@ import 'package:settings_ui/settings_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import '../../clanto/account_entries.dart';
 import '../../clanto/privacy_prompt.dart';
 import '../../clanto/inbound_security.dart';
 import '../../clanto/forwarding.dart';
@@ -745,6 +746,7 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
                   }
                 },
               ),
+              clantoMobileAccountTiles(),
             ],
           ),
         if (!disabledSettings &&

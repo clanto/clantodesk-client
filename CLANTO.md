@@ -688,6 +688,50 @@ macchina (`src/clanto/audit_queue.rs`), e ripartono ogni minuto; il server scart
 `nonce`. Oltre 10 000 eventi si scarta il più vecchio e il conteggio arriva al server con
 l'heartbeat (`clanto_audit_dropped`).
 
+### Chiavi del tenant
+
+`src/clanto/tenant_keys.rs`. La prima chiave è quella dell'iscrizione. Una rotazione ordinaria
+arriva nell'heartbeat (`clanto.tenant_key_rotation`) firmata dalla chiave corrente: la nuova
+diventa attiva e la precedente resta valida 7 giorni. In caso di compromissione la sostituzione è
+firmata dalla chiave radice Clanto (`CLANTO_ROOT_KEY` al build) e revoca subito le precedenti.
+L'elenco chiavi e revoche dei grant (`GET /device/grant-keys`) si aggiorna ogni ora e su segnale
+dell'heartbeat, ha versione crescente ed è salvato per l'uso offline. Criteri, grant, comandi e
+anello di aggiornamento si verificano con queste chiavi.
+
+### Grant di sessione e modalità di accesso
+
+`src/clanto/session_grant.rs`, contratto in `clantodesk-server/docs/api-future.md`.
+
+- **Controller**: con l'account attivo e il login fatto, prima di collegarsi chiede la sessione
+  (`POST /sessions`, al più 5 secondi) e allega il grant firmato al login (`clanto_grant`). Un PC
+  non gestito risponde `404` e si prosegue come oggi. Alla fine chiude la sessione sul server.
+- **Host iscritto**: `settings.access_mode` del criterio decide. Con le modalità ad account un
+  login senza grant valido è rifiutato; il grant deve essere firmato da una chiave fidata, per
+  questo PC, nella finestra di validità (tolleranza 120 s), mai usato prima e non revocato.
+  Password e conferma si chiedono se le vuole il grant **o** il criterio locale. I permessi del
+  grant limitano la sessione; allo scadere di `max_duration_s` la connessione si chiude.
+- Esito (`ack`) e consenso di chi è al PC vanno al server; il consenso è il clic di accettazione o
+  di chiusura nella finestra di gestione.
+
+### Comandi dal server
+
+`src/clanto/device_commands.rs`: long-poll firmato su `GET /device/commands`. Ogni comando deve
+essere firmato dal tenant, destinato a questo PC e non scaduto. Tipi: `update_now`,
+`resync_policy`, `resync_sysinfo`, `close_session`, `collect_logs`, `block_sessions` (chiude anche
+le sessioni aperte), `unblock_sessions`. Esito con `POST /device/commands/{id}/result`.
+
+### Postura, aggiornamenti assegnati, diagnostica
+
+`src/clanto/device_report.rs`: postura dell'host all'avvio, quando cambia e ogni 24 ore, senza
+nomi di prodotto; versione assegnata dall'anello di aggiornamento (firmata, scaricata dalla
+release GitHub del marchio con la verifica di firma del codice; `assigned: null` blocca gli
+aggiornamenti); log compressi solo su comando del tenant o con il tasto «Invia la diagnostica al
+gestore» nella scheda «Collega al server». Ogni criterio applicato è confermato con
+`POST /device/policy-ack` (conflitti con la GPO e chiavi scartate).
+
+Non implementato: rotazione della chiave del dispositivo (è anche la chiave dell'ID RustDesk) e
+notifiche push sul telefono (richiedono una nuova dipendenza).
+
 ### Controllo aggiornamenti
 
 Va a `<api-server>/api/clanto/v1/update` se l'api-server HTTPS è configurato, altrimenti a

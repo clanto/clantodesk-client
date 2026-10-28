@@ -161,8 +161,10 @@ pub fn clear() {
         }
     }
     set_current(None);
+    super::tenant_keys::reset();
     super::policy::clear();
     super::audit_queue::clear();
+    super::session_grant::set_sessions_blocked(false);
     log::info!("device enrollment removed");
 }
 
@@ -311,7 +313,11 @@ pub async fn post_signed(url: String, body: String) -> ResultType<String> {
 
 /// Campi Clanto dell'heartbeat.
 pub fn heartbeat_extend(v: &mut Value) {
-    v["clanto_policy_ver"] = json!(super::policy::version());
+    v["clanto_policy_ver"] = json!(super::policy::heartbeat_version());
+    if let Some(kid) = super::tenant_keys::current_kid() {
+        v["clanto_tenant_key_id"] = json!(kid);
+    }
+    v["clanto_grant_keys_ver"] = json!(super::tenant_keys::grant_keys_version());
     let dropped = super::audit_queue::dropped();
     if dropped > 0 {
         v["clanto_audit_dropped"] = json!(dropped);
@@ -323,12 +329,46 @@ pub fn heartbeat_response(clanto: Option<Value>, sent: &Value) {
     if let Some(dropped) = sent["clanto_audit_dropped"].as_u64() {
         super::audit_queue::dropped_reported(dropped);
     }
-    let policy = clanto
-        .and_then(|c| c.get("policy").cloned())
-        .filter(|p| !p.is_null())
-        .and_then(|p| serde_json::from_value::<super::policy::SignedPolicy>(p).ok());
-    if let Some(policy) = policy {
+    let Some(clanto) = clanto else {
+        return;
+    };
+    let signed = |key: &str| {
+        clanto
+            .get(key)
+            .filter(|p| !p.is_null())
+            .and_then(|p| serde_json::from_value::<super::policy::SignedPolicy>(p.clone()).ok())
+    };
+    // La rotazione prima del criterio: il criterio può essere già firmato
+    // con la chiave nuova.
+    if let Some(rotation) = signed("tenant_key_rotation") {
+        super::tenant_keys::receive_rotation(&rotation);
+    }
+    if let Some(policy) = signed("policy") {
         super::policy::receive(&policy);
+    }
+    let grant_keys_ver = clanto.get("grant_keys_ver").and_then(Value::as_u64);
+    if grant_keys_ver.map_or(false, |v| v > super::tenant_keys::grant_keys_version()) {
+        std::thread::spawn(refresh_grant_keys);
+    }
+}
+
+/// `GET /device/grant-keys`: chiavi e revoche per verificare i grant offline.
+pub fn refresh_grant_keys() {
+    let since = super::tenant_keys::grant_keys_version();
+    let Some(url) = super::device_api::url(&format!("/device/grant-keys?since={since}")) else {
+        return;
+    };
+    match super::device_api::get_json_sync(&url, Duration::from_secs(30)) {
+        Ok(v) if v.get("unchanged").and_then(Value::as_bool) == Some(true) => {}
+        Ok(v) => match serde_json::from_value::<super::tenant_keys::Signed>(v) {
+            Ok(signed) => {
+                if let Err(err) = super::tenant_keys::receive_grant_keys(&signed) {
+                    log::error!("grant keys rejected: {err}");
+                }
+            }
+            Err(err) => log::error!("grant keys unreadable: {err}"),
+        },
+        Err(err) => log::debug!("grant keys not refreshed: {err}"),
     }
 }
 
@@ -372,6 +412,7 @@ fn finish_enrollment(api: String, body: &str) -> ResultType<Enrollment> {
         api,
     };
     store(&enrollment)?;
+    super::tenant_keys::reset();
     set_current(Some(enrollment.clone()));
     log::info!("device enrolled in tenant {}", enrollment.tenant_id);
     if let Some(policy) = rsp.policy {
@@ -789,6 +830,8 @@ pub fn ui_is_admin() -> bool {
 pub fn start() {
     super::policy::apply_saved();
     super::audit_queue::start();
+    super::device_commands::start();
+    super::device_report::start();
     let overwrite = config::OVERWRITE_SETTINGS.read().unwrap().clone();
     let unenroll_requested = overwrite.get(OPT_UNENROLL).map(String::as_str) == Some("Y");
     let token = overwrite

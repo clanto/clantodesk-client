@@ -91,6 +91,9 @@ env:
   RENDEZVOUS_SERVER: "${{ secrets.RENDEZVOUS_SERVER }}"
   API_SERVER: "${{ secrets.API_SERVER }}"
   CLANTO_POSTURE_MASTER: "${{ secrets.CLANTO_POSTURE_MASTER }}"
+  # Chiave pubblica radice Clanto (base64): firma la sostituzione d'emergenza
+  # della chiave di un tenant (src/clanto/tenant_keys.rs). Facoltativa.
+  CLANTO_ROOT_KEY: "${{ secrets.CLANTO_ROOT_KEY }}"
 
 jobs:
   # Preflight: blocca i build su secret mancanti, versione incoerente,
@@ -2186,6 +2189,7 @@ jobs:
             export RS_PUB_KEY="${{ env.RS_PUB_KEY }}"
             export API_SERVER="${{ env.API_SERVER }}"
             export CLANTO_POSTURE_MASTER="${{ env.CLANTO_POSTURE_MASTER }}"
+            export CLANTO_ROOT_KEY="${{ env.CLANTO_ROOT_KEY }}"
             if [[ "${{ matrix.job.arch }}" == "aarch64" ]]; then
               export JOBS="--jobs 3"
             else

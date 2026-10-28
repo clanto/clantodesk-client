@@ -52,6 +52,10 @@ pub struct PolicySettings {
     pub enable_account: bool,
     #[serde(default)]
     pub record_upload: bool,
+    /// password | account_password | account_2fa | account_2fa_confirm |
+    /// account_2fa_password (vuoto = password).
+    #[serde(default)]
+    pub access_mode: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -101,19 +105,27 @@ pub fn merge(key: &str, gpo: Option<&str>, policy: &str) -> String {
     gpo.to_owned()
 }
 
-/// Verifica firma, tenant e dispositivo.
+/// Verifica firma (chiavi fidate del tenant, comprese le rotazioni), tenant e
+/// dispositivo.
 pub fn verify(signed: &SignedPolicy, enrollment: &enrollment::Enrollment) -> ResultType<Policy> {
-    let Some(key) = enrollment::decode_key(&enrollment.tenant_key) else {
-        bail!("invalid tenant key");
+    let payload = if enrollment::is_enrolled() {
+        super::tenant_keys::verify(signed, None)?
+    } else {
+        // Solo prima che lo stato di iscrizione sia salvato (risposta di
+        // `/enroll`) e nei test: vale la chiave dell'iscrizione.
+        let Some(key) = enrollment::decode_key(&enrollment.tenant_key) else {
+            bail!("invalid tenant key");
+        };
+        let payload = crate::decode64(&signed.payload)?;
+        let signature = crate::decode64(&signed.signature)?;
+        let Ok(signature) = sign::Signature::from_bytes(&signature) else {
+            bail!("invalid signature");
+        };
+        if !sign::verify_detached(&signature, &payload, &key) {
+            bail!("policy signature mismatch");
+        }
+        payload
     };
-    let payload = crate::decode64(&signed.payload)?;
-    let signature = crate::decode64(&signed.signature)?;
-    let Ok(signature) = sign::Signature::from_bytes(&signature) else {
-        bail!("invalid signature");
-    };
-    if !sign::verify_detached(&signature, &payload, &key) {
-        bail!("policy signature mismatch");
-    }
     let policy: Policy = serde_json::from_slice(&payload)?;
     if policy.device_id != enrollment.device_id || policy.tenant_id != enrollment.tenant_id {
         bail!("policy issued for another device");
@@ -178,7 +190,51 @@ fn apply_effective(next: HashMap<String, String>, policy: Option<Policy>) {
     state.policy = policy;
 }
 
+/// Conflitti e chiavi scartate rispetto al criterio ricevuto
+/// (`POST /device/policy-ack`).
+pub fn ack_body(policy: &Policy, baseline: &HashMap<String, String>) -> Value {
+    let mut conflicts = Vec::new();
+    let mut rejected = Vec::new();
+    let mut keys: Vec<_> = policy.options.iter().collect();
+    keys.sort();
+    for (key, value) in keys {
+        if !policy_key_allowed(key) {
+            rejected.push(json!({"key": key, "reason": "unsupported"}));
+            continue;
+        }
+        let effective = merge(key, baseline.get(key).map(String::as_str), value);
+        if &effective != value {
+            conflicts.push(json!({"key": key, "server": value, "local": effective,
+                "winner": "local", "source": "gpo"}));
+        }
+    }
+    json!({
+        "version": policy.version,
+        "applied_at": hbb_common::get_time() / 1000,
+        "conflicts": conflicts,
+        "rejected": rejected,
+        "errors": [],
+        "nonce": uuid::Uuid::new_v4().to_string(),
+    })
+}
+
+fn send_ack(body: Value) {
+    let Some(api) = enrollment::device_api() else {
+        return;
+    };
+    std::thread::spawn(move || {
+        let url = format!("{api}/api/clanto/v1/device/policy-ack");
+        if let Err(err) = super::device_api::post_json_sync(&url, &body) {
+            log::warn!("policy ack not delivered: {err}");
+        }
+    });
+}
+
 fn apply(policy: Policy) {
+    apply_and_ack(policy, false)
+}
+
+fn apply_and_ack(policy: Policy, ack: bool) {
     let baseline = applied()
         .lock()
         .ok()
@@ -194,6 +250,9 @@ fn apply(policy: Policy) {
         });
     let next = effective_options(&policy, &baseline);
     log::info!("tenant policy v{} applied ({} options)", policy.version, next.len());
+    if ack {
+        send_ack(ack_body(&policy, &baseline));
+    }
     apply_effective(next, Some(policy));
 }
 
@@ -237,8 +296,24 @@ pub fn receive(signed: &SignedPolicy) {
         }
         Err(err) => log::error!("cannot encode tenant policy: {err}"),
     }
-    apply(policy);
+    apply_and_ack(policy, true);
 }
+
+/// Comando `resync_policy`: il prossimo heartbeat chiede di nuovo il criterio.
+pub fn request_resync() {
+    FORCE_RESYNC.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Versione da dichiarare nell'heartbeat (0 dopo `resync_policy`).
+pub fn heartbeat_version() -> u64 {
+    if FORCE_RESYNC.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        0
+    } else {
+        version()
+    }
+}
+
+static FORCE_RESYNC: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Servizio, all'avvio: riapplica l'ultimo criterio verificato.
 pub fn apply_saved() {
@@ -399,6 +474,26 @@ mod tests {
                 .unwrap(),
         );
         assert!(verify(&tampered, &e).is_err());
+    }
+
+    #[test]
+    fn ack_reports_gpo_conflicts_and_unsupported_keys() {
+        let policy = Policy {
+            version: 4,
+            options: HashMap::from([
+                ("enable-clipboard".to_owned(), "Y".to_owned()),
+                ("enable-audio".to_owned(), "N".to_owned()),
+                ("api-server".to_owned(), "https://x".to_owned()),
+            ]),
+            ..Default::default()
+        };
+        let baseline = HashMap::from([("enable-clipboard".to_owned(), "N".to_owned())]);
+        let body = ack_body(&policy, &baseline);
+        assert_eq!(body["version"], json!(4));
+        assert_eq!(body["conflicts"].as_array().unwrap().len(), 1);
+        assert_eq!(body["conflicts"][0]["key"], json!("enable-clipboard"));
+        assert_eq!(body["conflicts"][0]["local"], json!("N"));
+        assert_eq!(body["rejected"][0]["key"], json!("api-server"));
     }
 
     #[test]

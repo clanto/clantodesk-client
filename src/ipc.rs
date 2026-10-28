@@ -1102,6 +1102,7 @@ async fn handle(data: Data, stream: &mut Connection) {
                     .or_else(|| {
                         crate::clanto::enrollment::on_ipc_set(&name, &value, ipc_peer_is_root(stream))
                     })
+                    .or_else(|| crate::clanto::device_report::on_ipc_set(&name))
                 {
                     let ack = if ok { "Y" } else { "N" }.to_owned();
                     allow_err!(stream.send(&Data::Config((name.clone(), Some(ack)))).await);

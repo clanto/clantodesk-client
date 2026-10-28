@@ -16,6 +16,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 const String _kStateKey = 'clanto-enrollment';
 const String _kQrKey = 'clanto-enroll-qr';
+const String _kDiagnosticsKey = 'clanto-diagnostics-send';
 
 class ClantoEnrollmentState {
   final bool enrolled;
@@ -102,6 +103,7 @@ class _ClantoEnrollmentState extends State<ClantoEnrollment> {
   ClantoEnrollmentState _state = ClantoEnrollmentState.read();
   final bool _elevatedUi = clantoIsAdmin();
   bool _elevating = false;
+  bool _diagnosticsSent = false;
   Timer? _timer;
 
   bool get _admin => _elevatedUi || _state.adminUnlocked;
@@ -152,6 +154,19 @@ class _ClantoEnrollmentState extends State<ClantoEnrollment> {
         Text('${translate('clanto_enroll_since')} ${_date(_state.enrolledAt)}')
             .marginOnly(bottom: 8),
       _text('clanto_enroll_managed_note'),
+      const Divider(),
+      _text('clanto_diagnostics_note'),
+      OutlinedButton.icon(
+        icon: const Icon(Icons.bug_report_outlined),
+        label: Text(translate('clanto_diagnostics_send')),
+        onPressed: _diagnosticsSent
+            ? null
+            : () {
+                bind.mainSetCommon(key: _kDiagnosticsKey, value: 'Y');
+                setState(() => _diagnosticsSent = true);
+                showToast(translate('clanto_diagnostics_sent'));
+              },
+      ),
     ]);
   }
 
