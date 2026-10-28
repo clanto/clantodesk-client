@@ -229,14 +229,20 @@ fn check_update(manually: bool) -> ResultType<()> {
                 );
             };
             format!(
-                "{}/clantodesk-{}-{}.{}",
+                "{}/{}-{}-{}.{}",
                 download_base_url,
+                crate::clanto::brand::FILE_PREFIX,
                 version,
                 arch,
                 if update_msi { "msi" } else { "exe" }
             )
         } else {
-            format!("{}/clantodesk-{}-x86-sciter.exe", download_base_url, version)
+            format!(
+                "{}/{}-{}-x86-sciter.exe",
+                download_base_url,
+                crate::clanto::brand::FILE_PREFIX,
+                version
+            )
         };
         #[cfg(not(target_os = "windows"))]
         let download_url = download_base_url.clone();
@@ -397,9 +403,9 @@ fn update_new_version(update_msi: bool, version: &str, file_path: &PathBuf) {
     }
 }
 
-// Release di ClantoDesk: la stessa sorgente restituita da clantodesk.php.
+// Release di ClantoDesk o del partner: la stessa sorgente restituita da clantodesk.php.
 const UPDATE_REPO_OWNER: &str = "clanto";
-const UPDATE_REPO_NAME: &str = "clantodesk-client";
+const UPDATE_REPO_NAME: &str = crate::clanto::brand::UPDATE_REPO;
 
 pub fn get_update_download_file_from_url(url: &str) -> Option<PathBuf> {
     let parsed = url::Url::parse(url).ok()?;
@@ -650,7 +656,13 @@ fn check_update_as_root_(manual: bool) -> ResultType<bool> {
     let download_url = update_url.replace("tag", "download");
     let version = download_url.split('/').last().unwrap_or_default().to_string();
     let arch = if std::env::consts::ARCH == "aarch64" { "aarch64" } else { "x86_64" };
-    let dmg_url = format!("{}/clantodesk-{}-{}.dmg", download_url, version, arch);
+    let dmg_url = format!(
+        "{}/{}-{}-{}.dmg",
+        download_url,
+        crate::clanto::brand::FILE_PREFIX,
+        version,
+        arch
+    );
     log::info!("[root-update] New version: {}, downloading from {}", version, dmg_url);
     // Validate URL against GitHub release allowlist before downloading as root
     let Some(file_path_validated) = get_update_download_file_from_url(&dmg_url) else {
@@ -728,15 +740,24 @@ mod tests {
 
     #[test]
     fn update_download_file_accepts_clanto_release_asset_urls() {
-        let file = get_download_file_from_url(
-            "https://github.com/clanto/clantodesk-client/releases/download/1.4.0/clantodesk-1.4.0-x86_64.dmg",
-        )
+        // Repo e nomi del brand della build: ClantoDesk senza variabili di brand.
+        let (repo, prefix) = (
+            crate::clanto::brand::UPDATE_REPO,
+            crate::clanto::brand::FILE_PREFIX,
+        );
+        let name = format!("{prefix}-1.4.0-x86_64.dmg");
+        let file = get_download_file_from_url(&format!(
+            "https://github.com/clanto/{repo}/releases/download/1.4.0/{name}"
+        ))
         .expect("valid Clanto release asset URL");
 
-        assert_eq!(
-            file.file_name().and_then(|name| name.to_str()),
-            Some("clantodesk-1.4.0-x86_64.dmg")
-        );
+        assert_eq!(file.file_name().and_then(|n| n.to_str()), Some(name.as_str()));
+        if crate::clanto::brand::BRANDED {
+            assert!(get_download_file_from_url(
+                "https://github.com/clanto/clantodesk-client/releases/download/1/clantodesk.exe"
+            )
+            .is_none());
+        }
     }
 
     #[test]

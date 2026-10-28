@@ -254,6 +254,7 @@ pub fn translate_locale(name: String, locale: &str) -> String {
             if s.contains("RustDesk")
                 && !name.starts_with("upgrade_rustdesk_server_pro")
                 && name != "powered_by_me"
+                && name != "clanto_uninstall_official_rustdesk"
             {
                 let app_name = crate::get_app_name();
                 if !app_name.contains("RustDesk") {
@@ -277,7 +278,7 @@ pub fn translate_locale(name: String, locale: &str) -> String {
                 }
             }
         }
-        s
+        crate::clanto::brand::localize(&name, s)
     };
     if let Some(v) = m.get(&name as &str) {
         if !v.is_empty() {

@@ -9,6 +9,7 @@
 
 pub mod access_hours;
 pub mod audit_sink;
+pub mod brand;
 pub mod config;
 pub mod config_import;
 pub mod file_scan;

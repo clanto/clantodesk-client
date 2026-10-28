@@ -1147,6 +1147,34 @@ Identità di firma fissata al build e verificata con API native (niente PowerShe
 - **Limite noto:** se il servizio non risponde, la UI desktop mostra comunque l'opzione cambiata
   (comportamento upstream di `ipc::set_options`).
 
+## Build per i partner
+
+Livello 1: solo Windows e macOS, firmati da Clanto, cambia solo ciò che si vede. Il repo del
+partner `github.com/clanto/<partner>` contiene `brand.json` e `icons/` (modello e regole in
+`res/partner-template/`); il workflow «Partner build» (`partner-build.yml`, input `partner` e
+`upload-tag`) chiama `flutter-build.yml` con `targets: desktop` e pubblica la release nel repo
+del partner. Serve il secret `CLANTO_PARTNER_TOKEN`: token con lettura e scrittura dei contenuti
+dei repo partner.
+
+- **Cosa cambia:** `.github/scripts/apply-brand.py` copia le icone, cambia `FileDescription`
+  (Task Manager, anche del packer portable) e `CFBundleName`/`CFBundleDisplayName` (barra dei
+  menu) e passa al build `CLANTO_BRAND_*`, letti da `src/clanto/brand.rs`. Ne dipendono titolo
+  delle finestre, nome in alto, tooltip del tray, link «Sito web» e «Assistenza», nomi degli
+  asset (`<file-prefix>-<versione>-...`). Nei testi tradotti `lang.rs` sostituisce «ClantoDesk»
+  con il nome e «Clanto» con l'azienda, tranne i nomi di sistema («ClantoDesk Camera»,
+  «ClantoDesk Input») e il firmatario in `clanto_tampered_error`.
+- **Cosa resta ClantoDesk:** `APP_NAME` e quindi servizio, cartelle, IPC, `clantodesk.exe`,
+  `ClantoDesk.app`, bundle id, voce in «App installate», editore della firma, privacy,
+  copyright. Una build partner e ClantoDesk sullo stesso PC si sostituiscono a vicenda.
+- **Finestra principale (Windows):** il runner la ritrova dal titolo per l'istanza unica e i
+  link `clantodesk://`; `get_rustdesk_app_name` e `core_main` usano il nome del brand, uguale
+  al titolo impostato da Flutter.
+- **Aggiornamenti:** il client chiama `clantodesk.php?repo=<partner>`, che risponde con lo
+  stesso `$LATEST_TAG` nel repo del partner; l'allowlist dei download accetta solo quel repo.
+  Prima di alzare `$LATEST_TAG` vanno pubblicate le release dei partner con lo stesso tag,
+  altrimenti il loro download fallisce e riprova più tardi. Windows 32 bit (Sciter) non ha
+  build partner.
+
 ## Disinstallazione (Windows)
 
 `clantodesk.exe --uninstall` (Programmi e funzionalità, collegamento «Disinstalla» anche nell'MSI)

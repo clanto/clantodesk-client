@@ -1,0 +1,26 @@
+name: Partner build (Windows + macOS)
+
+# Build con il brand di un partner (CLANTO.md, «Build per i partner»): legge
+# brand.json e icons/ da github.com/clanto/<partner>, firma con i certificati
+# Clanto e pubblica la release nel repo del partner con il tag indicato.
+on:
+  workflow_dispatch:
+    inputs:
+      partner:
+        description: "Repo del partner in github.com/clanto (es. acmedesk)"
+        type: string
+        required: true
+      upload-tag:
+        description: "Tag della release, uguale a quello di ClantoDesk (es. 1.5.1)"
+        type: string
+        required: true
+
+jobs:
+  run-partner:
+    uses: ./.github/workflows/flutter-build.yml
+    secrets: inherit
+    with:
+      upload-artifact: true
+      upload-tag: ${{ inputs.upload-tag }}
+      targets: desktop
+      partner: ${{ inputs.partner }}

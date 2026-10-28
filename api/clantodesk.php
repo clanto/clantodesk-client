@@ -289,14 +289,26 @@ $is_api = (strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false) 
 
 if ($is_api) {
     header('Content-Type: application/json');
+    // Build dei partner (`?repo=<repo>`): stessa versione, release nel repo
+    // github.com/clanto/<repo>. Nessun elenco da mantenere.
+    $api_repo_url = $REPO_URL;
+    $partner_repo = $_GET['repo'] ?? '';
+    if ($partner_repo !== '') {
+        if (!is_string($partner_repo) || !preg_match('/^[a-z0-9][a-z0-9-]{0,62}$/', $partner_repo)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'invalid repo']);
+            exit;
+        }
+        $api_repo_url = "https://github.com/clanto/{$partner_repo}";
+    }
     if (!$UPDATE_ENABLED) {
-        echo json_encode(['url' => "{$REPO_URL}/releases/tag/0.0.0"]);
+        echo json_encode(['url' => "{$api_repo_url}/releases/tag/0.0.0"]);
         exit;
     }
     
     // Per il client, restituiamo l'URL della release (RustDesk logic)
     echo json_encode([
-        'url' => $RELEASE_URL,
+        'url' => "{$api_repo_url}/releases/tag/{$LATEST_TAG}",
         'version' => $LATEST_TAG
     ]);
     exit;

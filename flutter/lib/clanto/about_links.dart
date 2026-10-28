@@ -7,6 +7,7 @@
 // ogni release upstream: nel file upstream resta una sola riga di aggancio.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_hbb/clanto/brand.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -23,10 +24,12 @@ List<Widget> clantoAboutLinks(TextStyle linkStyle) {
         style: linkStyle,
       ).marginSymmetric(vertical: 4.0));
 
+  final brand = ClantoBrand.current;
   return [
     link('https://supporto.clanto.it/documentazione/privacy-clantodesk/',
         translate('Privacy Statement')),
-    link('https://clanto.it', translate('Website')),
+    link(brand.websiteUrl, translate('Website')),
+    if (brand.branded) link(brand.supportUrl, translate('Support')),
     link('https://github.com/clanto/clantodesk-client',
         'Source code · AGPL-3.0-only'),
     link('https://www.gnu.org/licenses/agpl-3.0.html', 'GNU AGPL v3 license'),

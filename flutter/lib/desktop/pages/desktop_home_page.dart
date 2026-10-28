@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_hbb/clanto/brand.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/animated_rotation_widget.dart';
 import 'package:flutter_hbb/common/widgets/custom_password.dart';
@@ -534,8 +535,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             () async {},
             marginTop: LinuxCards.isEmpty ? 20.0 : 5.0,
             help: 'Help',
-            link:
-                'https://supporto.clanto.it/clantodesk',
+            link: ClantoBrand.current.supportUrl,
             closeButton: true,
             closeOption: keyShowSelinuxHelpTip,
           ));
@@ -546,13 +546,13 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             "Warning", "wayland_experiment_tip", "", () async {},
             marginTop: LinuxCards.isEmpty ? 20.0 : 5.0,
             help: 'Help',
-            link: 'https://supporto.clanto.it/clantodesk'));
+            link: ClantoBrand.current.supportUrl));
       } else if (bind.mainIsLoginWayland()) {
         LinuxCards.add(buildInstallCard("Warning",
             "Login screen using Wayland is not supported", "", () async {},
             marginTop: LinuxCards.isEmpty ? 20.0 : 5.0,
             help: 'Help',
-            link: 'https://supporto.clanto.it/clantodesk'));
+            link: ClantoBrand.current.supportUrl));
       }
       if (LinuxCards.isNotEmpty) {
         return Column(

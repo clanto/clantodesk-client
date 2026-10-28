@@ -2944,6 +2944,9 @@ pub fn main_get_printer_names() -> SyncReturn<String> {
 }
 
 pub fn main_get_common(key: String) -> String {
+    if key == "clanto-brand" {
+        return crate::clanto::brand::to_json();
+    }
     if key == "clanto-device-key" {
         return crate::clanto::trusted_controllers::device_public_key().unwrap_or_default();
     }
@@ -3005,12 +3008,12 @@ pub fn main_get_common(key: String) -> String {
                 crate::common::is_custom_client(),
             ) {
                 (Ok(true), false) => match crate::platform::windows::release_arch_suffix() {
-                    Some(arch) => format!("clantodesk-{_version}-{arch}.msi"),
+                    Some(arch) => format!("{}-{_version}-{arch}.msi", crate::clanto::brand::FILE_PREFIX),
                     None => "error:unsupported".to_owned(),
                 },
                 (Ok(true), true) | (Ok(false), _) => {
                     match crate::platform::windows::release_arch_suffix() {
-                        Some(arch) => format!("clantodesk-{_version}-{arch}.exe"),
+                        Some(arch) => format!("{}-{_version}-{arch}.exe", crate::clanto::brand::FILE_PREFIX),
                         None => "error:unsupported".to_owned(),
                     }
                 }
@@ -3022,9 +3025,9 @@ pub fn main_get_common(key: String) -> String {
             #[cfg(target_os = "macos")]
             {
                 return if cfg!(target_arch = "x86_64") {
-                    format!("clantodesk-{_version}-x86_64.dmg")
+                    format!("{}-{_version}-x86_64.dmg", crate::clanto::brand::FILE_PREFIX)
                 } else if cfg!(target_arch = "aarch64") {
-                    format!("clantodesk-{_version}-aarch64.dmg")
+                    format!("{}-{_version}-aarch64.dmg", crate::clanto::brand::FILE_PREFIX)
                 } else {
                     "error:unsupported".to_owned()
                 };

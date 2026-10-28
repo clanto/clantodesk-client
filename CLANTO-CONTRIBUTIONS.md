@@ -26,6 +26,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 
 - `src/clanto/access_hours.rs`
 - `src/clanto/audit_sink.rs`
+- `src/clanto/brand.rs`
 - `src/clanto/config.rs`
 - `src/clanto/config_import.rs`
 - `src/clanto/file_scan.rs`
@@ -67,6 +68,7 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `src/clanto/watermark.rs`
 - `src/platform/linux_gtk_clipboard.rs`
 - `flutter/lib/clanto/about_links.dart`
+- `flutter/lib/clanto/brand.dart`
 - `flutter/lib/clanto/access_hours.dart`
 - `flutter/lib/clanto/accessibility_disclosure.dart`
 - `flutter/lib/clanto/android_file_transfer.dart`
@@ -113,6 +115,8 @@ I file interamente Clanto riportano l'identificatore SPDX
 - `libs/clanto-win/Cargo.toml`, `src/lib.rs`, `src/trust.rs`, `src/posture.rs`
 - `flutter/macos/CameraExtension/main.swift`, `Info.plist`, `CameraExtension.entitlements`
 - `.github/scripts/build-macos-camera-extension.sh`
+- `.github/scripts/apply-brand.py`, `.github/workflows/partner-build.yml`
+- `res/partner-template/README.md`, `brand.json`
 - `docker/Dockerfile.android`, `docker/android-build.sh`, `docker/android-inner.sh`
 - `docker/e2e/e2e_harness.rs`
 - `api/clantodesk.php`, `api/clantodesk-posture.php`
