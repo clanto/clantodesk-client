@@ -5,4 +5,3 @@ Versione 1.5.0
 - Se il PC remoto lo richiede, la sessione mostra una filigrana con tecnico, ora e codice sessione.
 - Chiede se attivare la modalità privacy all'ingresso in un PC; la richiesta si può disattivare.
 - Menu Forwarding rete e Forwarding webcam: inoltro di porte nei due sensi e fotocamera dell'iPhone come webcam sul PC remoto.
-- Con un account ClantoDesk: dispositivi gestiti, approvazioni di accesso e collegamento di un PC con il suo QR.

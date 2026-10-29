@@ -5,4 +5,3 @@ Version 1.5.0
 - When the remote PC requires it, the session shows a watermark with technician, time and session code.
 - Asks whether to enable privacy mode when connecting to a PC; it can be turned off.
 - Network forwarding and Webcam forwarding menus: ports in both directions and the iPhone camera as a webcam on the remote PC.
-- With a ClantoDesk account: managed devices, access approvals and linking a PC with its QR code.
