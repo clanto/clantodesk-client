@@ -400,7 +400,9 @@ pub fn set_sessions_blocked(blocked: bool) -> bool {
             .lock()
             .map(|m| m.keys().copied().collect())
             .unwrap_or_default();
+        #[allow(unused_mut)]
         let mut conns = all;
+        #[cfg(not(target_os = "ios"))]
         conns.extend(crate::server::AUTHED_CONNS.lock().unwrap().iter().map(|c| c.conn_id));
         conns.sort_unstable();
         conns.dedup();
