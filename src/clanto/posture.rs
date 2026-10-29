@@ -244,7 +244,7 @@ fn collect_and_store() -> HashMap<String, String> {
 fn disk_cache_mac(at: u64, posture: &HashMap<String, String>) -> Option<String> {
     let key = release_key()?;
     let message = format!(
-        "clanto-posture-cache-v1
+        "clanto-posture-cache-v2
 {}",
         canonical_message(posture, "", &at.to_string(), crate::VERSION)
     );
@@ -464,27 +464,38 @@ fn platform_name() -> String {
 }
 
 /// Windows: API native (`libs/clanto-win`), niente PowerShell. In un thread a
-/// parte per COM; se supera la scadenza si usa quello che c'è (nulla).
+/// parte per COM; le voci arrivano a passi, e alla scadenza si tiene quello
+/// che è già arrivato.
 #[cfg(target_os = "windows")]
 fn collect_platform(posture: &mut HashMap<String, String>, deadline: Instant) {
     let (tx, rx) = std::sync::mpsc::channel();
     let spawned = std::thread::Builder::new()
         .name("clanto-posture".to_owned())
         .spawn(move || {
-            let _ = tx.send(clanto_win::posture::collect());
+            clanto_win::posture::collect_each(|pairs| {
+                let _ = tx.send(pairs);
+            });
         });
     if spawned.is_err() {
         return;
     }
-    let timeout = deadline.saturating_duration_since(Instant::now());
-    if let Ok(pairs) = rx.recv_timeout(timeout) {
-        let output = pairs
-            .iter()
-            .map(|(key, value)| format!("{key}={value}"))
-            .collect::<Vec<_>>()
-            .join("
-");
-        apply_lines(posture, &output);
+    loop {
+        let timeout = deadline.saturating_duration_since(Instant::now());
+        match rx.recv_timeout(timeout) {
+            Ok(pairs) => {
+                let output = pairs
+                    .iter()
+                    .map(|(key, value)| format!("{key}={value}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                apply_lines(posture, &output);
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                hbb_common::log::warn!("posture collection incomplete after {COLLECT_TIMEOUT:?}");
+                return;
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
+        }
     }
 }
 

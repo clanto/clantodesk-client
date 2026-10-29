@@ -3,8 +3,9 @@
 
 //! Postura del dispositivo Windows con API native, al posto dello script
 //! PowerShell: stesse chiavi (src/clanto/posture.rs), una frazione del tempo.
-//! Registro per quasi tutto; WMI solo per Security Center (antivirus,
-//! firewall), BitLocker e VBS; TBS per il TPM; IP Helper e WLAN per la rete.
+//! Registro per quasi tutto; API di Windows Security Center per antivirus e
+//! firewall; proprietà della shell per BitLocker (senza privilegi); WMI solo
+//! per VBS; TBS per il TPM; IP Helper e WLAN per la rete.
 //! Una voce che non si riesce a leggere manca (resta `unknown`).
 
 use std::ffi::c_void;
@@ -27,6 +28,10 @@ use windows::{
                 EOAC_NONE, RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE,
             },
             Registry::{RegGetValueW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_BINARY, RRF_RT_REG_DWORD, RRF_RT_REG_SZ},
+            SecurityCenter::{
+                IWSCProductList, WSCProductList, WSC_SECURITY_PRODUCT_STATE_ON, WSC_SECURITY_PRODUCT_UP_TO_DATE,
+                WSC_SECURITY_PROVIDER, WSC_SECURITY_PROVIDER_ANTIVIRUS, WSC_SECURITY_PROVIDER_FIREWALL,
+            },
             TpmBaseServices::{Tbsi_GetDeviceInfo, TPM_DEVICE_INFO},
             Variant::VARIANT,
             Wmi::{
@@ -307,18 +312,6 @@ fn variant_i64(value: &VARIANT) -> Option<i64> {
     i32::try_from(value).ok().map(i64::from).or_else(|| u32::try_from(value).ok().map(i64::from))
 }
 
-fn variant_string(value: &VARIANT) -> Option<String> {
-    use windows::Win32::System::Variant::VT_BSTR;
-    unsafe {
-        let inner = &value.Anonymous.Anonymous;
-        if inner.vt != VT_BSTR {
-            return None;
-        }
-        let text: &BSTR = &inner.Anonymous.bstrVal;
-        Some(text.to_string())
-    }
-}
-
 /// Righe di una query WMI: per ogni oggetto, le proprietà richieste.
 fn wmi_query(namespace: &str, query: &str, props: &[&str]) -> Option<Vec<Vec<VARIANT>>> {
     unsafe {
@@ -368,23 +361,44 @@ fn wmi_query(namespace: &str, query: &str, props: &[&str]) -> Option<Vec<Vec<VAR
     }
 }
 
-fn security_center(out: &mut Vec<(String, String)>) {
-    if let Some(products) = wmi_query(r"ROOT\SecurityCenter2", "SELECT displayName, productState FROM AntivirusProduct", &[
-        "displayName",
-        "productState",
-    ]) {
-        if !products.is_empty() {
-            let state = |row: &Vec<VARIANT>| variant_i64(&row[1]).unwrap_or(0);
-            let active: Vec<_> = products.iter().filter(|row| state(row) & 0x1000 != 0).collect();
-            out.push(("av_enabled".into(), flag(!active.is_empty())));
-            out.push(("av_uptodate".into(), flag(active.iter().any(|row| state(row) & 0x10 == 0))));
-            let names: Vec<String> = products.iter().filter_map(|row| variant_string(&row[0])).collect();
-            out.push(("av_products".into(), names.join("|")));
+struct WscProduct {
+    name: String,
+    on: bool,
+    up_to_date: bool,
+}
+
+/// Prodotti registrati in Windows Security Center (`IWSCProductList`, Windows
+/// 8+, senza privilegi). `None` senza Security Center (Windows Server).
+fn wsc_products(provider: WSC_SECURITY_PROVIDER) -> Option<Vec<WscProduct>> {
+    unsafe {
+        let list: IWSCProductList = CoCreateInstance(&WSCProductList, None, CLSCTX_INPROC_SERVER).ok()?;
+        list.Initialize(provider).ok()?;
+        let count = list.Count().ok()?.max(0) as u32;
+        let mut products = Vec::new();
+        for index in 0..count {
+            let Ok(product) = list.get_Item(index) else {
+                continue;
+            };
+            products.push(WscProduct {
+                name: product.ProductName().map(|n| n.to_string()).unwrap_or_default(),
+                on: product.ProductState().ok() == Some(WSC_SECURITY_PRODUCT_STATE_ON),
+                up_to_date: product.SignatureStatus().ok() == Some(WSC_SECURITY_PRODUCT_UP_TO_DATE),
+            });
         }
+        Some(products)
     }
-    let firewall_products = wmi_query(r"ROOT\SecurityCenter2", "SELECT productState FROM FirewallProduct", &["productState"])
-        .filter(|rows| !rows.is_empty())
-        .map(|rows| rows.iter().any(|row| variant_i64(&row[0]).unwrap_or(0) & 0x1000 != 0));
+}
+
+fn security_center(out: &mut Vec<(String, String)>) {
+    if let Some(products) = wsc_products(WSC_SECURITY_PROVIDER_ANTIVIRUS).filter(|p| !p.is_empty()) {
+        out.push(("av_enabled".into(), flag(products.iter().any(|p| p.on))));
+        out.push(("av_uptodate".into(), flag(products.iter().any(|p| p.on && p.up_to_date))));
+        let names: Vec<&str> = products.iter().map(|p| p.name.as_str()).filter(|n| !n.is_empty()).collect();
+        out.push(("av_products".into(), names.join("|")));
+    }
+    let firewall_products = wsc_products(WSC_SECURITY_PROVIDER_FIREWALL)
+        .filter(|products| !products.is_empty())
+        .map(|products| products.iter().any(|p| p.on));
     let public = public_firewall();
     if let Some(public) = public {
         out.push(("firewall_public".into(), flag(public)));
@@ -397,18 +411,39 @@ fn security_center(out: &mut Vec<(String, String)>) {
     }
 }
 
-fn bitlocker_and_vbs(out: &mut Vec<(String, String)>) {
+/// Protezione BitLocker del disco di sistema dalla proprietà della shell
+/// `System.Volume.BitLockerProtection`: leggibile senza privilegi, mentre
+/// `Win32_EncryptableVolume` (WMI) li richiede e senza impiega secondi a
+/// rifiutare. 1 = attiva, 2 = disattivata; gli altri stati restano `unknown`.
+fn bitlocker(out: &mut Vec<(String, String)>) {
+    use windows::Win32::{
+        Foundation::PROPERTYKEY,
+        UI::Shell::PropertiesSystem::{IPropertyStore, PSGetPropertyKeyFromName, SHGetPropertyStoreFromParsingName, GPS_DEFAULT},
+    };
     let drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_owned());
-    // Richiede privilegi di amministratore, come Get-BitLockerVolume.
-    if let Some(rows) = wmi_query(
-        r"ROOT\CIMV2\Security\MicrosoftVolumeEncryption",
-        &format!("SELECT ProtectionStatus FROM Win32_EncryptableVolume WHERE DriveLetter = '{drive}'"),
-        &["ProtectionStatus"],
-    ) {
-        if let Some(status) = rows.first().and_then(|row| variant_i64(&row[0])) {
-            out.push(("disk_encrypted".into(), flag(status == 1)));
+    let status = unsafe {
+        let mut key = PROPERTYKEY::default();
+        if PSGetPropertyKeyFromName(&HSTRING::from("System.Volume.BitLockerProtection"), &mut key).is_err() {
+            return;
         }
+        let Ok(store) =
+            SHGetPropertyStoreFromParsingName::<_, _, IPropertyStore>(&HSTRING::from(format!(r"{drive}\")), None, GPS_DEFAULT)
+        else {
+            return;
+        };
+        let Ok(value) = store.GetValue(&key) else {
+            return;
+        };
+        i32::try_from(&value).ok()
+    };
+    match status {
+        Some(1) => out.push(("disk_encrypted".into(), flag(true))),
+        Some(2) => out.push(("disk_encrypted".into(), flag(false))),
+        _ => {}
     }
+}
+
+fn vbs(out: &mut Vec<(String, String)>) {
     if let Some(rows) = wmi_query(
         r"ROOT\Microsoft\Windows\DeviceGuard",
         "SELECT VirtualizationBasedSecurityStatus FROM Win32_DeviceGuard",
@@ -532,20 +567,27 @@ fn auth_name(algorithm: DOT11_AUTH_ALGORITHM) -> Option<&'static str> {
 
 /// Raccolta completa: coppie chiave/valore come le righe dello script
 /// PowerShell. Va chiamata da un thread che può inizializzare COM (MTA).
-pub fn collect() -> Vec<(String, String)> {
-    let mut out = Vec::new();
+/// Raccolta a passi: `emit` riceve le voci di ogni passo appena pronte, così
+/// un passo lento non fa perdere quelle già lette a chi ha una scadenza.
+pub fn collect_each(mut emit: impl FnMut(Vec<(String, String)>)) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    os(&mut out);
-    registry_flags(&mut out);
-    updates(&mut out);
-    tpm(&mut out);
-    security_center(&mut out);
-    bitlocker_and_vbs(&mut out);
-    network(&mut out);
-    wifi(&mut out);
-    out
+    let steps: [fn(&mut Vec<(String, String)>); 9] =
+        [os, registry_flags, updates, tpm, security_center, bitlocker, vbs, network, wifi];
+    for step in steps {
+        let mut out = Vec::new();
+        step(&mut out);
+        if !out.is_empty() {
+            emit(out);
+        }
+    }
+}
+
+pub fn collect() -> Vec<(String, String)> {
+    let mut all = Vec::new();
+    collect_each(|out| all.extend(out));
+    all
 }
 
 #[cfg(test)]
