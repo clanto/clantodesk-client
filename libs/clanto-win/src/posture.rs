@@ -200,18 +200,19 @@ fn registry_flags(out: &mut Vec<(String, String)>) {
         let vm = ["Virtual", "VMware", "VirtualBox", "KVM", "QEMU", "Xen"].iter().any(|m| text.contains(m));
         out.push(("is_vm".into(), flag(vm)));
     }
-    if let Some(bytes) = reg_binary(
+}
+
+/// Età delle firme di Microsoft Defender. Vale solo se Defender è l'antivirus
+/// attivo: con un altro antivirus Defender è spento e le sue firme invecchiano
+/// senza significato; lì basta `av_uptodate` di Security Center.
+fn defender_signature_days() -> Option<u64> {
+    let bytes = reg_binary(
         HKEY_LOCAL_MACHINE,
         r"SOFTWARE\Microsoft\Windows Defender\Signature Updates",
         "SignaturesLastUpdated",
-    ) {
-        if bytes.len() >= 8 {
-            let filetime = u64::from_le_bytes(bytes[..8].try_into().unwrap_or_default());
-            if let Some(days) = days_since_filetime(filetime) {
-                out.push(("av_signature_days".into(), days.to_string()));
-            }
-        }
-    }
+    )?;
+    let filetime = u64::from_le_bytes(bytes.get(..8)?.try_into().ok()?);
+    days_since_filetime(filetime)
 }
 
 /// Firewall del profilo pubblico: la policy di dominio prevale sulla
@@ -390,11 +391,21 @@ fn wsc_products(provider: WSC_SECURITY_PROVIDER) -> Option<Vec<WscProduct>> {
 }
 
 fn security_center(out: &mut Vec<(String, String)>) {
-    if let Some(products) = wsc_products(WSC_SECURITY_PROVIDER_ANTIVIRUS).filter(|p| !p.is_empty()) {
+    let products = wsc_products(WSC_SECURITY_PROVIDER_ANTIVIRUS).filter(|p| !p.is_empty());
+    if let Some(products) = &products {
         out.push(("av_enabled".into(), flag(products.iter().any(|p| p.on))));
         out.push(("av_uptodate".into(), flag(products.iter().any(|p| p.on && p.up_to_date))));
         let names: Vec<&str> = products.iter().map(|p| p.name.as_str()).filter(|n| !n.is_empty()).collect();
         out.push(("av_products".into(), names.join("|")));
+    }
+    // Senza Security Center (Windows Server) Defender è l'unica fonte.
+    let defender_active = products
+        .as_ref()
+        .map_or(true, |products| products.iter().any(|p| p.on && p.name.contains("Defender")));
+    if defender_active {
+        if let Some(days) = defender_signature_days() {
+            out.push(("av_signature_days".into(), days.to_string()));
+        }
     }
     let firewall_products = wsc_products(WSC_SECURITY_PROVIDER_FIREWALL)
         .filter(|products| !products.is_empty())
