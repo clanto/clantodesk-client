@@ -4935,7 +4935,7 @@ pub trait Interface: Send + Clone + 'static + Sized {
 
     fn get_switch_code(&self) -> String {
         match self.get_lch().read().unwrap().switch_uuid.clone() {
-            Some(u) if !u.is_empty() => {
+            Some(u) if !u.is_empty() && crate::clanto::enrollment::switch_grants_enabled() => {
                 use hbb_common::sodiumoxide::crypto::hash::sha256;
                 crate::encode64(sha256::hash(u.as_bytes()).0)
             }

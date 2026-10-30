@@ -206,6 +206,13 @@ pub fn device_api() -> Option<String> {
     (enrolled.api == api).then_some(api)
 }
 
+/// Lo switch_code verso hbbs ha senso solo se il grant è registrato, cioè da
+/// iscritto: senza, hbbs non lo conosce e il client aspetterebbe uno scambio di
+/// chiavi che un hbbs senza grant non avvia, fallendo il cambio lato dopo 18 s.
+pub fn switch_grants_enabled() -> bool {
+    device_api().is_some()
+}
+
 fn now_secs() -> i64 {
     hbb_common::get_time() / 1000 + CLOCK_OFFSET.load(Ordering::Relaxed)
 }
