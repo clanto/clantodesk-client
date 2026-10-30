@@ -5,7 +5,7 @@
 
 use base::{
     fs::{self, CompletedDownload, TransferJob},
-    message_proto::{file_action, FileAction},
+    message_proto::{cliprdr, file_action, Cliprdr, CliprdrServerFormatDataResponse, FileAction},
 };
 use hbb_common::{
     anyhow::anyhow,
@@ -455,6 +455,78 @@ pub fn reject_file_action(action: &FileAction, conn_id: i32) -> Option<PolicyRej
         }
         _ => None,
     }
+}
+
+const CLIP_PDU_HEADER: usize = 4;
+const CLIP_DESCRIPTOR_SIZE: usize = 592;
+const CLIP_ATTRIBUTES_OFFSET: usize = 36;
+const CLIP_SIZE_HIGH_OFFSET: usize = 64;
+const CLIP_NAME_OFFSET: usize = 72;
+const CLIP_NAME_UNITS: usize = 260;
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+const CB_RESPONSE_FAIL: i32 = 0x0002;
+
+/// Nomi e dimensioni dei file di un FILEGROUPDESCRIPTORW (`None` se i dati non
+/// lo sono); le cartelle sono escluse.
+fn clipboard_descriptor_files(data: &[u8]) -> Option<Vec<(String, u64)>> {
+    let count = u32::from_le_bytes(data.get(..CLIP_PDU_HEADER)?.try_into().ok()?) as usize;
+    if count == 0 || data.len() != CLIP_PDU_HEADER + count.checked_mul(CLIP_DESCRIPTOR_SIZE)? {
+        return None;
+    }
+    let u32_at = |d: &[u8], at: usize| u32::from_le_bytes(d[at..at + 4].try_into().unwrap_or_default());
+    let files = data[CLIP_PDU_HEADER..]
+        .chunks_exact(CLIP_DESCRIPTOR_SIZE)
+        .filter(|d| u32_at(d, CLIP_ATTRIBUTES_OFFSET) & FILE_ATTRIBUTE_DIRECTORY == 0)
+        .map(|d| {
+            let units: Vec<u16> = d[CLIP_NAME_OFFSET..CLIP_NAME_OFFSET + CLIP_NAME_UNITS * 2]
+                .chunks_exact(2)
+                .map(|u| u16::from_le_bytes([u[0], u[1]]))
+                .take_while(|u| *u != 0)
+                .collect();
+            let size = (u32_at(d, CLIP_SIZE_HIGH_OFFSET) as u64) << 32 | u32_at(d, CLIP_SIZE_HIGH_OFFSET + 4) as u64;
+            (String::from_utf16_lossy(&units), size)
+        })
+        .collect();
+    Some(files)
+}
+
+/// Copia-incolla di file verso l'host: stessi criteri di direzione ed
+/// estensione del trasferimento. L'elenco dei file arriva dal controller come
+/// FILEGROUPDESCRIPTORW in una `FormatDataResponse`; se va bloccato diventa una
+/// risposta di errore e l'incolla sull'host non crea nulla.
+pub fn filter_clipboard_to_host(clip: &mut Cliprdr, conn_id: i32) {
+    let Some(cliprdr::Union::FormatDataResponse(response)) = clip.union.as_ref() else {
+        return;
+    };
+    let Some(files) = clipboard_descriptor_files(&response.format_data) else {
+        return;
+    };
+    let policy = file_direction_from(&Config::get_option(OPT_FILE_DIRECTION));
+    let blocked = if !direction_allowed(policy, TransferDirection::ToHost) {
+        files.first().map(|(name, size)| ("clanto_file_direction_blocked", name, *size, "to-host"))
+    } else {
+        let configured = Config::get_option(OPT_FILE_BLOCKED_EXT);
+        files
+            .iter()
+            .find(|(name, _)| extension_blocked(name, &configured))
+            .map(|(name, size)| ("clanto_file_extension_blocked", name, *size, "blocked"))
+    };
+    if let Some((kind, name, size, result)) = blocked {
+        emit_policy_event(kind, conn_id, name, size, result);
+        clip.set_format_data_response(CliprdrServerFormatDataResponse {
+            msg_flags: CB_RESPONSE_FAIL,
+            ..Default::default()
+        });
+    }
+}
+
+/// Copia-incolla di file dall'host: le richieste del controller non vengono
+/// servite se la direzione non lo consente.
+pub fn clipboard_from_host_blocked() -> bool {
+    !direction_allowed(
+        file_direction_from(&Config::get_option(OPT_FILE_DIRECTION)),
+        TransferDirection::FromHost,
+    )
 }
 
 fn scan_decision(mode: ScanMode, outcome: ScanOutcomeKind) -> ScanDecision {
@@ -926,6 +998,43 @@ mod tests {
         assert!(extension_blocked("a.exe.", configured));
         assert!(extension_blocked("a.exe ", configured));
         assert!(!extension_blocked("report.exe.pdf", configured));
+    }
+
+    fn descriptor_pdu(entries: &[(&str, u32, u64)]) -> Vec<u8> {
+        let mut pdu = (entries.len() as u32).to_le_bytes().to_vec();
+        for (name, attributes, size) in entries {
+            let mut d = vec![0_u8; CLIP_DESCRIPTOR_SIZE];
+            d[CLIP_ATTRIBUTES_OFFSET..CLIP_ATTRIBUTES_OFFSET + 4].copy_from_slice(&attributes.to_le_bytes());
+            d[CLIP_SIZE_HIGH_OFFSET..CLIP_SIZE_HIGH_OFFSET + 4].copy_from_slice(&((size >> 32) as u32).to_le_bytes());
+            d[CLIP_SIZE_HIGH_OFFSET + 4..CLIP_NAME_OFFSET].copy_from_slice(&(*size as u32).to_le_bytes());
+            for (i, unit) in name.encode_utf16().enumerate() {
+                d[CLIP_NAME_OFFSET + i * 2..CLIP_NAME_OFFSET + i * 2 + 2].copy_from_slice(&unit.to_le_bytes());
+            }
+            pdu.extend(d);
+        }
+        pdu
+    }
+
+    #[test]
+    fn clipboard_descriptor_lists_files_without_folders() {
+        let pdu = descriptor_pdu(&[
+            ("cartella.txt", FILE_ATTRIBUTE_DIRECTORY, 0),
+            (r"cartella.txt\nota.txt", 0x80, (1 << 32) + 5),
+        ]);
+        assert_eq!(
+            clipboard_descriptor_files(&pdu),
+            Some(vec![(r"cartella.txt\nota.txt".to_owned(), (1 << 32) + 5)])
+        );
+        assert!(extension_blocked(r"cartella.txt\nota.txt", "txt"));
+    }
+
+    #[test]
+    fn clipboard_descriptor_rejects_other_data() {
+        assert_eq!(clipboard_descriptor_files(b"testo copiato"), None);
+        assert_eq!(clipboard_descriptor_files(&0_u32.to_le_bytes()), None);
+        let mut pdu = descriptor_pdu(&[("a.txt", 0x80, 1)]);
+        pdu.pop();
+        assert_eq!(clipboard_descriptor_files(&pdu), None);
     }
 
     #[test]

@@ -3940,7 +3940,8 @@ impl Connection {
                     }
                 }
                 #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
-                Some(message::Union::Cliprdr(clip)) => {
+                Some(message::Union::Cliprdr(mut clip)) => {
+                    crate::clanto::file_scan::filter_clipboard_to_host(&mut clip, self.inner.id());
                     if let Some(cliprdr::Union::Files(files)) = &clip.union {
                         self.post_file_audit(
                             FileAuditType::RemoteReceive,
@@ -3953,7 +3954,8 @@ impl Connection {
                             json!({}),
                         );
                     } else if is_file_data_request(&clip)
-                        && crate::get_builtin_option(keys::OPTION_ONE_WAY_FILE_TRANSFER) == "Y"
+                        && (crate::get_builtin_option(keys::OPTION_ONE_WAY_FILE_TRANSFER) == "Y"
+                            || crate::clanto::file_scan::clipboard_from_host_blocked())
                     {
                         // One-way file transfer: never serve this side's clipboard files to the peer.
                     } else if let Some(clip) = msg_2_clip(clip) {
