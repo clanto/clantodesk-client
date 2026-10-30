@@ -708,7 +708,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Terminal", "Terminale"),
         ("Enable terminal", "Abilita terminale"),
         ("New tab", "Nuova scheda"),
-        ("Keep terminal sessions on disconnect", "Quando disconetti mantieni attiva sessione terminale"),
+        ("Keep terminal sessions on disconnect", "Mantieni attiva la sessione terminale alla disconnessione"),
         ("Terminal (Run as administrator)", "Terminale (esegui come amministratore)"),
         ("terminal-admin-login-tip", "Inserisci il nome utente e la password dell'amministratore del lato controllato."),
         ("Failed to get user token.", "Impossibile ottenere il token utente."),
