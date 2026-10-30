@@ -976,6 +976,8 @@ impl Connection {
                                         json!({}),
                                     );
                                 }
+                                clipboard::ClipboardFile::FormatList { .. }
+                                    if crate::clanto::file_scan::clipboard_from_host_blocked() => {}
                                 _ => {
                                     allow_err!(conn.stream.send(&clip_2_msg(clip)).await);
                                 }
@@ -3954,10 +3956,13 @@ impl Connection {
                             json!({}),
                         );
                     } else if is_file_data_request(&clip)
-                        && (crate::get_builtin_option(keys::OPTION_ONE_WAY_FILE_TRANSFER) == "Y"
-                            || crate::clanto::file_scan::clipboard_from_host_blocked())
+                        && crate::get_builtin_option(keys::OPTION_ONE_WAY_FILE_TRANSFER) == "Y"
                     {
                         // One-way file transfer: never serve this side's clipboard files to the peer.
+                    } else if let Some(refusal) =
+                        crate::clanto::file_scan::refuse_clipboard_from_host(&clip)
+                    {
+                        self.send(refusal).await;
                     } else if let Some(clip) = msg_2_clip(clip) {
                         #[cfg(target_os = "windows")]
                         {

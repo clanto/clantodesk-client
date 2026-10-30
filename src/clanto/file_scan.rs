@@ -5,7 +5,10 @@
 
 use base::{
     fs::{self, CompletedDownload, TransferJob},
-    message_proto::{cliprdr, file_action, Cliprdr, CliprdrServerFormatDataResponse, FileAction},
+    message_proto::{
+        cliprdr, file_action, message, Cliprdr, CliprdrFileContentsResponse,
+        CliprdrServerFormatDataResponse, FileAction, Message,
+    },
 };
 use hbb_common::{
     anyhow::anyhow,
@@ -520,13 +523,45 @@ pub fn filter_clipboard_to_host(clip: &mut Cliprdr, conn_id: i32) {
     }
 }
 
-/// Copia-incolla di file dall'host: le richieste del controller non vengono
-/// servite se la direzione non lo consente.
+/// Copia-incolla di file dall'host vietato dalla direzione: l'elenco degli
+/// appunti dell'host non va offerto al controller.
 pub fn clipboard_from_host_blocked() -> bool {
     !direction_allowed(
         file_direction_from(&Config::get_option(OPT_FILE_DIRECTION)),
         TransferDirection::FromHost,
     )
+}
+
+/// Richiesta del controller sugli appunti dell'host con la direzione vietata:
+/// risposta di errore subito, così il controller non resta in attesa fino al
+/// timeout bloccando i propri appunti.
+pub fn refuse_clipboard_from_host(clip: &Cliprdr) -> Option<Message> {
+    let refusal = match clip.union.as_ref()? {
+        cliprdr::Union::FormatDataRequest(_) => {
+            cliprdr::Union::FormatDataResponse(CliprdrServerFormatDataResponse {
+                msg_flags: CB_RESPONSE_FAIL,
+                ..Default::default()
+            })
+        }
+        cliprdr::Union::FileContentsRequest(request) => {
+            cliprdr::Union::FileContentsResponse(CliprdrFileContentsResponse {
+                msg_flags: CB_RESPONSE_FAIL,
+                stream_id: request.stream_id,
+                ..Default::default()
+            })
+        }
+        _ => return None,
+    };
+    if !clipboard_from_host_blocked() {
+        return None;
+    }
+    Some(Message {
+        union: Some(message::Union::Cliprdr(Cliprdr {
+            union: Some(refusal),
+            ..Default::default()
+        })),
+        ..Default::default()
+    })
 }
 
 fn scan_decision(mode: ScanMode, outcome: ScanOutcomeKind) -> ScanDecision {
