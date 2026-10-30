@@ -60,6 +60,33 @@ Future<List<_Service>> _loadCatalog() async {
   }
 }
 
+/// Voce `indirizzo:porte` leggibile; `self` è come chiamare `localhost`.
+String _describeTarget(String entry, String self) {
+  final i = entry.lastIndexOf(':');
+  if (i <= 0) return entry;
+  final address = entry.substring(0, i);
+  final ports = entry.substring(i + 1);
+  final who = switch (address.toLowerCase()) {
+    'localhost' => translate(self),
+    '*' => translate('Any device'),
+    _ => address,
+  };
+  final port = ports == '*' ? translate('any port') : ports;
+  return '$who · ${translate('port')} $port';
+}
+
+/// Indirizzo e porta di una voce senza reti, `*` o intervalli: usabile così com'è.
+(String, int)? _concreteTarget(String entry) {
+  final i = entry.lastIndexOf(':');
+  if (i <= 0) return null;
+  final address =
+      entry.substring(0, i).replaceAll('[', '').replaceAll(']', '');
+  final port = int.tryParse(entry.substring(i + 1));
+  if (port == null || port < 1 || port > 65535) return null;
+  if (address == '*' || address.contains('/')) return null;
+  return (address, port);
+}
+
 /// La webcam del PC controllato arriva su una camera virtuale di questo PC:
 /// solo sul desktop.
 bool get _canReceiveWebcam => isDesktop;
@@ -365,19 +392,7 @@ class _TargetRulesState extends State<_TargetRules> {
     await _save(entries);
   }
 
-  String _describe(String entry) {
-    final i = entry.lastIndexOf(':');
-    if (i <= 0) return entry;
-    final address = entry.substring(0, i);
-    final ports = entry.substring(i + 1);
-    final who = switch (address.toLowerCase()) {
-      'localhost' => translate('This PC itself'),
-      '*' => translate('Any device'),
-      _ => address,
-    };
-    final port = ports == '*' ? translate('any port') : ports;
-    return '$who · ${translate('port')} $port';
-  }
+  String _describe(String entry) => _describeTarget(entry, 'This PC itself');
 
   @override
   Widget build(BuildContext context) {
@@ -528,6 +543,9 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   Timer? _timer;
   String _direction = 'to_host';
   String _serviceId = '';
+  // Verso l'host: destinazioni che il PC controllato ammette, e quella scelta.
+  Map<String, dynamic> _hostTargets = const {};
+  String _hostTarget = '';
   // Destinazione personalizzata: il PC stesso o un altro dispositivo della sua rete.
   bool _otherDevice = false;
   final _address = TextEditingController();
@@ -538,6 +556,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   @override
   void initState() {
     super.initState();
+    bind.sessionClantoForwardQueryTargets(sessionId: widget.sessionId);
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
     _loadCatalog().then((list) {
@@ -557,13 +576,62 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   void _refresh() {
     final json = bind.sessionClantoForwardList(sessionId: widget.sessionId);
     final list = (jsonDecode(json) as List).cast<Map<String, dynamic>>();
-    if (mounted) setState(() => _forwards = list);
+    Map<String, dynamic> targets = const {};
+    try {
+      targets = jsonDecode(
+              bind.sessionClantoForwardTargets(sessionId: widget.sessionId))
+          as Map<String, dynamic>;
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _forwards = list;
+        _hostTargets = targets;
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> get _offered =>
+      ((_hostTargets['targets'] as List?) ?? []).cast<Map<String, dynamic>>();
+
+  String _offeredLabel(Map<String, dynamic> t) {
+    final target = t['target'] as String? ?? '';
+    final service = _catalog.where((s) => s.id == t['service']);
+    final text = _describeTarget(target, 'The remote PC itself');
+    return service.isEmpty ? text : '${service.first.name} ($text)';
+  }
+
+  /// Voce dell'host scelta: se è precisa si usa così, altrimenti precompila i
+  /// campi (rete, `*` o intervallo di porte da completare).
+  void _pickHostTarget(String target) {
+    setState(() {
+      _error = null;
+      if (target.isEmpty || _concreteTarget(target) != null) {
+        _hostTarget = target;
+        return;
+      }
+      _hostTarget = '';
+      final i = target.lastIndexOf(':');
+      final address = target.substring(0, i);
+      final ports = target.substring(i + 1);
+      _otherDevice = address.toLowerCase() != 'localhost';
+      _address.text = address == '*' || address.contains('/') ? '' : address;
+      _servicePort.text = int.tryParse(ports) == null ? '' : ports;
+    });
   }
 
   Future<void> _add() async {
     String host;
     int port;
-    if (_serviceId.isNotEmpty) {
+    var service = _serviceId;
+    final picked = _direction == 'to_host' && _hostTarget.isNotEmpty
+        ? _concreteTarget(_hostTarget)
+        : null;
+    if (picked != null) {
+      (host, port) = picked;
+      service = _offered.firstWhere((t) => t['target'] == _hostTarget,
+              orElse: () => const {})['service'] as String? ??
+          '';
+    } else if (_serviceId.isNotEmpty) {
       final s = _catalog.firstWhere((s) => s.id == _serviceId);
       final i = s.target.lastIndexOf(':');
       host = s.target.substring(0, i);
@@ -586,7 +654,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
       localPort: int.tryParse(_localPort.text.trim()) ?? 0,
       targetHost: host,
       targetPort: port,
-      service: _serviceId,
+      service: service,
     ));
     if (!mounted) return;
     setState(
@@ -605,13 +673,17 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
   @override
   Widget build(BuildContext context) {
     // Verso il controller valgono solo i servizi spuntati su questo PC; verso
-    // l'host decide il PC controllato.
+    // l'host le destinazioni che il PC controllato dichiara (decide comunque lui).
+    final toHost = _direction == 'to_host';
     final mine = _enabledServices(kOptClantoForwardServicesController);
-    final services = _catalog
-        .where((s) =>
-            s.direction == _direction &&
-            (_direction == 'to_host' || mine[s.id] == s.target))
-        .toList();
+    final services = toHost
+        ? <_Service>[]
+        : _catalog
+            .where((s) => s.direction == _direction && mine[s.id] == s.target)
+            .toList();
+    final offered = toHost ? _offered : <Map<String, dynamic>>[];
+    final targetsState = _hostTargets['state'] as String? ?? 'none';
+    final custom = toHost ? _hostTarget.isEmpty : _serviceId.isEmpty;
     return AlertDialog(
       title: Text(translate('Network forwarding')),
       content: ConstrainedBox(
@@ -656,8 +728,34 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
                 onChanged: (v) => setState(() {
                   _direction = v ?? 'to_host';
                   _serviceId = '';
+                  _hostTarget = '';
                 }),
               ),
+              if (toHost && targetsState == 'pending')
+                Text(translate(
+                    'Loading the destinations allowed by the remote PC…')),
+              if (toHost && targetsState == 'denied')
+                Text(translate(_hostTargets['message'] as String? ?? ''),
+                    style: const TextStyle(color: Colors.red)),
+              if (toHost && targetsState == 'ok' && offered.isEmpty)
+                Text(translate(
+                    'The remote PC does not allow any destination yet')),
+              if (offered.isNotEmpty)
+                DropdownButton<String>(
+                  value: offered.any((t) => t['target'] == _hostTarget)
+                      ? _hostTarget
+                      : '',
+                  isExpanded: true,
+                  items: [
+                    DropdownMenuItem(
+                        value: '',
+                        child: Text(translate('Custom destination'))),
+                    ...offered.map((t) => DropdownMenuItem(
+                        value: t['target'] as String? ?? '',
+                        child: Text(_offeredLabel(t)))),
+                  ],
+                  onChanged: (v) => _pickHostTarget(v ?? ''),
+                ),
               if (services.isNotEmpty)
                 DropdownButton<String>(
                   value: _serviceId,
@@ -671,7 +769,7 @@ class _ForwardingDialogState extends State<_ForwardingDialog> {
                   ],
                   onChanged: (v) => setState(() => _serviceId = v ?? ''),
                 ),
-              if (_serviceId.isEmpty) ...[
+              if (custom) ...[
                 DropdownButton<bool>(
                   value: _otherDevice,
                   isExpanded: true,

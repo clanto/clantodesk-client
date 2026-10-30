@@ -305,6 +305,35 @@ pub async fn authorize_target(direction: Direction, host: &str, port: i32) -> Re
     Err(DENIED_TARGET.to_owned())
 }
 
+/// Destinazioni verso la rete di questo PC da mostrare al peer: servizi spuntati
+/// (`id`, destinazione) e voci personalizzate (id vuoto). Solo le voci valide.
+pub fn offered_targets(direction: Direction) -> Result<Vec<(String, String)>, String> {
+    if !on(OPT_ENABLED) {
+        return Err(DENIED_DISABLED.to_owned());
+    }
+    let (custom_on, list_key) = match direction {
+        Direction::ToHost => (on(OPT_CUSTOM_HOST), OPT_CUSTOM_HOST_TARGETS),
+        Direction::ToController => (on(OPT_CUSTOM_CONTROLLER), OPT_CUSTOM_CONTROLLER_TARGETS),
+    };
+    let mut targets: Vec<(String, String)> = Config::get_option(services_key(direction))
+        .split(';')
+        .filter_map(|entry| {
+            let (id, target) = entry.trim().split_once('=')?;
+            let (id, target) = (id.trim(), target.trim());
+            (catalog::valid_id(id) && parse_pattern(target).is_some()).then(|| (id.to_owned(), target.to_owned()))
+        })
+        .collect();
+    if custom_on {
+        targets.extend(
+            Config::get_option(list_key)
+                .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+                .filter(|item| parse_pattern(item).is_some())
+                .map(|item| (String::new(), item.to_owned())),
+        );
+    }
+    Ok(targets)
+}
+
 /// Host: può aprire un listener su 127.0.0.1 per un forward verso il controller?
 pub fn authorize_listen() -> Result<(), String> {
     if !on(OPT_ENABLED) {

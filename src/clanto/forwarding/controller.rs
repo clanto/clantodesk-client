@@ -79,7 +79,25 @@ struct SessionState {
     out: Out,
     camera: Option<SendStream>,
     remote: RemoteCamera,
+    targets: HostTargets,
 }
+
+/// Destinazioni che il PC controllato ammette verso la sua rete.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct HostTargets {
+    /// "none", "pending", "ok", "denied".
+    pub state: &'static str,
+    pub message: String,
+    pub targets: Vec<HostTarget>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct HostTarget {
+    pub service: String,
+    pub target: String,
+}
+
+const MAX_HOST_TARGETS: usize = 200;
 
 /// Webcam del PC controllato verso questo PC: richiesta, consenso e flusso.
 #[derive(Clone, Debug, Default, Serialize)]
@@ -172,7 +190,14 @@ fn session(key: u64, sender: &UnboundedSender<Data>) -> Option<(Arc<Engine>, Arc
             out.clone(),
             Arc::new(ControllerHooks { forwards: forwards.clone() }),
         );
-        SessionState { engine, forwards, out, camera: None, remote: RemoteCamera { request: "none", ..Default::default() } }
+        SessionState {
+            engine,
+            forwards,
+            out,
+            camera: None,
+            remote: RemoteCamera { request: "none", ..Default::default() },
+            targets: HostTargets { state: "none", ..Default::default() },
+        }
     });
     Some((state.engine.clone(), state.forwards.clone()))
 }
@@ -224,7 +249,29 @@ pub fn on_message(key: u64, sender: &UnboundedSender<Data>, msg: ClantoForward) 
             });
             return;
         }
-        Some(clanto_forward::Union::MediaOpen(_) | clanto_forward::Union::MediaFrame(_)) => return,
+        Some(clanto_forward::Union::Targets(t)) => {
+            let mut sessions = SESSIONS.lock().unwrap();
+            if let Some(state) = sessions.as_mut().and_then(|s| s.get_mut(&key)) {
+                // Valide e senza duplicati: le voci servono solo a riempire il dialogo.
+                let mut targets: Vec<HostTarget> = Vec::new();
+                for t in t.targets.into_iter().filter(|t| policy::parse_pattern(&t.target).is_some()) {
+                    if targets.len() < MAX_HOST_TARGETS && !targets.iter().any(|x| x.target == t.target) {
+                        targets.push(HostTarget { service: t.service.chars().take(64).collect(), target: t.target });
+                    }
+                }
+                state.targets = HostTargets {
+                    state: if t.message.is_empty() { "ok" } else { "denied" },
+                    message: t.message,
+                    targets,
+                };
+            }
+            return;
+        }
+        Some(
+            clanto_forward::Union::MediaOpen(_)
+            | clanto_forward::Union::MediaFrame(_)
+            | clanto_forward::Union::TargetsQuery(_),
+        ) => return,
         union => ClantoForward { union, ..Default::default() },
     };
     let Some((engine, _)) = session(key, sender) else { return };
@@ -394,6 +441,27 @@ pub fn remove(key: u64, id: i32) {
             ..Default::default()
         }));
     }
+}
+
+/// Chiede al PC controllato le destinazioni che ammette verso la sua rete.
+pub fn query_targets(key: u64, sender: &UnboundedSender<Data>) -> Result<(), String> {
+    let (engine, _) = session(key, sender).ok_or("Session closed")?;
+    if let Some(state) = SESSIONS.lock().unwrap().as_mut().and_then(|s| s.get_mut(&key)) {
+        state.targets = HostTargets { state: "pending", ..Default::default() };
+    }
+    let _guard = runtime().enter();
+    engine.send(clanto_forward::Union::TargetsQuery(ClantoForwardTargetsQuery::default()));
+    Ok(())
+}
+
+pub fn host_targets(key: u64) -> HostTargets {
+    SESSIONS
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|s| s.get(&key))
+        .map(|s| s.targets.clone())
+        .unwrap_or(HostTargets { state: "none", ..Default::default() })
 }
 
 /// Servizi del catalogo, aggiornato se vecchio.

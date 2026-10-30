@@ -1862,6 +1862,28 @@ pub fn session_clanto_forward_remove(session_id: SessionID, id: i32) {
     }
 }
 
+/// Chiede al PC controllato le destinazioni ammesse verso la sua rete.
+pub fn session_clanto_forward_query_targets(session_id: SessionID) {
+    let Some(session) = sessions::get_session_by_session_id(&session_id) else {
+        return;
+    };
+    let key = session.lc.read().unwrap().session_id;
+    let sender = session.sender.read().unwrap().clone();
+    if let Some(sender) = sender {
+        crate::clanto::forwarding::controller::query_targets(key, &sender).ok();
+    }
+}
+
+/// Destinazioni ammesse dal PC controllato, JSON `{"state","message","targets"}`.
+pub fn session_clanto_forward_targets(session_id: SessionID) -> SyncReturn<String> {
+    let Some(session) = sessions::get_session_by_session_id(&session_id) else {
+        return SyncReturn("{}".to_owned());
+    };
+    let key = session.lc.read().unwrap().session_id;
+    let targets = crate::clanto::forwarding::controller::host_targets(key);
+    SyncReturn(serde_json::to_string(&targets).unwrap_or_default())
+}
+
 /// Servizi del catalogo firmato, JSON.
 pub fn main_clanto_forward_catalog() -> String {
     serde_json::to_string(&crate::clanto::forwarding::controller::catalog_services())

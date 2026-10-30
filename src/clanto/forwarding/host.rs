@@ -250,6 +250,21 @@ pub fn on_message(
             });
             return Action::None;
         }
+        Some(clanto_forward::Union::TargetsQuery(_)) => {
+            let reply = match allowed(peer.conn_id).and_then(|_| policy::offered_targets(Direction::ToHost)) {
+                Ok(list) => ClantoForwardTargets {
+                    targets: list
+                        .into_iter()
+                        .map(|(service, target)| ClantoForwardTarget { service, target, ..Default::default() })
+                        .collect(),
+                    ..Default::default()
+                },
+                Err(message) => ClantoForwardTargets { message, ..Default::default() },
+            };
+            media_out()(wrap(clanto_forward::Union::Targets(reply)));
+            return Action::None;
+        }
+        Some(clanto_forward::Union::Targets(_)) => return Action::None,
         Some(clanto_forward::Union::CameraRequest(r)) => return on_camera_request(&peer, media_out(), r),
         Some(clanto_forward::Union::CameraPull(p)) => {
             on_camera_pull(&peer, media_out(), p);

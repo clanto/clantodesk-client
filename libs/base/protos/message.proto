@@ -1074,6 +1074,8 @@ message ClantoForward {
     ClantoCameraRequest camera_request = 10;
     ClantoCameraGrant camera_grant = 11;
     ClantoCameraPull camera_pull = 12;
+    ClantoForwardTargetsQuery targets_query = 13;
+    ClantoForwardTargets targets = 14;
   }
 }
 // Controller -> host: ascolta su 127.0.0.1:port dell'host (0 = porta libera)
@@ -1146,4 +1148,16 @@ message ClantoCameraGrant {
 message ClantoCameraPull {
   int32 stream_id = 1;
   int32 index = 2;
+}
+
+// Destinazioni che l'host ammette verso la propria rete, per il dialogo del
+// controller: aiutano a scegliere, non autorizzano (decide authorize_target).
+message ClantoForwardTargetsQuery {}
+message ClantoForwardTarget {
+  string service = 1;  // id del catalogo, vuoto per una voce personalizzata
+  string target = 2;   // indirizzo:porte come nella policy
+}
+message ClantoForwardTargets {
+  repeated ClantoForwardTarget targets = 1;
+  string message = 2;  // motivo, se il forwarding non è disponibile
 }

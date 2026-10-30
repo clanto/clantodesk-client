@@ -1141,6 +1141,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("pending", "in attesa"),
         ("Forwarding is disabled on this device", "Il forwarding è disattivato su questo dispositivo"),
         ("Forwarding target not allowed", "Destinazione del forwarding non consentita"),
+        ("Loading the destinations allowed by the remote PC…", "Caricamento delle destinazioni ammesse dal PC remoto…"),
+        ("The remote PC does not allow any destination yet", "Il PC remoto non ammette ancora nessuna destinazione"),
         ("Forwarding towards the controller is not allowed on this device", "Il forwarding verso il controller non è consentito su questo dispositivo"),
         ("Too many forwards", "Troppi forward"),
         ("Virtual camera device (empty = automatic)", "Dispositivo della camera virtuale (vuoto = automatico)"),
