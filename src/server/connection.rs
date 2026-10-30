@@ -979,7 +979,11 @@ impl Connection {
                                 clipboard::ClipboardFile::FormatList { .. }
                                     if crate::clanto::file_scan::clipboard_from_host_blocked() => {}
                                 _ => {
-                                    allow_err!(conn.stream.send(&clip_2_msg(clip)).await);
+                                    let mut msg = clip_2_msg(clip);
+                                    if let Some(message::Union::Cliprdr(c)) = msg.union.as_mut() {
+                                        crate::clanto::file_scan::filter_clipboard_from_host(c, conn.inner.id());
+                                    }
+                                    allow_err!(conn.stream.send(&msg).await);
                                 }
                             }
                         }
@@ -4003,7 +4007,13 @@ impl Connection {
                                 );
                             }
 
-                            for msg in out_msgs.into_iter() {
+                            for mut msg in out_msgs.into_iter() {
+                                if let Some(message::Union::Cliprdr(c)) = msg.union.as_mut() {
+                                    crate::clanto::file_scan::filter_clipboard_from_host(
+                                        c,
+                                        self.inner.id(),
+                                    );
+                                }
                                 if let Some(message::Union::Cliprdr(cliprdr)) = msg.union.as_ref() {
                                     if let Some(cliprdr::Union::Files(files)) =
                                         cliprdr.union.as_ref()
@@ -5967,6 +5977,19 @@ impl Connection {
 
                 let path_str = dir.path.clone();
                 let file_entries: Vec<FileEntry> = dir.entries.into();
+                if let Some(message) = crate::clanto::file_scan::reject_files_from_host(
+                    self.inner.id(),
+                    &path_str,
+                    file_entries.iter().map(|f| (f.name.as_str(), f.size)),
+                ) {
+                    self.cm_read_job_ids.remove(&id);
+                    self.send_fs(ipc::FS::CancelRead {
+                        id,
+                        conn_id: self.inner.id(),
+                    });
+                    self.send(fs::new_error(id, message, 0)).await;
+                    return;
+                }
 
                 // Send file directory to client
                 self.send(fs::new_dir(id, path_str.clone(), file_entries.clone()))
@@ -6198,6 +6221,16 @@ impl Connection {
                 self.send(fs::new_error(id, err, 0)).await;
             }
             Ok(job) => {
+                if job_type == fs::JobType::Generic {
+                    if let Some(message) = crate::clanto::file_scan::reject_files_from_host(
+                        self.inner.id(),
+                        &path,
+                        job.files().iter().map(|f| (f.name.as_str(), f.size)),
+                    ) {
+                        self.send(fs::new_error(id, message, 0)).await;
+                        return;
+                    }
+                }
                 if check_file_limit {
                     if let Err(msg) =
                         crate::ui_cm_interface::check_file_count_limit(job.files().len())
@@ -6798,13 +6831,16 @@ impl Connection {
                 && crate::get_builtin_option(OPTION_ONE_WAY_FILE_TRANSFER) == "Y"
             {
                 // If one way file transfer is enabled, don't send clipboard file to client
+            } else if matches!(clip, clipboard::ClipboardFile::FormatList { .. })
+                && crate::clanto::file_scan::clipboard_from_host_blocked()
+            {
             } else {
                 // Maybe we should end the connection, because copy&paste files causes everything to wait.
-                allow_err!(
-                    self.stream
-                        .send(&crate::clipboard_file::clip_2_msg(clip))
-                        .await
-                );
+                let mut msg = crate::clipboard_file::clip_2_msg(clip);
+                if let Some(message::Union::Cliprdr(c)) = msg.union.as_mut() {
+                    crate::clanto::file_scan::filter_clipboard_from_host(c, self.inner.id());
+                }
+                allow_err!(self.stream.send(&msg).await);
             }
         }
     }

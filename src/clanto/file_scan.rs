@@ -460,6 +460,26 @@ pub fn reject_file_action(action: &FileAction, conn_id: i32) -> Option<PolicyRej
     }
 }
 
+/// File presi dall'host col trasferimento: le estensioni bloccate valgono in
+/// entrambe le direzioni. `files` sono i nomi relativi a `path` con la
+/// dimensione; un nome vuoto indica `path` stesso.
+pub fn reject_files_from_host<'a>(
+    conn_id: i32,
+    path: &str,
+    files: impl IntoIterator<Item = (&'a str, u64)>,
+) -> Option<&'static str> {
+    let configured = Config::get_option(OPT_FILE_BLOCKED_EXT);
+    if configured.trim().is_empty() {
+        return None;
+    }
+    let (name, size) = files
+        .into_iter()
+        .map(|(name, size)| (incoming_name(path, name), size))
+        .find(|(name, _)| extension_blocked(name, &configured))?;
+    emit_policy_event("clanto_file_extension_blocked", conn_id, name, size, "blocked");
+    Some(BLOCKED_EXTENSION_MESSAGE)
+}
+
 const CLIP_PDU_HEADER: usize = 4;
 const CLIP_DESCRIPTOR_SIZE: usize = 592;
 const CLIP_ATTRIBUTES_OFFSET: usize = 36;
@@ -498,6 +518,16 @@ fn clipboard_descriptor_files(data: &[u8]) -> Option<Vec<(String, u64)>> {
 /// FILEGROUPDESCRIPTORW in una `FormatDataResponse`; se va bloccato diventa una
 /// risposta di errore e l'incolla sull'host non crea nulla.
 pub fn filter_clipboard_to_host(clip: &mut Cliprdr, conn_id: i32) {
+    filter_clipboard_files(clip, conn_id, TransferDirection::ToHost);
+}
+
+/// Copia-incolla di file dall'host: l'elenco che l'host manda al controller
+/// passa dalle stesse estensioni bloccate.
+pub fn filter_clipboard_from_host(clip: &mut Cliprdr, conn_id: i32) {
+    filter_clipboard_files(clip, conn_id, TransferDirection::FromHost);
+}
+
+fn filter_clipboard_files(clip: &mut Cliprdr, conn_id: i32, direction: TransferDirection) {
     let Some(cliprdr::Union::FormatDataResponse(response)) = clip.union.as_ref() else {
         return;
     };
@@ -505,8 +535,12 @@ pub fn filter_clipboard_to_host(clip: &mut Cliprdr, conn_id: i32) {
         return;
     };
     let policy = file_direction_from(&Config::get_option(OPT_FILE_DIRECTION));
-    let blocked = if !direction_allowed(policy, TransferDirection::ToHost) {
-        files.first().map(|(name, size)| ("clanto_file_direction_blocked", name, *size, "to-host"))
+    let blocked = if !direction_allowed(policy, direction) {
+        let label = match direction {
+            TransferDirection::ToHost => "to-host",
+            TransferDirection::FromHost => "from-host",
+        };
+        files.first().map(|(name, size)| ("clanto_file_direction_blocked", name, *size, label))
     } else {
         let configured = Config::get_option(OPT_FILE_BLOCKED_EXT);
         files
