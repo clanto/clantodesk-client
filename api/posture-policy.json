@@ -107,8 +107,8 @@
       ],
       "field": "os_build",
       "op": "date_within_days",
-      "value": 180,
-      "message": "Le patch di sicurezza Android hanno più di 6 mesi: aggiornare il dispositivo o sostituirlo se non riceve più aggiornamenti."
+      "value": 210,
+      "message": "Le patch di sicurezza Android hanno più di 210 giorni: aggiornare il dispositivo o sostituirlo se non riceve più aggiornamenti."
     },
     {
       "id": "aggiornamenti-recenti",
